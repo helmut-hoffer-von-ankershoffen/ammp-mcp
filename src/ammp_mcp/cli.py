@@ -44,7 +44,7 @@ from .registries import (
     load_mentors,
     save_mentees,
 )
-from .settings import get_settings
+from .settings import Settings, get_settings
 
 app = typer.Typer(
     name="ammp",
@@ -330,14 +330,14 @@ def serve(
 # S3776 limit of 15.
 
 
-def _setup_print_header(s: object, repo_root: Path) -> None:
+def _setup_print_header(s: Settings, repo_root: Path) -> None:
     console.print(
         Panel.fit(
             f"[bold]ammp-mcp setup[/bold]\n"
             f"[dim]repo:[/dim] {repo_root}\n"
-            f"[dim]mentors_root:[/dim] {s.mentors_root}\n"  # type: ignore[attr-defined]
-            f"[dim]mentees_file:[/dim] {s.mentees_file}\n"  # type: ignore[attr-defined]
-            f"[dim]audit_log:[/dim] {s.audit_log_path}",  # type: ignore[attr-defined]
+            f"[dim]mentors_root:[/dim] {s.mentors_root}\n"
+            f"[dim]mentees_file:[/dim] {s.mentees_file}\n"
+            f"[dim]audit_log:[/dim] {s.audit_log_path}",
             title="Step 0 — environment",
             border_style="cyan",
         )
@@ -411,13 +411,13 @@ def _setup_load_existing_env(env_path: Path) -> dict[str, str]:
 
 
 def _setup_compose_env(
-    s: object, backend: str, auth_bearer_env: str, require_auth: bool, existing: dict[str, str]
+    s: Settings, backend: str, auth_bearer_env: str, require_auth: bool, existing: dict[str, str]
 ) -> dict[str, str]:
     desired = {
         "AMMP_REQUIRE_AUTH": "true" if require_auth else "false",
-        "AMMP_MENTORS_ROOT": str(s.mentors_root),  # type: ignore[attr-defined]
-        "AMMP_MENTEES_FILE": str(s.mentees_file),  # type: ignore[attr-defined]
-        "AMMP_AUDIT_LOG_PATH": str(s.audit_log_path),  # type: ignore[attr-defined]
+        "AMMP_MENTORS_ROOT": str(s.mentors_root),
+        "AMMP_MENTEES_FILE": str(s.mentees_file),
+        "AMMP_AUDIT_LOG_PATH": str(s.audit_log_path),
     }
     if backend == "anthropic":
         desired.setdefault("AMMP_ANTHROPIC_API_KEY", existing.get("AMMP_ANTHROPIC_API_KEY", ""))
@@ -590,11 +590,11 @@ def _status_check_audit_log(audit_log_path: Path, r: _StatusReporter) -> None:
         r.fail("Audit log writable", f"{audit_log_path}: {e}")
 
 
-def _status_check_anthropic_key(s: object, mentors: dict[str, Mentor], r: _StatusReporter) -> None:
+def _status_check_anthropic_key(s: Settings, mentors: dict[str, Mentor], r: _StatusReporter) -> None:
     has_anthropic_mentor = any(m.backend is None or m.backend.kind == "anthropic" for m in mentors.values())
     if not has_anthropic_mentor:
         return
-    if not s.anthropic_api_key:  # type: ignore[attr-defined]
+    if not s.anthropic_api_key:
         r.warn(
             "AMMP_ANTHROPIC_API_KEY",
             "unset; AskMentor will return a deterministic stub for any anthropic-backed mentor",
