@@ -321,8 +321,19 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
 
 
 def create_server(settings: Settings | None = None) -> FastMCP:
-    """Build a FastMCP server bound to the given settings (or the env-derived
-    singleton). Returns the server ready to ``.run()``."""
+    """Build a FastMCP server bound to ``settings``.
+
+    Loads mentors, the mentee allowlist, and per-mentor backends; then
+    registers the five AMMP Mentoring-track tools and the capability
+    advertisement endpoint.
+
+    Args:
+        settings: Settings instance. ``None`` uses the env-derived
+            singleton from :func:`ammp_mcp.settings.get_settings`.
+
+    Returns:
+        A configured FastMCP server ready to ``.run()``.
+    """
     s = settings or get_settings()
     mentors = load_mentors(s.mentors_root)
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
@@ -377,13 +388,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         context: str = "",
         api_key: str | None = None,
     ) -> dict[str, Any]:
-        """Ask the mentor a free-form question. The mentor synthesises an
-        answer from its playbook corpus + general operational knowledge,
-        and returns a self-reported confidence in [0, 1]. When confidence
-        is below the mentor's threshold, the response also recommends
-        EscalateToHuman with suggested phrasing — *mentor-triggered*
-        escalation, in addition to the mentee being free to call
-        EscalateToHuman directly."""
+        """Ask the mentor a free-form question.
+
+        The mentor synthesises an answer from its playbook corpus +
+        general operational knowledge, and returns a self-reported
+        confidence in ``[0, 1]``. When confidence is below the mentor's
+        threshold, the response also recommends ``EscalateToHuman``
+        with suggested phrasing — *mentor-triggered* escalation, in
+        addition to the mentee being free to call ``EscalateToHuman``
+        directly.
+        """
         return await _handle_ask_mentor(ctx, question, mentor, context, api_key)
 
     @mcp.tool
@@ -393,10 +407,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         why_stuck: str = "",
         api_key: str | None = None,
     ) -> dict[str, Any]:
-        """Mentee-triggered escalation. Returns suggested phrasing the
-        mentee hands to its own operator. The mentor does not page or
-        message anyone — that's the Human-Gated Escalation Invariant
-        (AMMP §3.4)."""
+        """Mentee-triggered escalation to the mentee's own operator.
+
+        Returns suggested phrasing the mentee hands to its own
+        operator. The mentor does not page or message anyone — that's
+        the Human-Gated Escalation Invariant (AMMP §3.4).
+        """
         return _handle_escalate_to_human(ctx, situation, mentor, why_stuck, api_key)
 
     @mcp.custom_route("/.well-known/agent.json", methods=["GET"])

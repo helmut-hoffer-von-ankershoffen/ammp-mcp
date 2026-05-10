@@ -105,6 +105,7 @@ select = [
     "N",                # pep8-naming
     "ARG",              # unused arguments
     "RUF",              # ruff-specific
+    "D",                # pydocstyle (Google convention enforced below)
 ]
 ignore = [
     "E501",   # line length handled by formatter where unavoidable
@@ -112,13 +113,21 @@ ignore = [
     "N802",   # MCP operation function names are PascalCase per AMMP
     "RUF001", # ambiguous unicode in strings — used deliberately in operator-facing prose
     "RUF002", # ambiguous unicode in docstrings — same
+    "D203",   # incompatible with D211 — prefer D211 (no blank line before class docstring)
+    "D212",   # incompatible with D213 — prefer D213 (multi-line summary on second line)
 ]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 30  # FastMCP factories wire many tools; raising over the default 10
 
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["ARG", "B011"]
+# Tests and scripts: relax docstring requirements (per-test docstrings
+# add noise; test names already document intent).
+"tests/**/*.py" = ["ARG", "B011", "D"]
+"scripts/**/*.py" = ["D100", "D103"]
 
 [tool.ruff.format]
 quote-style = "double"

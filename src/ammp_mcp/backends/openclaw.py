@@ -70,6 +70,17 @@ class OpenClawBackend(MentorBackend):
         timeout_seconds: float = 60.0,
         max_concurrent: int = 10,
     ) -> None:
+        """Wire an HTTP-webhook-backed mentor.
+
+        Args:
+            url: HTTPS endpoint that implements the wire contract above.
+            auth_bearer_env: Name of the env var holding the Bearer token.
+                Read lazily on each call so token rotation doesn't
+                require restarting the server. Pass ``None`` to omit the
+                Authorization header.
+            timeout_seconds: Per-call HTTP timeout.
+            max_concurrent: Per-backend concurrency cap (Semaphore).
+        """
         super().__init__(max_concurrent=max_concurrent)
         self._url = url
         # Read the bearer token from the environment lazily, so a redeploy
@@ -79,9 +90,11 @@ class OpenClawBackend(MentorBackend):
 
     @property
     def is_live(self) -> bool:
+        """``True`` iff a non-empty webhook URL is configured."""
         return bool(self._url)
 
     def _bearer(self) -> str | None:
+        """Read the Bearer token from the configured env var (if any)."""
         if not self._auth_bearer_env:
             return None
         return os.environ.get(self._auth_bearer_env) or None
@@ -94,6 +107,21 @@ class OpenClawBackend(MentorBackend):
         question: str,
         playbook_bodies: list[tuple[str, str]],
     ) -> LLMAnswer:
+        """POST the question to the configured webhook and parse the response.
+
+        Args:
+            mentor_name: Display name passed in the ``name`` field.
+            persona: Voice/stance string for the mentor.
+            question: The mentee's question.
+            playbook_bodies: Top-N retrieved ``(title, body)`` pairs.
+
+        Returns:
+            ``LLMAnswer`` parsed from the webhook's JSON response.
+
+        Raises:
+            RuntimeError: If the webhook returns a non-200 status; the
+                server catches and surfaces ``llm_failed`` to the mentee.
+        """
         headers = {"Content-Type": "application/json", "User-Agent": f"ammp-mcp/{__version__}"}
         bearer = self._bearer()
         if bearer:

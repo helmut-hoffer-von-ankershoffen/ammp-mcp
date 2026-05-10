@@ -3,7 +3,8 @@
 A *mentor* is a directory under `mentors_root` containing `mentor.json`
 (metadata) and `playbooks/*.md` (corpus). A *mentee* is an entry in
 `mentees_file` (JSON list of objects). Both are loaded once at server
-boot; reload via the CLI or by sending the server SIGHUP."""
+boot; reload via the CLI or by sending the server SIGHUP.
+"""
 
 from __future__ import annotations
 
@@ -21,9 +22,19 @@ logger = logging.getLogger(__name__)
 
 
 def load_mentors(root: Path) -> dict[str, Mentor]:
-    """Discover mentors under root. Each subdirectory of root is a mentor;
-    its `mentor.json` describes it; its `playbooks/` (or `*.md` files in the
-    mentor dir) are the corpus."""
+    """Discover mentors under ``root``.
+
+    Each subdirectory of ``root`` is a mentor; its ``mentor.json``
+    describes it; its ``playbooks/`` (or ``*.md`` files in the mentor
+    dir itself) are the corpus.
+
+    Args:
+        root: Root directory holding one subdir per mentor.
+
+    Returns:
+        Mapping of mentor slug → :class:`Mentor`. Empty dict when
+        ``root`` does not exist.
+    """
     if not root.is_dir():
         logger.warning("mentors_root %s does not exist; returning empty registry", root)
         return {}
@@ -50,8 +61,18 @@ def load_mentors(root: Path) -> dict[str, Mentor]:
 
 
 def get_mentor(mentors: dict[str, Mentor], slug: str | None, default_slug: str) -> Mentor | None:
-    """Resolve a mentor slug. Returns the mentor or None if not found.
-    Empty / None slug routes to the configured default mentor."""
+    """Resolve a mentor slug to a :class:`Mentor`.
+
+    Empty or ``None`` ``slug`` routes to the configured default mentor.
+
+    Args:
+        mentors: Loaded mentor registry.
+        slug: Caller-supplied slug, possibly empty / None.
+        default_slug: Server's default mentor slug.
+
+    Returns:
+        The matching mentor, or ``None`` if no match.
+    """
     chosen = (slug or default_slug).strip().lower()
     return mentors.get(chosen)
 
@@ -102,8 +123,20 @@ def hash_api_key(api_key: str) -> str:
 
 
 def find_mentee_by_api_key(mentees: dict[str, Mentee], api_key: str) -> Mentee | None:
-    """Constant-time-ish comparison: hash the incoming key once, then
-    look up the hash. Returns the mentee or None."""
+    """Resolve a Bearer key to a mentee record.
+
+    Hashes the incoming key once, then looks up the hash in the
+    allowlist. Constant-time-ish comparison is good enough here
+    because the hash is computed before any equality test, and the
+    only comparison is between two short fixed-size hex strings.
+
+    Args:
+        mentees: Loaded mentee allowlist.
+        api_key: Plaintext Bearer token from the request.
+
+    Returns:
+        The matching mentee, or ``None`` if no match.
+    """
     h = hash_api_key(api_key)
     for m in mentees.values():
         if m.api_key_hash == h:

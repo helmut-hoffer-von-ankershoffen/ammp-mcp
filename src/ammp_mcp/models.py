@@ -1,5 +1,9 @@
-"""Pydantic models for the protocol surface — Mentor, Mentee, Playbook, plus
-the structured response envelopes returned by each AMMP operation."""
+"""Pydantic models for the protocol surface.
+
+Covers the static config objects (Mentor, Mentee, BackendConfig
+discriminated union) and the response envelopes returned by each AMMP
+Mentoring-track operation.
+"""
 
 from __future__ import annotations
 
@@ -94,10 +98,13 @@ class Mentor(BaseModel):
 
 
 class Mentee(BaseModel):
-    """A registered mentee allowed to call the server. Identifier is the slug;
-    api_key_hash is checked when require_auth is True. The api_key (plaintext)
-    is never stored — the server hashes incoming keys at request time and
-    compares hashes."""
+    """A registered mentee allowed to call the server.
+
+    Identifier is the slug; ``api_key_hash`` is checked when
+    ``require_auth`` is ``True``. The api_key (plaintext) is never
+    stored — the server hashes incoming keys at request time and
+    compares hashes.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -112,6 +119,8 @@ class Mentee(BaseModel):
 
 
 class PlaybookSummary(BaseModel):
+    """Summary of one playbook for the response envelopes."""
+
     model_config = ConfigDict(extra="forbid")
 
     id: str
@@ -120,6 +129,8 @@ class PlaybookSummary(BaseModel):
 
 
 class ListPlaybooksResponse(BaseModel):
+    """Response envelope for the ``ListPlaybooks`` AMMP operation."""
+
     model_config = ConfigDict(extra="forbid")
 
     mentor: str
@@ -129,6 +140,8 @@ class ListPlaybooksResponse(BaseModel):
 
 
 class GetPlaybookResponse(BaseModel):
+    """Response envelope for the ``GetPlaybook`` AMMP operation."""
+
     model_config = ConfigDict(extra="forbid")
 
     mentor: str
@@ -138,6 +151,8 @@ class GetPlaybookResponse(BaseModel):
 
 
 class SearchMatch(BaseModel):
+    """One match in a ``SearchPlaybooks`` result list."""
+
     model_config = ConfigDict(extra="forbid")
 
     id: str
@@ -147,6 +162,8 @@ class SearchMatch(BaseModel):
 
 
 class SearchPlaybooksResponse(BaseModel):
+    """Response envelope for the ``SearchPlaybooks`` AMMP operation."""
+
     model_config = ConfigDict(extra="forbid")
 
     mentor: str
@@ -156,10 +173,14 @@ class SearchPlaybooksResponse(BaseModel):
 
 
 class AskMentorResponse(BaseModel):
-    """The response from AskMentor. When confidence falls below the mentor's
-    threshold, `escalation_recommended` is set and `suggested_message_to_your_operator`
-    is populated — the mentor proactively offers an escalation path even
-    without an explicit EscalateToHuman call."""
+    """Response envelope for the ``AskMentor`` AMMP operation.
+
+    When confidence falls below the mentor's threshold,
+    ``escalation_recommended`` is set and
+    ``suggested_message_to_your_operator`` is populated — the mentor
+    proactively offers an escalation path even without an explicit
+    ``EscalateToHuman`` call.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -173,6 +194,8 @@ class AskMentorResponse(BaseModel):
 
 
 class EscalateToHumanResponse(BaseModel):
+    """Response envelope for the ``EscalateToHuman`` AMMP operation."""
+
     model_config = ConfigDict(extra="forbid")
 
     mentor: str
@@ -182,8 +205,11 @@ class EscalateToHumanResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """Returned (as a tool result, not an HTTP error) for graceful in-band
-    error reporting — invalid mentor slug, missing playbook id, etc."""
+    """Graceful in-band error envelope.
+
+    Returned as a tool result (not an HTTP error) for cases like
+    invalid mentor slug, missing playbook id, auth failure, etc.
+    """
 
     model_config = ConfigDict(extra="forbid")
 

@@ -15,6 +15,16 @@ from pathlib import Path
 
 @dataclass(frozen=True, slots=True)
 class Playbook:
+    """One playbook loaded from a markdown file in a mentor's corpus.
+
+    Attributes:
+        id: Filename stem (the on-the-wire id used by GetPlaybook).
+        title: First H1 in the file (or the stem if no H1 is present).
+        summary: First non-blank, non-heading line, ~200-char truncated.
+        body: Full markdown source.
+        path: Filesystem path the playbook was loaded from.
+    """
+
     id: str
     title: str
     summary: str
@@ -55,17 +65,32 @@ def _load_one(path: Path) -> Playbook:
 
 
 def load_corpus(directory: Path) -> list[Playbook]:
-    """Scan a directory for `*.md` files (excluding README.md) and load
-    them sorted by filename. Returns an empty list if the directory does
-    not exist."""
+    """Scan a directory for ``*.md`` files and load each as a Playbook.
+
+    ``README.md`` is excluded (it's an index, not a playbook).
+
+    Args:
+        directory: Mentor's playbook directory.
+
+    Returns:
+        Playbooks sorted by filename. Empty list when the directory
+        does not exist.
+    """
     if not directory.is_dir():
         return []
     return [_load_one(p) for p in sorted(directory.glob("*.md")) if p.name.lower() != "readme.md"]
 
 
 def safe_id(raw: str) -> str | None:
-    """Validate a playbook id from untrusted input. Returns the canonical
-    slug or None if rejected (path traversal, dotfile, empty)."""
+    """Validate a playbook id from untrusted mentee input.
+
+    Args:
+        raw: Caller-supplied id string.
+
+    Returns:
+        Canonical slug, or ``None`` when rejected (path-traversal
+        sequences, dotfile prefix, empty, longer than 128 chars).
+    """
     s = raw.strip()
     if not s or "/" in s or "\\" in s or s.startswith(".") or len(s) > 128:
         return None
@@ -73,9 +98,19 @@ def safe_id(raw: str) -> str | None:
 
 
 def search(corpus: list[Playbook], query: str, limit: int = 5) -> list[tuple[Playbook, int, str]]:
-    """Substring-rank a corpus for a query. Returns (playbook, rank, snippet)
-    tuples sorted by descending rank. v0.2 implementation; v0.3 will add
-    embedding-based ranking."""
+    """Substring-rank a playbook corpus for a query string.
+
+    v0.2 implementation; v0.3 will add embedding-based ranking.
+
+    Args:
+        corpus: Playbooks to search.
+        query: User-supplied query string. Empty / whitespace returns
+            an empty list.
+        limit: Maximum number of matches to return.
+
+    Returns:
+        ``(playbook, rank, snippet)`` triples sorted by descending rank.
+    """
     q = (query or "").strip().lower()
     if not q:
         return []
@@ -99,8 +134,19 @@ def search(corpus: list[Playbook], query: str, limit: int = 5) -> list[tuple[Pla
 
 
 def keyword_rank(corpus: list[Playbook], question: str, limit: int = 3) -> list[tuple[Playbook, int]]:
-    """Token-ranked match across the corpus, used as cheap retrieval for
-    AskMentor. Returns (playbook, rank) sorted by descending rank."""
+    """Token-rank a corpus against a question for cheap retrieval.
+
+    Used by ``AskMentor`` to feed the top-N most relevant playbooks
+    into the backend's prompt. Stopwords are filtered.
+
+    Args:
+        corpus: Playbooks to score.
+        question: The mentee's question.
+        limit: Maximum number of matches to return.
+
+    Returns:
+        ``(playbook, rank)`` pairs sorted by descending rank.
+    """
     stopwords = {
         "the", "and", "for", "with", "what", "when", "how", "why", "you",
         "are", "this", "that", "from", "into", "over", "about", "your",

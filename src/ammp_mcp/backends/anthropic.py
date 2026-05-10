@@ -64,6 +64,15 @@ class AnthropicBackend(MentorBackend):
         max_concurrent: int,
         timeout_seconds: float,
     ) -> None:
+        """Wire an Anthropic-Messages-backed mentor.
+
+        Args:
+            api_key: Anthropic API key. ``None`` puts the backend in a
+                no-network fallback mode that mirrors StubBackend.
+            model: Anthropic model id (e.g. ``"claude-opus-4-7"``).
+            max_concurrent: Per-backend concurrency cap (asyncio Semaphore).
+            timeout_seconds: Per-call HTTP timeout passed to the SDK.
+        """
         super().__init__(max_concurrent=max_concurrent)
         self._api_key = api_key
         self._model = model
@@ -74,6 +83,7 @@ class AnthropicBackend(MentorBackend):
 
     @property
     def is_live(self) -> bool:
+        """``True`` iff the backend has an API key and can hit Anthropic."""
         return self._client is not None
 
     async def ask(
@@ -84,6 +94,25 @@ class AnthropicBackend(MentorBackend):
         question: str,
         playbook_bodies: list[tuple[str, str]],
     ) -> LLMAnswer:
+        """Synthesise a mentor answer via the Anthropic Messages API.
+
+        See :meth:`ammp_mcp.backends.base.MentorBackend.ask` for the
+        general contract — this implementation pastes ``persona`` and
+        the playbook bodies into a system prompt and asks the model
+        for a JSON envelope.
+
+        Args:
+            mentor_name: Display name (e.g. ``"Pepe Arturo"``).
+            persona: Voice/stance string for the mentor.
+            question: The mentee's question, already trimmed.
+            playbook_bodies: Top-N retrieved ``(title, body)`` pairs.
+
+        Returns:
+            ``LLMAnswer`` with the model's prose + self-reported
+            confidence in ``[0, 1]``. When no API key is configured,
+            returns a deterministic low-confidence placeholder so the
+            response shape stays consistent.
+        """
         if not self._client:
             # Mirror the StubBackend behaviour so a missing API key
             # doesn't break the response shape — the low confidence

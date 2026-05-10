@@ -21,10 +21,20 @@ _salt = secrets.token_bytes(16)  # per-process; cleared on restart
 
 
 def short_hash(payload: str | bytes | None) -> str:
-    """Return an 8-hex-char hash of payload (or `—` for None / empty).
+    """Return an 8-hex-char hash of ``payload``.
+
     The output is a stable identifier within a single server process —
     enough to correlate two log lines about the same request — but
-    cannot be reversed back to plaintext."""
+    cannot be reversed back to plaintext.
+
+    Args:
+        payload: The bytes (or str, encoded as UTF-8) to hash. ``None``
+            or empty returns the placeholder ``"—"``.
+
+    Returns:
+        Lowercase 8-character hex string when payload is non-empty;
+        ``"—"`` for None / empty payloads.
+    """
     if not payload:
         return "—"
     if isinstance(payload, str):
@@ -41,8 +51,20 @@ def log_event(
     request_hash: str = "—",
     extra: str | None = None,
 ) -> None:
-    """Append a single audit line. Thread-safe; opens + closes the file
-    each call (small cost, big simplicity for a low-volume server)."""
+    """Append a single audit line to ``log_path``.
+
+    Thread-safe; opens and closes the file each call (small cost, big
+    simplicity for a low-volume server).
+
+    Args:
+        log_path: The audit-log file. Parent dirs are created on demand.
+        operation: AMMP operation name (e.g. ``"AskMentor"``).
+        mentor: Mentor slug (default ``"—"``).
+        mentee: Mentee slug (default ``"—"``).
+        request_hash: Opaque request hash from :func:`short_hash`.
+        extra: Optional free-form trailer (kept short; never include
+            request payloads).
+    """
     log_path.parent.mkdir(parents=True, exist_ok=True)
     line = f"{dt.datetime.now(dt.UTC).isoformat()} op={operation} mentor={mentor} mentee={mentee} hash={request_hash}"
     if extra:
@@ -53,6 +75,11 @@ def log_event(
 
 
 def reset_salt_for_testing() -> None:
-    """Test-only — re-roll the per-process salt so test runs are isolated."""
+    """Re-roll the per-process salt so test runs are isolated.
+
+    Test-only helper. Production code never calls this — the salt is
+    fixed for the lifetime of the process so that hashes within a
+    single run are correlatable.
+    """
     global _salt
     _salt = os.urandom(16)
