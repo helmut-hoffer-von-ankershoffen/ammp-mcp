@@ -25,6 +25,7 @@ import os
 import re
 import secrets
 from collections import Counter
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import typer
@@ -52,6 +53,14 @@ app = typer.Typer(
     add_completion=False,
 )
 console = Console()
+
+# ─── Constants reused across commands ────────────────────────────────────
+
+_ICON_OK = "[green]✓[/green]"
+_ICON_FAIL = "[red]✗[/red]"
+_ICON_WARN = "[yellow]![/yellow]"
+_CAP_LABEL = "Capability advertisement"
+_VALID_BACKEND_KINDS = {"openclaw", "anthropic", "stub"}
 
 mentor_app = typer.Typer(
     name="mentor",
@@ -315,6 +324,140 @@ def serve(
 
 
 # ─── ammp system setup ────────────────────────────────────────────────────
+#
+# `setup` is split into a thin command function that calls a sequence of
+# private helpers. Keeps cognitive complexity well under SonarCloud's
+# S3776 limit of 15.
+
+
+def _setup_print_header(s: object, repo_root: Path) -> None:
+    console.print(
+        Panel.fit(
+            f"[bold]ammp-mcp setup[/bold]\n"
+            f"[dim]repo:[/dim] {repo_root}\n"
+            f"[dim]mentors_root:[/dim] {s.mentors_root}\n"  # type: ignore[attr-defined]
+            f"[dim]mentees_file:[/dim] {s.mentees_file}\n"  # type: ignore[attr-defined]
+            f"[dim]audit_log:[/dim] {s.audit_log_path}",  # type: ignore[attr-defined]
+            title="Step 0 — environment",
+            border_style="cyan",
+        )
+    )
+
+
+def _setup_validate(mentors_root: Path, mentor_slug: str, backend: str) -> dict[str, Mentor]:
+    mentors = load_mentors(mentors_root)
+    if mentor_slug not in mentors:
+        console.print(
+            f"[red]No mentor directory found at {mentors_root / mentor_slug}.[/red]\n"
+            "Create one with `mentor.json` + `playbooks/*.md` first, then re-run setup."
+        )
+        raise typer.Exit(code=2)
+    if backend not in _VALID_BACKEND_KINDS:
+        kinds = ", ".join(sorted(_VALID_BACKEND_KINDS))
+        console.print(f"[red]Unknown backend kind: {backend!r}. Choose one of: {kinds}.[/red]")
+        raise typer.Exit(code=2)
+    return mentors
+
+
+def _setup_resolve_openclaw_args(yes: bool, openclaw_url: str, auth_bearer_env: str) -> tuple[str, str]:
+    if yes:
+        return openclaw_url, auth_bearer_env
+    url = Prompt.ask("OpenClaw webhook URL", default=openclaw_url, console=console)
+    bearer = Prompt.ask("Env var holding the OpenClaw Bearer token", default=auth_bearer_env, console=console)
+    return url, bearer
+
+
+def _setup_apply_backend(mentor_json_path: Path, backend: str, openclaw_url: str, auth_bearer_env: str) -> None:
+    backend_block: dict[str, object] = {"kind": backend}
+    if backend == "openclaw":
+        backend_block.update(
+            {"url": openclaw_url, "auth_bearer_env": auth_bearer_env, "timeout_seconds": 60, "max_concurrent": 10}
+        )
+    raw = json.loads(mentor_json_path.read_text(encoding="utf-8"))
+    raw = {k: v for k, v in raw.items() if not k.startswith("_")}
+    raw["backend"] = backend_block
+    mentor_json_path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
+
+
+def _setup_mint_mentee_if_needed(mentees_file: Path) -> str | None:
+    """Mint `claude-cowork-helmut` if absent; return the plaintext key (or None when skipped)."""
+    mentees = load_mentees(mentees_file) if mentees_file.exists() else {}
+    first_slug = "claude-cowork-helmut"
+    if first_slug in mentees:
+        console.print(f"[yellow]·[/yellow] Mentee [bold]{first_slug}[/bold] already exists — skipped.")
+        return None
+    api_key = "ammp-" + secrets.token_urlsafe(32)
+    mentees[first_slug] = Mentee(
+        slug=first_slug,
+        operator="human:helmut",
+        runtime="claude-cowork",
+        api_key_hash=hash_api_key(api_key),
+        rate_limit_per_minute=60,
+    )
+    save_mentees(mentees_file, mentees)
+    console.print(f"{_ICON_OK} Minted first mentee [bold]{first_slug}[/bold].")
+    return api_key
+
+
+def _setup_load_existing_env(env_path: Path) -> dict[str, str]:
+    if not env_path.exists():
+        return {}
+    out: dict[str, str] = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.strip().startswith("#"):
+            k, _, v = line.partition("=")
+            out[k.strip()] = v.strip()
+    return out
+
+
+def _setup_compose_env(
+    s: object, backend: str, auth_bearer_env: str, require_auth: bool, existing: dict[str, str]
+) -> dict[str, str]:
+    desired = {
+        "AMMP_REQUIRE_AUTH": "true" if require_auth else "false",
+        "AMMP_MENTORS_ROOT": str(s.mentors_root),  # type: ignore[attr-defined]
+        "AMMP_MENTEES_FILE": str(s.mentees_file),  # type: ignore[attr-defined]
+        "AMMP_AUDIT_LOG_PATH": str(s.audit_log_path),  # type: ignore[attr-defined]
+    }
+    if backend == "anthropic":
+        desired.setdefault("AMMP_ANTHROPIC_API_KEY", existing.get("AMMP_ANTHROPIC_API_KEY", ""))
+    if backend == "openclaw":
+        desired.setdefault(auth_bearer_env, existing.get(auth_bearer_env, ""))
+    return {**desired, **existing}
+
+
+def _setup_write_env(env_path: Path, merged: dict[str, str], auth_bearer_env: str) -> None:
+    lines = [
+        "# ammp-mcp environment - written by `ammp setup`. Edit freely.",
+        f"# Generated {dt.datetime.now(dt.UTC).isoformat()}.",
+        "",
+    ]
+    for k in sorted(merged):
+        v = merged[k]
+        comment = ""
+        if k == auth_bearer_env and not v:
+            comment = "  # <-- fill in the Bearer token before booting"
+        if k == "AMMP_ANTHROPIC_API_KEY" and not v:
+            comment = "  # <-- fill in if you choose the anthropic backend"
+        lines.append(f"{k}={v}{comment}")
+    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    console.print(f"{_ICON_OK} Wrote [bold].env[/bold] scaffold ({len(merged)} keys).")
+
+
+def _setup_print_next_steps(backend: str, auth_bearer_env: str) -> None:
+    next_secret = auth_bearer_env if backend == "openclaw" else "AMMP_ANTHROPIC_API_KEY"
+    console.print()
+    console.print(
+        Panel.fit(
+            "[bold]Next steps[/bold]\n\n"
+            f"  1. Edit [cyan].env[/cyan] and fill in the [cyan]{next_secret}[/cyan] value.\n"
+            "  2. [cyan]uv run ammp status[/cyan] — verify the install is healthy.\n"
+            "  3. [cyan]uv run ammp serve[/cyan] — boot the MCP server.\n"
+            "  4. [cyan]curl http://127.0.0.1:8765/.well-known/agent.json[/cyan] — confirm the capability advertisement.",
+            title="Setup complete",
+            border_style="green",
+        )
+    )
 
 
 @system_app.command("setup")
@@ -346,126 +489,24 @@ def setup(
 
     Configures the chosen mentor's backend block, optionally mints a first
     mentee, writes a .env scaffold with the required env vars, and prints
-    the next-step commands. Idempotent — re-running updates the same
-    files without duplicating mentees.
+    the next-step commands. Idempotent.
     """
     s = get_settings()
     repo_root = Path.cwd()
-    console.print(
-        Panel.fit(
-            f"[bold]ammp-mcp setup[/bold]\n"
-            f"[dim]repo:[/dim] {repo_root}\n"
-            f"[dim]mentors_root:[/dim] {s.mentors_root}\n"
-            f"[dim]mentees_file:[/dim] {s.mentees_file}\n"
-            f"[dim]audit_log:[/dim] {s.audit_log_path}",
-            title="Step 0 — environment",
-            border_style="cyan",
-        )
-    )
-
-    mentors = load_mentors(s.mentors_root)
-    if mentor_slug not in mentors:
-        console.print(
-            f"[red]No mentor directory found at {s.mentors_root / mentor_slug}.[/red]\n"
-            "Create one with `mentor.json` + `playbooks/*.md` first, then re-run setup."
-        )
-        raise typer.Exit(code=2)
-
-    if backend not in {"openclaw", "anthropic", "stub"}:
-        console.print(f"[red]Unknown backend kind: {backend!r}. Choose one of: openclaw, anthropic, stub.[/red]")
-        raise typer.Exit(code=2)
-
-    if backend == "openclaw" and not yes:
-        openclaw_url = Prompt.ask("OpenClaw webhook URL", default=openclaw_url, console=console)
-        auth_bearer_env = Prompt.ask(
-            "Env var holding the OpenClaw Bearer token", default=auth_bearer_env, console=console
-        )
-
-    backend_block: dict[str, object] = {"kind": backend}
+    _setup_print_header(s, repo_root)
+    _setup_validate(s.mentors_root, mentor_slug, backend)
     if backend == "openclaw":
-        backend_block.update(
-            {
-                "url": openclaw_url,
-                "auth_bearer_env": auth_bearer_env,
-                "timeout_seconds": 60,
-                "max_concurrent": 10,
-            }
-        )
+        openclaw_url, auth_bearer_env = _setup_resolve_openclaw_args(yes, openclaw_url, auth_bearer_env)
+    _setup_apply_backend(s.mentors_root / mentor_slug / "mentor.json", backend, openclaw_url, auth_bearer_env)
+    console.print(f"{_ICON_OK} Updated [bold]{mentor_slug}/mentor.json[/bold] → backend = [cyan]{backend}[/cyan]")
 
-    mentor_json_path = s.mentors_root / mentor_slug / "mentor.json"
-    raw = json.loads(mentor_json_path.read_text(encoding="utf-8"))
-    raw = {k: v for k, v in raw.items() if not k.startswith("_")}
-    raw["backend"] = backend_block
-    mentor_json_path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
-    console.print(f"[green]✓[/green] Updated [bold]{mentor_slug}/mentor.json[/bold] → backend = [cyan]{backend}[/cyan]")
-
-    api_key: str | None = None
-    if mint_first_mentee:
-        mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
-        first_slug = "claude-cowork-helmut"
-        if first_slug not in mentees:
-            api_key = "ammp-" + secrets.token_urlsafe(32)
-            mentees[first_slug] = Mentee(
-                slug=first_slug,
-                operator="human:helmut",
-                runtime="claude-cowork",
-                api_key_hash=hash_api_key(api_key),
-                rate_limit_per_minute=60,
-            )
-            save_mentees(s.mentees_file, mentees)
-            console.print(f"[green]✓[/green] Minted first mentee [bold]{first_slug}[/bold].")
-        else:
-            console.print(f"[yellow]·[/yellow] Mentee [bold]{first_slug}[/bold] already exists — skipped.")
+    api_key = _setup_mint_mentee_if_needed(s.mentees_file) if mint_first_mentee else None
 
     env_path = repo_root / ".env"
-    existing_env: dict[str, str] = {}
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            if "=" in line and not line.strip().startswith("#"):
-                k, _, v = line.partition("=")
-                existing_env[k.strip()] = v.strip()
-
-    desired = {
-        "AMMP_REQUIRE_AUTH": "true" if require_auth else "false",
-        "AMMP_MENTORS_ROOT": str(s.mentors_root),
-        "AMMP_MENTEES_FILE": str(s.mentees_file),
-        "AMMP_AUDIT_LOG_PATH": str(s.audit_log_path),
-    }
-    if backend == "anthropic":
-        desired.setdefault("AMMP_ANTHROPIC_API_KEY", existing_env.get("AMMP_ANTHROPIC_API_KEY", ""))
-    if backend == "openclaw":
-        desired.setdefault(auth_bearer_env, existing_env.get(auth_bearer_env, ""))
-
-    merged = {**desired, **existing_env}
-    lines = [
-        "# ammp-mcp environment - written by `ammp setup`. Edit freely.",
-        f"# Generated {dt.datetime.now(dt.UTC).isoformat()}.",
-        "",
-    ]
-    for k in sorted(merged):
-        v = merged[k]
-        comment = ""
-        if k == auth_bearer_env and not v:
-            comment = "  # <-- fill in the Bearer token before booting"
-        if k == "AMMP_ANTHROPIC_API_KEY" and not v:
-            comment = "  # <-- fill in if you choose the anthropic backend"
-        lines.append(f"{k}={v}{comment}")
-    env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    console.print(f"[green]✓[/green] Wrote [bold].env[/bold] scaffold ({len(merged)} keys).")
-
-    next_secret = auth_bearer_env if backend == "openclaw" else "AMMP_ANTHROPIC_API_KEY"
-    console.print()
-    console.print(
-        Panel.fit(
-            "[bold]Next steps[/bold]\n\n"
-            f"  1. Edit [cyan].env[/cyan] and fill in the [cyan]{next_secret}[/cyan] value.\n"
-            "  2. [cyan]uv run ammp status[/cyan] — verify the install is healthy.\n"
-            "  3. [cyan]uv run ammp serve[/cyan] — boot the MCP server.\n"
-            "  4. [cyan]curl http://127.0.0.1:8765/.well-known/agent.json[/cyan] — confirm the capability advertisement.",
-            title="Setup complete",
-            border_style="green",
-        )
-    )
+    existing = _setup_load_existing_env(env_path)
+    merged = _setup_compose_env(s, backend, auth_bearer_env, require_auth, existing)
+    _setup_write_env(env_path, merged, auth_bearer_env)
+    _setup_print_next_steps(backend, auth_bearer_env)
 
     if api_key:
         console.print()
@@ -476,101 +517,103 @@ def setup(
 # ─── ammp system status ───────────────────────────────────────────────────
 
 
-@system_app.command("status")
-def status() -> None:
-    """Validate the current installation. Exits non-zero if anything is broken.
+@dataclass
+class _StatusReporter:
+    """Collects status-check rows + outcome lists. One closure-free unit per run."""
 
-    Checks: settings load, mentor.json files parse, playbook dirs exist,
-    mentees allowlist is well-formed, audit log is writable, env vars
-    referenced by OpenClaw backends are set, and the configured public
-    URL is well-formed.
-    """
-    s = get_settings()
-    problems: list[str] = []
-    notes: list[str] = []
+    table: Table
+    problems: list[str]
+    notes: list[str]
 
-    table = Table(title="ammp-mcp installation status", show_lines=False)
-    table.add_column("check", style="white", no_wrap=True)
-    table.add_column("result", justify="left")
-    table.add_column("detail", style="dim")
+    def ok(self, name: str, detail: str = "") -> None:
+        self.table.add_row(name, _ICON_OK, detail)
 
-    def ok(name: str, detail: str = "") -> None:
-        table.add_row(name, "[green]✓[/green]", detail)
+    def warn(self, name: str, detail: str) -> None:
+        self.table.add_row(name, _ICON_WARN, detail)
+        self.notes.append(f"{name}: {detail}")
 
-    def warn(name: str, detail: str) -> None:
-        table.add_row(name, "[yellow]![/yellow]", detail)
-        notes.append(f"{name}: {detail}")
+    def fail(self, name: str, detail: str) -> None:
+        self.table.add_row(name, _ICON_FAIL, detail)
+        self.problems.append(f"{name}: {detail}")
 
-    def fail(name: str, detail: str) -> None:
-        table.add_row(name, "[red]✗[/red]", detail)
-        problems.append(f"{name}: {detail}")
 
-    ok("Settings loaded", f"public_url={s.public_url}, host={s.host}, port={s.port}, require_auth={s.require_auth}")
-
-    mentors: dict[str, Mentor] = {}
-    if not s.mentors_root.is_dir():
-        fail("Mentors root", f"directory does not exist: {s.mentors_root}")
+def _status_check_one_mentor(slug: str, m: Mentor, r: _StatusReporter) -> None:
+    corpus = load_corpus(m.playbook_dir)
+    backend_label = m.backend.kind if m.backend else "fallback"
+    if not corpus:
+        r.warn(f"  mentor {slug}", f"playbook_dir has no *.md: {m.playbook_dir}")
     else:
-        try:
-            mentors = load_mentors(s.mentors_root)
-        except Exception as e:
-            fail("Mentor registry", f"failed to load: {e}")
-        if not mentors:
-            warn("Mentor registry", f"no mentors under {s.mentors_root}")
-        for slug, m in mentors.items():
-            corpus = load_corpus(m.playbook_dir)
-            backend_label = m.backend.kind if m.backend else "fallback"
-            if not corpus:
-                warn(f"  mentor {slug}", f"playbook_dir has no *.md: {m.playbook_dir}")
-            else:
-                ok(f"  mentor {slug}", f"{len(corpus)} playbook(s), backend={backend_label}")
-            if m.backend and m.backend.kind == "openclaw":
-                env_name = m.backend.auth_bearer_env
-                if env_name and not os.environ.get(env_name):
-                    warn(f"    {slug}.backend env", f"{env_name} is not set in the environment")
-                if not re.match(r"^https?://", m.backend.url):
-                    fail(f"    {slug}.backend url", f"not http(s): {m.backend.url}")
+        r.ok(f"  mentor {slug}", f"{len(corpus)} playbook(s), backend={backend_label}")
+    if m.backend and m.backend.kind == "openclaw":
+        env_name = m.backend.auth_bearer_env
+        if env_name and not os.environ.get(env_name):
+            r.warn(f"    {slug}.backend env", f"{env_name} is not set in the environment")
+        if not re.match(r"^https?://", m.backend.url):
+            r.fail(f"    {slug}.backend url", f"not http(s): {m.backend.url}")
 
-    if not s.mentees_file.exists():
-        warn("Mentees file", f"does not exist yet: {s.mentees_file} (run `ammp mentee add` to mint one)")
-    else:
-        try:
-            mentees = load_mentees(s.mentees_file)
-            ok("Mentees allowlist", f"{len(mentees)} mentee(s)")
-        except Exception as e:
-            fail("Mentees allowlist", f"failed to load: {e}")
 
+def _status_check_mentors(mentors_root: Path, r: _StatusReporter) -> dict[str, Mentor]:
+    if not mentors_root.is_dir():
+        r.fail("Mentors root", f"directory does not exist: {mentors_root}")
+        return {}
     try:
-        s.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
-        probe = s.audit_log_path.parent / ".ammp-status-probe"
+        mentors = load_mentors(mentors_root)
+    except Exception as e:
+        r.fail("Mentor registry", f"failed to load: {e}")
+        return {}
+    if not mentors:
+        r.warn("Mentor registry", f"no mentors under {mentors_root}")
+    for slug, m in mentors.items():
+        _status_check_one_mentor(slug, m, r)
+    return mentors
+
+
+def _status_check_mentees(mentees_file: Path, r: _StatusReporter) -> None:
+    if not mentees_file.exists():
+        r.warn("Mentees file", f"does not exist yet: {mentees_file} (run `ammp mentee add` to mint one)")
+        return
+    try:
+        mentees = load_mentees(mentees_file)
+        r.ok("Mentees allowlist", f"{len(mentees)} mentee(s)")
+    except Exception as e:
+        r.fail("Mentees allowlist", f"failed to load: {e}")
+
+
+def _status_check_audit_log(audit_log_path: Path, r: _StatusReporter) -> None:
+    try:
+        audit_log_path.parent.mkdir(parents=True, exist_ok=True)
+        probe = audit_log_path.parent / ".ammp-status-probe"
         probe.write_text("probe", encoding="utf-8")
         probe.unlink()
-        ok("Audit log writable", str(s.audit_log_path))
+        r.ok("Audit log writable", str(audit_log_path))
     except Exception as e:
-        fail("Audit log writable", f"{s.audit_log_path}: {e}")
+        r.fail("Audit log writable", f"{audit_log_path}: {e}")
 
+
+def _status_check_anthropic_key(s: object, mentors: dict[str, Mentor], r: _StatusReporter) -> None:
     has_anthropic_mentor = any(m.backend is None or m.backend.kind == "anthropic" for m in mentors.values())
-    if has_anthropic_mentor:
-        if not s.anthropic_api_key:
-            warn(
-                "AMMP_ANTHROPIC_API_KEY",
-                "unset; AskMentor will return a deterministic stub for any anthropic-backed mentor",
-            )
-        else:
-            ok("AMMP_ANTHROPIC_API_KEY", "set")
+    if not has_anthropic_mentor:
+        return
+    if not s.anthropic_api_key:  # type: ignore[attr-defined]
+        r.warn(
+            "AMMP_ANTHROPIC_API_KEY",
+            "unset; AskMentor will return a deterministic stub for any anthropic-backed mentor",
+        )
+    else:
+        r.ok("AMMP_ANTHROPIC_API_KEY", "set")
 
-    console.print(table)
 
-    if problems:
+def _status_emit_summary(r: _StatusReporter) -> None:
+    if r.problems:
         console.print()
-        console.print(f"[bold red]{len(problems)} problem(s) — installation is broken:[/bold red]")
-        for p in problems:
+        console.print(f"[bold red]{len(r.problems)} problem(s) — installation is broken:[/bold red]")
+        for p in r.problems:
             console.print(f"  • {p}")
         raise typer.Exit(code=1)
-    if notes:
+    if r.notes:
         console.print()
-        console.print(f"[yellow]{len(notes)} warning(s) — non-fatal but worth checking:[/yellow]")
-        for n in notes:
+        console.print(f"[yellow]{len(r.notes)} warning(s) — non-fatal but worth checking:[/yellow]")
+        for n in r.notes:
             console.print(f"  • {n}")
         console.print()
         console.print("[green]Status: OK with warnings.[/green]")
@@ -579,12 +622,88 @@ def status() -> None:
         console.print("[bold green]Status: OK.[/bold green]")
 
 
+@system_app.command("status")
+def status() -> None:
+    """Validate the current installation. Exits non-zero if anything is broken."""
+    s = get_settings()
+    table = Table(title="ammp-mcp installation status", show_lines=False)
+    table.add_column("check", style="white", no_wrap=True)
+    table.add_column("result", justify="left")
+    table.add_column("detail", style="dim")
+    r = _StatusReporter(table=table, problems=[], notes=[])
+
+    r.ok(
+        "Settings loaded",
+        f"public_url={s.public_url}, host={s.host}, port={s.port}, require_auth={s.require_auth}",
+    )
+    mentors = _status_check_mentors(s.mentors_root, r)
+    _status_check_mentees(s.mentees_file, r)
+    _status_check_audit_log(s.audit_log_path, r)
+    _status_check_anthropic_key(s, mentors, r)
+
+    console.print(table)
+    _status_emit_summary(r)
+
+
 # ─── ammp system usage ────────────────────────────────────────────────────
 
 
 _AUDIT_LINE_RE = re.compile(
     r"^(?P<ts>\S+)\s+op=(?P<op>\S+)\s+mentor=(?P<mentor>\S+)\s+mentee=(?P<mentee>\S+)\s+hash=(?P<hash>\S+)"
 )
+
+
+@dataclass
+class _AuditAggregate:
+    op_counts: Counter[str] = field(default_factory=Counter)
+    mentor_counts: Counter[str] = field(default_factory=Counter)
+    mentee_counts: Counter[str] = field(default_factory=Counter)
+    parsed: int = 0
+    skipped: int = 0
+    earliest: dt.datetime | None = None
+    latest: dt.datetime | None = None
+
+
+def _usage_parse_one_line(line: str, cutoff: dt.datetime | None, agg: _AuditAggregate) -> None:
+    m = _AUDIT_LINE_RE.match(line)
+    if not m:
+        agg.skipped += 1
+        return
+    try:
+        ts = dt.datetime.fromisoformat(m.group("ts"))
+    except ValueError:
+        agg.skipped += 1
+        return
+    if cutoff and ts < cutoff:
+        return
+    agg.parsed += 1
+    agg.op_counts[m.group("op")] += 1
+    agg.mentor_counts[m.group("mentor")] += 1
+    agg.mentee_counts[m.group("mentee")] += 1
+    if agg.earliest is None or ts < agg.earliest:
+        agg.earliest = ts
+    if agg.latest is None or ts > agg.latest:
+        agg.latest = ts
+
+
+def _usage_parse_audit(path: Path, cutoff: dt.datetime | None) -> _AuditAggregate:
+    agg = _AuditAggregate()
+    with path.open("r", encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            _usage_parse_one_line(line, cutoff, agg)
+    return agg
+
+
+def _usage_render_breakdown(title: str, counts: Counter[str], col_label: str, style: str) -> Table:
+    t = Table(title=title)
+    t.add_column(col_label, style="white")
+    t.add_column("count", justify="right", style=style)
+    for k, n in counts.most_common():
+        t.add_row(k, str(n))
+    return t
 
 
 @system_app.command("usage")
@@ -604,86 +723,86 @@ def usage(
         console.print(f"[yellow]Audit log does not exist yet: {s.audit_log_path}[/yellow]")
         raise typer.Exit(code=0)
 
-    cutoff: dt.datetime | None = None
-    if days > 0:
-        cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=days)
-
-    op_counts: Counter[str] = Counter()
-    mentor_counts: Counter[str] = Counter()
-    mentee_counts: Counter[str] = Counter()
-    parsed_lines = 0
-    skipped_lines = 0
-    earliest: dt.datetime | None = None
-    latest: dt.datetime | None = None
-
-    with s.audit_log_path.open("r", encoding="utf-8") as f:
-        for raw_line in f:
-            line = raw_line.strip()
-            if not line:
-                continue
-            m = _AUDIT_LINE_RE.match(line)
-            if not m:
-                skipped_lines += 1
-                continue
-            try:
-                ts = dt.datetime.fromisoformat(m.group("ts"))
-            except ValueError:
-                skipped_lines += 1
-                continue
-            if cutoff and ts < cutoff:
-                continue
-            parsed_lines += 1
-            op_counts[m.group("op")] += 1
-            mentor_counts[m.group("mentor")] += 1
-            mentee_counts[m.group("mentee")] += 1
-            earliest = ts if earliest is None or ts < earliest else earliest
-            latest = ts if latest is None or ts > latest else latest
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(days=days) if days > 0 else None
+    agg = _usage_parse_audit(s.audit_log_path, cutoff)
 
     window = f"last {days}d" if days > 0 else "all time"
-    if not parsed_lines:
+    if not agg.parsed:
         console.print(f"[yellow]No audit entries in window ({window}).[/yellow]")
         raise typer.Exit(code=0)
 
     range_line = ""
-    if earliest:
-        range_line = (
-            f"\nrange: {earliest.isoformat(timespec='seconds')} → "
-            f"{latest.isoformat(timespec='seconds') if latest else '—'}"
-        )
-    skipped_note = f" (skipped {skipped_lines} unparsable)" if skipped_lines else ""
+    if agg.earliest:
+        latest_str = agg.latest.isoformat(timespec="seconds") if agg.latest else "—"
+        range_line = f"\nrange: {agg.earliest.isoformat(timespec='seconds')} → {latest_str}"
+    skipped_note = f" (skipped {agg.skipped} unparsable)" if agg.skipped else ""
     console.print(
         Panel.fit(
             f"[bold]ammp-mcp usage[/bold] · window: [cyan]{window}[/cyan]\n"
-            f"entries: [bold]{parsed_lines}[/bold]{skipped_note}{range_line}",
+            f"entries: [bold]{agg.parsed}[/bold]{skipped_note}{range_line}",
             border_style="cyan",
         )
     )
 
-    op_table = Table(title="By operation")
-    op_table.add_column("operation", style="white")
-    op_table.add_column("count", justify="right", style="cyan")
-    for op, n in op_counts.most_common():
-        op_table.add_row(op, str(n))
-    console.print(op_table)
-
+    console.print(_usage_render_breakdown("By operation", agg.op_counts, "operation", "cyan"))
     if by_mentor:
-        m_table = Table(title="By mentor")
-        m_table.add_column("mentor", style="white")
-        m_table.add_column("count", justify="right", style="green")
-        for mentor, n in mentor_counts.most_common():
-            m_table.add_row(mentor, str(n))
-        console.print(m_table)
-
+        console.print(_usage_render_breakdown("By mentor", agg.mentor_counts, "mentor", "green"))
     if by_mentee:
-        u_table = Table(title="By mentee")
-        u_table.add_column("mentee", style="white")
-        u_table.add_column("count", justify="right", style="magenta")
-        for mentee, n in mentee_counts.most_common():
-            u_table.add_row(mentee, str(n))
-        console.print(u_table)
+        console.print(_usage_render_breakdown("By mentee", agg.mentee_counts, "mentee", "magenta"))
 
 
 # ─── ammp system health ───────────────────────────────────────────────────
+
+
+def _health_probe_capability(agent_url: str, timeout: float, table: Table, problems: list[str]) -> None:
+    import urllib.error
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(agent_url, headers={"User-Agent": "ammp-health/1"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read())
+    except urllib.error.URLError as e:
+        table.add_row(_CAP_LABEL, _ICON_FAIL, f"GET {agent_url} failed: {e}")
+        problems.append(f"server unreachable at {agent_url} — boot it with `ammp serve`")
+        return
+    except Exception as e:
+        table.add_row(_CAP_LABEL, _ICON_FAIL, f"unexpected error: {e}")
+        problems.append(f"capability probe error: {e}")
+        return
+    ammp_block = body.get("ammp", {})
+    mentor_count = len(ammp_block.get("mentors", []))
+    live_count = sum(1 for m in ammp_block.get("mentors", []) if m.get("backendLive"))
+    table.add_row(
+        _CAP_LABEL,
+        _ICON_OK,
+        f"name={body.get('name')} v{body.get('version')} · {mentor_count} mentor(s), {live_count} live",
+    )
+
+
+def _health_probe_one_backend(slug: str, m: Mentor, timeout: float, table: Table, problems: list[str]) -> None:
+    import urllib.error
+    import urllib.request
+
+    label = f"  backend {slug} (openclaw)"
+    if m.backend is None or m.backend.kind != "openclaw":
+        return
+    try:
+        req = urllib.request.Request(m.backend.url, method="HEAD", headers={"User-Agent": "ammp-health/1"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            table.add_row(label, _ICON_OK, f"HEAD {m.backend.url} → {resp.status}")
+    except urllib.error.HTTPError as e:
+        # 405 Method Not Allowed is fine — server is up, just rejects HEAD.
+        if e.code in {405, 501}:
+            table.add_row(label, _ICON_OK, f"reachable (HEAD rejected: {e.code})")
+        else:
+            table.add_row(label, _ICON_WARN, f"{m.backend.url} → {e}")
+    except urllib.error.URLError as e:
+        table.add_row(label, _ICON_FAIL, f"unreachable: {e.reason}")
+        problems.append(f"openclaw backend for {slug!r} unreachable: {m.backend.url}")
+    except Exception as e:
+        table.add_row(label, _ICON_FAIL, f"unexpected error: {e}")
+        problems.append(f"openclaw backend probe error for {slug!r}: {e}")
 
 
 @system_app.command("health")
@@ -698,13 +817,7 @@ def health(
     `health` validates that the running thing actually answers — it
     GETs `/.well-known/agent.json` from the server and (optionally)
     HEADs each openclaw mentor backend's webhook URL.
-
-    Boot the server (`ammp serve`) before running this; otherwise the
-    server probe will fail with a helpful hint.
     """
-    import urllib.error
-    import urllib.request
-
     s = get_settings()
     target = (url or s.public_url or f"http://{s.host}:{s.port}").rstrip("/")
     agent_url = f"{target}/.well-known/agent.json"
@@ -713,63 +826,12 @@ def health(
     table.add_column("probe", style="white", no_wrap=True)
     table.add_column("result", justify="left")
     table.add_column("detail", style="dim")
-
     problems: list[str] = []
 
-    # Probe 1: capability advertisement
-    try:
-        req = urllib.request.Request(agent_url, headers={"User-Agent": "ammp-health/1"})
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            body = json.loads(resp.read())
-        ammp_block = body.get("ammp", {})
-        mentor_count = len(ammp_block.get("mentors", []))
-        live_count = sum(1 for m in ammp_block.get("mentors", []) if m.get("backendLive"))
-        table.add_row(
-            "Capability advertisement",
-            "[green]✓[/green]",
-            f"name={body.get('name')} v{body.get('version')} · {mentor_count} mentor(s), {live_count} live",
-        )
-    except urllib.error.URLError as e:
-        table.add_row("Capability advertisement", "[red]✗[/red]", f"GET {agent_url} failed: {e}")
-        problems.append(f"server unreachable at {target} — boot it with `ammp serve`")
-    except Exception as e:
-        table.add_row("Capability advertisement", "[red]✗[/red]", f"unexpected error: {e}")
-        problems.append(f"capability probe error: {e}")
-
-    # Probe 2: each openclaw backend webhook
+    _health_probe_capability(agent_url, timeout, table, problems)
     if probe_backends:
-        mentors = load_mentors(s.mentors_root)
-        for slug, m in mentors.items():
-            if m.backend is None or m.backend.kind != "openclaw":
-                continue
-            try:
-                req = urllib.request.Request(m.backend.url, method="HEAD", headers={"User-Agent": "ammp-health/1"})
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
-                    table.add_row(
-                        f"  backend {slug} (openclaw)",
-                        "[green]✓[/green]",
-                        f"HEAD {m.backend.url} → {resp.status}",
-                    )
-            except urllib.error.HTTPError as e:
-                # 405 Method Not Allowed is fine — server is up, just rejects HEAD.
-                if e.code in {405, 501}:
-                    table.add_row(
-                        f"  backend {slug} (openclaw)",
-                        "[green]✓[/green]",
-                        f"reachable (HEAD rejected: {e.code})",
-                    )
-                else:
-                    table.add_row(f"  backend {slug} (openclaw)", "[yellow]![/yellow]", f"{m.backend.url} → {e}")
-            except urllib.error.URLError as e:
-                table.add_row(
-                    f"  backend {slug} (openclaw)",
-                    "[red]✗[/red]",
-                    f"unreachable: {e.reason}",
-                )
-                problems.append(f"openclaw backend for {slug!r} unreachable: {m.backend.url}")
-            except Exception as e:
-                table.add_row(f"  backend {slug} (openclaw)", "[red]✗[/red]", f"unexpected error: {e}")
-                problems.append(f"openclaw backend probe error for {slug!r}: {e}")
+        for slug, m in load_mentors(s.mentors_root).items():
+            _health_probe_one_backend(slug, m, timeout, table, problems)
 
     console.print(table)
     console.print()
