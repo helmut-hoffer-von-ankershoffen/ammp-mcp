@@ -6,7 +6,7 @@
 [![Linter: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Type-checked: mypy](https://img.shields.io/badge/typed-mypy_strict-blue.svg)](http://mypy-lang.org/)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11_|_3.12_|_3.13_|_3.14-blue.svg)](https://www.python.org/)
-[![AMMP draft-01](https://img.shields.io/badge/AMMP-draft--arturo--ammp--01-purple)](https://www.helmguild.com/rfc/ammp/)
+[![AMMP draft-01](https://img.shields.io/badge/AMMP-draft--ammp--01-purple)](https://www.helmguild.com/rfc/ammp/)
 
 Reference implementation of the **Agentic Mentor-Mentee Protocol** (AMMP) — the *Mentoring* track — as a [FastMCP](https://gofastmcp.com) server.
 
@@ -229,6 +229,6 @@ MIT — see [`LICENSE`](LICENSE).
 
 ## See also
 
-- AMMP RFC: [draft-arturo-ammp-01](https://www.helmguild.com/rfc/ammp/) — the canonical spec.
+- AMMP RFC: [draft-ammp-01](https://www.helmguild.com/rfc/ammp/) — the canonical spec.
 - [aignostics/python-sdk](https://github.com/aignostics/python-sdk) — packaging/lint conventions inspiration.
 - [FastMCP](https://gofastmcp.com) — the MCP server framework this is built on.

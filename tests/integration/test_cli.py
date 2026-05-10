@@ -145,4 +145,4 @@ def test_capability_command(runner: CliRunner) -> None:
     r = runner.invoke(app, ["capability"])
     assert r.exit_code == 0
     assert "ammp-mcp" in r.output
-    assert "draft-arturo-ammp" in r.output
+    assert "draft-ammp" in r.output

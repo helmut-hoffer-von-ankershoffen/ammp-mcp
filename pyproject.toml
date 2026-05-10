@@ -77,7 +77,7 @@ ammp-server = "ammp_mcp.server:run"
 [project.urls]
 Homepage = "https://www.helmguild.com/rfc/ammp/"
 Repository = "https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp"
-Specification = "https://www.helmguild.com/rfc/ammp/draft-arturo-ammp-01.txt"
+Specification = "https://www.helmguild.com/rfc/ammp/draft-ammp-01.txt"
 Issues = "https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/issues"
 
 [build-system]
