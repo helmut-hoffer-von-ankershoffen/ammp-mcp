@@ -115,9 +115,7 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
 
             # Step 3: search.
             searched = payload(
-                await mentee.call_tool(
-                    "SearchPlaybooks", {"query": "playbook", "mentor": "pepe", "limit": 5}
-                )
+                await mentee.call_tool("SearchPlaybooks", {"query": "playbook", "mentor": "pepe", "limit": 5})
             )
             assert searched["mentor"] == "pepe"
             assert searched["count"] >= 0  # corpus is small; just verify the envelope shape
