@@ -6,6 +6,8 @@ call resolves to the isolated tree. This is the same surface a real user hits.
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from pathlib import Path
 
@@ -146,3 +148,108 @@ def test_capability_command(runner: CliRunner) -> None:
     assert r.exit_code == 0
     assert "ammp-mcp" in r.output
     assert "draft-ammp" in r.output
+
+
+# ─── Setup / status / usage ───────────────────────────────────────────────
+
+
+def test_setup_writes_backend_block_and_first_mentee(runner: CliRunner, isolated_tree: Path) -> None:
+    cwd_before = os.getcwd()
+    os.chdir(isolated_tree)
+    try:
+        r = runner.invoke(
+            app,
+            [
+                "setup",
+                "--yes",
+                "--mentor-slug",
+                "pepe",
+                "--backend",
+                "openclaw",
+                "--openclaw-url",
+                "https://test.invalid/ammp/ask",
+                "--auth-bearer-env",
+                "MY_TEST_BEARER",
+                "--no-mint-first-mentee",  # skip mentee in test, less file noise
+            ],
+        )
+    finally:
+        os.chdir(cwd_before)
+    assert r.exit_code == 0, r.output
+    # mentor.json now has the openclaw backend block
+    pepe_mj = json.loads((isolated_tree / "mentors" / "pepe" / "mentor.json").read_text(encoding="utf-8"))
+    assert pepe_mj["backend"]["kind"] == "openclaw"
+    assert pepe_mj["backend"]["url"] == "https://test.invalid/ammp/ask"
+    assert pepe_mj["backend"]["auth_bearer_env"] == "MY_TEST_BEARER"
+    # .env scaffold written into cwd
+    env_path = isolated_tree / ".env"
+    assert env_path.exists()
+    body = env_path.read_text(encoding="utf-8")
+    assert "AMMP_REQUIRE_AUTH=true" in body
+    assert "MY_TEST_BEARER=" in body
+
+
+def test_setup_rejects_unknown_mentor(runner: CliRunner, isolated_tree: Path) -> None:
+    cwd_before = os.getcwd()
+    os.chdir(isolated_tree)
+    try:
+        r = runner.invoke(app, ["setup", "--yes", "--mentor-slug", "ghost"])
+    finally:
+        os.chdir(cwd_before)
+    assert r.exit_code == 2
+    assert "No mentor directory" in r.output
+
+
+def test_setup_rejects_unknown_backend(runner: CliRunner, isolated_tree: Path) -> None:
+    cwd_before = os.getcwd()
+    os.chdir(isolated_tree)
+    try:
+        r = runner.invoke(app, ["setup", "--yes", "--backend", "ghost"])
+    finally:
+        os.chdir(cwd_before)
+    assert r.exit_code == 2
+    assert "Unknown backend kind" in r.output
+
+
+def test_status_reports_ok_with_warnings(runner: CliRunner) -> None:
+    r = runner.invoke(app, ["status"])
+    # mentees.json exists in the fixture (no AMMP_ANTHROPIC key) → OK with warnings.
+    assert r.exit_code == 0
+    assert "Settings loaded" in r.output
+    assert "mentor pepe" in r.output
+
+
+def test_status_fails_when_mentors_root_missing(runner: CliRunner, monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("AMMP_MENTORS_ROOT", str(tmp_path / "definitely_not_a_dir"))
+    from ammp_mcp import settings as settings_module
+
+    settings_module.reset_settings_for_testing()
+    r = runner.invoke(app, ["status"])
+    assert r.exit_code == 1
+    assert "Mentors root" in r.output
+    assert "directory does not exist" in r.output
+
+
+def test_usage_handles_missing_log(runner: CliRunner) -> None:
+    r = runner.invoke(app, ["usage"])
+    assert r.exit_code == 0
+    assert "does not exist yet" in r.output
+
+
+def test_usage_aggregates_audit_log(runner: CliRunner, isolated_tree: Path) -> None:
+    import datetime as dt
+
+    audit_log = isolated_tree / "audit.log"
+    now = dt.datetime.now(dt.UTC).isoformat()
+    audit_log.write_text(
+        f"{now} op=ListPlaybooks mentor=pepe mentee=anonymous hash=—\n"
+        f"{now} op=AskMentor mentor=pepe mentee=alice hash=abc12345\n"
+        f"{now} op=AskMentor mentor=strict mentee=alice hash=def00000\n"
+        f"{now} op=EscalateToHuman mentor=pepe mentee=bob hash=ffffffff\n",
+        encoding="utf-8",
+    )
+    r = runner.invoke(app, ["usage", "--days", "0"])
+    assert r.exit_code == 0
+    assert "AskMentor" in r.output
+    assert "pepe" in r.output
+    assert "alice" in r.output

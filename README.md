@@ -5,6 +5,9 @@
 [![Audit](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml)
 [![CodeQL](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/codeql.yml)
 [![Coverage](https://codecov.io/gh/helmut-hoffer-von-ankershoffen/ammp-mcp/graph/badge.svg)](https://codecov.io/gh/helmut-hoffer-von-ankershoffen/ammp-mcp)
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=helmut-hoffer-von-ankershoffen_ammp-mcp&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=helmut-hoffer-von-ankershoffen_ammp-mcp)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=helmut-hoffer-von-ankershoffen_ammp-mcp&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=helmut-hoffer-von-ankershoffen_ammp-mcp)
+[![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=helmut-hoffer-von-ankershoffen_ammp-mcp&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=helmut-hoffer-von-ankershoffen_ammp-mcp)
 [![Linter: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Type-checked: mypy](https://img.shields.io/badge/typed-mypy_strict-blue.svg)](http://mypy-lang.org/)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11_|_3.12_|_3.13_|_3.14-blue.svg)](https://www.python.org/)
@@ -26,29 +29,55 @@ When an autonomous mentee agent runs into something it doesn't know, it needs a 
 
 ```mermaid
 graph LR
-    H[Human operator<br/>e.g. Sandra] -->|chats with| CCW[Claude Cowork]
-    H2[Human operator<br/>e.g. Helmut] -->|chats with| CCO[Claude Code]
-    H3[Human operator] -->|chats with| CAI[Claude.ai]
+    HM_OP[Human operator<br/>e.g. Sandra] -->|chats with| CCW
 
-    subgraph Mentee_runtimes [mentee runtimes]
-      CCW
-      CCO
-      CAI
+    subgraph MENTEE [Agentic Mentee]
+      CCW[Claude Cowork]
+      CCO[Claude Code]
+      CAI[Claude.ai]
     end
 
-    CCW -->|MCP / AMMP<br/>https| AMMP[ammp.helmguild.com<br/>ammp-mcp]
-    CCO -->|MCP / AMMP<br/>https| AMMP
-    CAI -->|MCP / AMMP<br/>https| AMMP
+    CCW -->|MCP / AMMP<br/>HTTPS| AMMP
+    CCO -->|MCP / AMMP<br/>HTTPS| AMMP
+    CAI -->|MCP / AMMP<br/>HTTPS| AMMP
 
-    AMMP -->|reads| PB[(playbook corpus<br/>markdown)]
-    AMMP -->|synthesises<br/>answer| OC[OpenClaw runtime]
-    OC -->|Anthropic Messages API| OPUS[Claude Opus 4.7]
+    subgraph SERVER [ammp-mcp · ammp.helmguild.com]
+      AMMP[Mentor router<br/>+ AskMentor / EscalateToHuman / …]
+      AMMP -->|reads| PB[(Playbook corpus<br/>markdown)]
+      AMMP -.->|hash-only| LOG[(audit.log)]
+    end
 
-    AMMP -.->|hash-only| LOG[(audit.log)]
+    AMMP -->|backend.kind=openclaw<br/>HTTPS webhook| AGM
+    AMMP -->|backend.kind=anthropic<br/>Messages API| AD
 
-    style AMMP fill:#fef3c7,stroke:#92400e,stroke-width:2px
-    style OPUS fill:#e0e7ff,stroke:#3730a3
-    style LOG fill:#f3f4f6,stroke:#6b7280,stroke-dasharray:3 3
+    subgraph MENTOR_AGENTIC [Agentic Mentor]
+      AGM[Pepe Arturo<br/>on OpenClaw runtime] -->|Anthropic Messages API| OPUS[Claude Opus 4.7]
+      AD[stateless persona<br/>fallback]
+    end
+
+    subgraph MENTOR_HUMAN [Human Mentor]
+      HUM["Operator of the mentee<br/>(reached only via the<br/>mentee, never by the server)"]
+    end
+
+    CCW -.->|"EscalateToHuman →<br/>guidance text the mentee<br/>hands to its operator"| HUM
+    CCO -.-> HUM
+    CAI -.-> HUM
+
+    classDef mentee fill:#dbeafe,stroke:#1d4ed8;
+    classDef server fill:#fef3c7,stroke:#92400e,stroke-width:2px;
+    classDef mentor fill:#dcfce7,stroke:#166534;
+    classDef human fill:#fce7f3,stroke:#9d174d;
+    classDef store fill:#f3f4f6,stroke:#6b7280,stroke-dasharray:3 3;
+    class MENTEE mentee
+    class CCW,CCO,CAI mentee
+    class SERVER server
+    class AMMP server
+    class MENTOR_AGENTIC mentor
+    class AGM,AD,OPUS mentor
+    class MENTOR_HUMAN human
+    class HUM human
+    class HM_OP human
+    class PB,LOG store
 ```
 
 ## Sequence diagram — `AskMentor`
@@ -56,28 +85,28 @@ graph LR
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Human operator
-    participant Mentee as Mentee agent<br/>(Claude Cowork)
+    actor Op as Mentee's human operator
+    participant Mentee as Agentic Mentee<br/>(Claude Cowork)
     participant Server as ammp-mcp
-    participant LLM as Claude Opus 4.7
+    participant Mentor as Agentic Mentor<br/>(Pepe on OpenClaw)
     participant Audit as audit.log
 
-    User->>Mentee: "Help me with this thing."
+    Op->>Mentee: "Help me with this thing."
     Note over Mentee: hits a question it<br/>cannot ground itself
 
     Mentee->>Server: AskMentor(question, mentor="pepe", api_key)
     Server->>Audit: append op=AskMentor mentor=pepe<br/>hash=<8 hex> (no plaintext)
     Server->>Server: keyword_rank(corpus) → top 3 playbooks
-    Server->>LLM: messages.create(persona + playbooks + question)
-    LLM-->>Server: {answer, confidence ∈ [0,1]}
+    Server->>Mentor: backend.ask(persona + playbooks + question)
+    Mentor-->>Server: {answer, confidence ∈ [0,1]}
 
     alt confidence ≥ threshold
       Server-->>Mentee: {answer, escalation_recommended=false}
-      Mentee-->>User: synthesised answer
+      Mentee-->>Op: synthesised answer
     else confidence < threshold (mentor-triggered escalation)
       Server-->>Mentee: {answer, escalation_recommended=true,<br/>suggested_message_to_your_operator}
-      Mentee-->>User: "I'm not confident — could you take a look?"
-      Note over Mentee,User: Mentor never reached operator directly.<br/>Human-Gated Escalation Invariant.
+      Mentee-->>Op: "I'm not confident — could you take a look?<br/>(Human Mentor path)"
+      Note over Mentee,Op: Mentor never reached operator directly.<br/>Human-Gated Escalation Invariant.
     end
 ```
 
