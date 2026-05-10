@@ -22,8 +22,14 @@ class Playbook:
     path: Path
 
 
-_TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
-_FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n", re.DOTALL)
+# `[^\n]+` instead of `.+` so the title group never backtracks across
+# lines (avoids the catastrophic-backtracking class S5852 flags). Same
+# match semantics with re.MULTILINE — the title is whatever follows
+# `# ` on a single line.
+_TITLE_RE = re.compile(r"^#\s+([^\n]+)$", re.MULTILINE)
+# Bounded `[\s\S]*?` instead of `.*?` for the same reason — non-greedy
+# but with explicit any-char including newlines.
+_FRONTMATTER_RE = re.compile(r"^---\n[\s\S]*?\n---\n")
 
 
 def _summarise(body: str) -> str:
