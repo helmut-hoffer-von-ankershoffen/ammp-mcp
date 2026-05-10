@@ -18,7 +18,7 @@ from starlette.responses import JSONResponse
 
 from . import __ammp_draft__, __version__
 from .audit import log_event, short_hash
-from .llm import LLMAnswer, LLMClient
+from .backends import LLMAnswer, MentorBackend, build_backend
 from .models import (
     AskMentorResponse,
     EscalateToHumanResponse,
@@ -45,19 +45,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     mentors = load_mentors(s.mentors_root)
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
-    llm = LLMClient(
-        api_key=s.anthropic_api_key,
-        model=s.llm_model,
-        max_concurrent=s.llm_max_concurrent,
-        timeout_seconds=s.llm_timeout_seconds,
-    )
+
+    # Resolve a backend per mentor. mentor.json may declare its own; if
+    # not, the factory falls back to a global Anthropic backend.
+    backends: dict[str, MentorBackend] = {slug: build_backend(m.backend, s) for slug, m in mentors.items()}
 
     logger.info(
-        "boot: %d mentors loaded (%s), %d mentees in allowlist, llm_live=%s",
+        "boot: %d mentors loaded (%s), %d mentees in allowlist, backends={%s}",
         len(mentors),
         ",".join(mentors) or "none",
         len(mentees),
-        llm.is_live,
+        ", ".join(f"{slug}:{b.mode_label}({'live' if b.is_live else 'stub'})" for slug, b in backends.items())
+        or "none",
     )
 
     mcp: FastMCP[Any] = FastMCP(
@@ -207,15 +206,19 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         relevant = [PlaybookSummary(id=pb.id, title=pb.title, summary=pb.summary) for pb, _ in ranked]
         playbook_bodies = [(pb.title, pb.body) for pb, _ in ranked]
 
+        backend = backends.get(m.slug)
+        if backend is None:
+            # Defensive — every loaded mentor gets a backend at boot.
+            return {"error": "unknown_mentor"}
         try:
-            llm_answer: LLMAnswer = await llm.ask(
+            llm_answer: LLMAnswer = await backend.ask(
                 mentor_name=m.name,
                 persona=m.persona,
                 question=q if not context else f"{q}\n\nContext:\n{context}",
                 playbook_bodies=playbook_bodies,
             )
         except Exception as e:
-            logger.warning("AskMentor LLM call failed: %s", e)
+            logger.warning("AskMentor backend call failed (%s): %s", backend.mode_label, e)
             return {
                 "error": "llm_failed",
                 "detail": "the mentor is currently unable to synthesise an answer; try GetPlaybook on a relevant id",
@@ -296,11 +299,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         mentor_summaries = []
         for slug, m in mentors.items():
             corpus = load_corpus(m.playbook_dir)
+            backend = backends.get(slug)
             mentor_summaries.append(
                 {
                     "slug": slug,
                     "name": m.name,
                     "playbookCount": len(corpus),
+                    "backend": backend.mode_label if backend else "unknown",
+                    "backendLive": backend.is_live if backend else False,
                 }
             )
         return JSONResponse(
@@ -319,7 +325,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                     "tracks": ["mentoring"],
                     "mentors": mentor_summaries,
                     "mentoring": {
-                        "askMentorMode": "llm-synthesised" if llm.is_live else "structured-pointer",
+                        # Per-mentor mode is in `mentors[].backend`; this is
+                        # the "any of them live?" signal for clients that
+                        # only care about the global picture.
+                        "askMentorMode": (
+                            "per-mentor" if any(b.is_live for b in backends.values()) else "structured-pointer"
+                        ),
                         "askMentorMaxConcurrent": s.llm_max_concurrent,
                         "playbookLanguages": ["en"],
                     },

@@ -34,6 +34,11 @@ def load_mentors(root: Path) -> dict[str, Mentor]:
             logger.warning("skipping %s — no mentor.json", mentor_dir)
             continue
         meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        # JSON has no comment syntax — treat underscore-prefixed top-level
+        # keys (`_note`, `_backend_example`, …) as documentation and drop
+        # them before validation. Lets operators leave inline notes in
+        # mentor.json without tripping the strict pydantic schema.
+        meta = {k: v for k, v in meta.items() if not k.startswith("_")}
         # Default playbook_dir is `<mentor>/playbooks/` if it exists, else `<mentor>/`.
         candidate_playbook_dirs = [mentor_dir / "playbooks", mentor_dir]
         chosen_playbook_dir = next((d for d in candidate_playbook_dirs if d.is_dir()), mentor_dir)

@@ -135,7 +135,10 @@ async def test_capability_route(server) -> None:
     assert payload["name"] == "ammp-mcp"
     assert payload["ammp"]["tracks"] == ["mentoring"]
     slugs = {m["slug"] for m in payload["ammp"]["mentors"]}
-    assert slugs == {"pepe", "strict"}
+    assert slugs == {"pepe", "strict", "stubmentor"}
+    # Each mentor advertises its backend in the new shape.
+    backends = {m["slug"]: m["backend"] for m in payload["ammp"]["mentors"]}
+    assert backends["stubmentor"] == "stub"
     assert payload["ammp"]["privacyPosture"]["crossCompartmentEscalation"] == "prohibited"
 
 
@@ -194,3 +197,32 @@ async def test_response_envelopes_match_pydantic_schema(server) -> None:
     payload = json.dumps(lp.data)
     assert "track" in payload
     assert "mentor" in payload
+
+
+async def test_ask_mentor_routes_to_explicit_stub_backend(server) -> None:
+    """A mentor whose mentor.json declares backend.kind=stub goes through StubBackend."""
+    async with Client(server) as c:
+        result = await c.call_tool(
+            "AskMentor",
+            {"question": "anything", "mentor": "stubmentor"},
+        )
+    assert result.data["mentor"] == "stubmentor"
+    # Stub returns confidence 0.2 → escalation_recommended True at default threshold 0.6.
+    assert result.data["escalation_recommended"] is True
+    assert "stub backend" in result.data["answer"].lower()
+
+
+async def test_capability_advertises_per_mentor_backends(server) -> None:
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/")
+    with TestClient(app) as http:
+        r = http.get("/.well-known/agent.json")
+    payload = r.json()
+    backends_by_slug = {m["slug"]: m["backend"] for m in payload["ammp"]["mentors"]}
+    # stubmentor was declared with backend.kind=stub.
+    assert backends_by_slug["stubmentor"] == "stub"
+    # pepe and strict have no backend block — fall through to anthropic-direct
+    # (which is `is_live=False` here because no API key is configured).
+    assert backends_by_slug["pepe"] == "anthropic-direct"
+    assert backends_by_slug["strict"] == "anthropic-direct"

@@ -18,7 +18,7 @@ pytestmark = pytest.mark.unit
 
 def test_load_mentors_discovers_subdirs(isolated_tree: Path) -> None:
     mentors = load_mentors(isolated_tree / "mentors")
-    assert set(mentors) == {"pepe", "strict"}
+    assert set(mentors) == {"pepe", "strict", "stubmentor"}
     assert mentors["pepe"].name == "Pepe Arturo"
     assert mentors["strict"].confidence_threshold == 0.9
 

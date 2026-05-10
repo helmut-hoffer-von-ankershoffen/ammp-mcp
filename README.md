@@ -99,8 +99,37 @@ Plus the AMMP capability advertisement at `GET /.well-known/agent.json` (track, 
 
 ## Multi-mentor, multi-mentee — from the start
 
-* **Multiple mentors.** Each mentor is a directory under `mentors/` with a `mentor.json` (slug, name, persona, threshold) and a `playbooks/*.md` corpus. The mentee picks the mentor *per tool call*. Default mentor is configurable.
+* **Multiple mentors.** Each mentor is a directory under `mentors/` with a `mentor.json` (slug, name, persona, threshold, backend) and a `playbooks/*.md` corpus. The mentee picks the mentor *per tool call*. Default mentor is configurable.
 * **Multiple mentees.** The allowlist in `mentees.json` keys on a per-mentee `api_key_hash` (SHA-256). The plaintext key is shown to you *once* when you mint it; only the hash is at rest. Each mentee has an `operator` (e.g. `human:sandra`), a `runtime` (`claude-cowork`, `claude-ai`, `claude-code`), and a per-minute rate budget.
+
+## Pluggable mentor backends
+
+The thing that synthesises an answer when `AskMentor` is invoked is a pluggable **backend**. Three are shipped:
+
+| Backend | When to use |
+|---|---|
+| `anthropic` | Stateless. Persona + playbooks pasted into the system prompt of an Anthropic Messages API call. Cheapest. Good for personas where voice + corpus is the whole story. |
+| `openclaw` | The mentor *lives* on an OpenClaw runtime with their own memory and vault. AskMentor POSTs the question into that runtime via an HTTP webhook contract; the live mentor answers as themselves. This is the production setup for Pepe Arturo. |
+| `stub` | Deterministic low-confidence answer. For tests and offline development. |
+
+A mentor declares its backend in `mentor.json`:
+
+```jsonc
+{
+  "name": "Pepe Arturo",
+  "persona": "...",
+  "backend": {
+    "kind": "openclaw",
+    "url": "https://openclaw.helmguild.local/ammp/ask",
+    "auth_bearer_env": "OPENCLAW_BEARER",
+    "timeout_seconds": 60
+  }
+}
+```
+
+Without a `backend` block, the server falls through to a global Anthropic backend wired from `AMMP_*` settings. Adding a fourth backend (Hermes, another Claude Cowork mentor, …) is a single new file under `src/ammp_mcp/backends/` plus one branch in the factory.
+
+The OpenClaw wire contract is documented in [`src/ammp_mcp/backends/openclaw.py`](src/ammp_mcp/backends/openclaw.py) — anyone who can host an HTTPS endpoint that takes `{question, persona, playbooks}` and returns `{answer, confidence}` can be a mentor.
 
 ## Privacy posture (the load-bearing part)
 

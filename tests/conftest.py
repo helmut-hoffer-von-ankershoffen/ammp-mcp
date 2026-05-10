@@ -71,6 +71,23 @@ def isolated_tree(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
 
+    # Third mentor — exercises the explicit stub-backend config path so
+    # integration tests can confirm multi-mentor routing with mixed
+    # backend kinds.
+    stubmentor = mentors_root / "stubmentor" / "playbooks"
+    stubmentor.mkdir(parents=True)
+    (stubmentor / "any.md").write_text("# Any\n\nstub-backed mentor for tests.\n", encoding="utf-8")
+    (mentors_root / "stubmentor" / "mentor.json").write_text(
+        json.dumps(
+            {
+                "name": "Stub Mentor",
+                "persona": "deterministic",
+                "backend": {"kind": "stub"},
+            }
+        ),
+        encoding="utf-8",
+    )
+
     mentees_file = tmp_path / "mentees.json"
     mentees_file.write_text(
         json.dumps(
