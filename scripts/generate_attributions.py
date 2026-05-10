@@ -95,6 +95,9 @@ def render(rows: list[dict[str, str]]) -> str:
 def main() -> None:
     rows = run_pip_licenses()
     body = render(rows)
+    # Right-strip every line so the pre-commit hygiene hook doesn't
+    # need to "fix" the file after every regeneration.
+    body = "\n".join(line.rstrip() for line in body.splitlines()) + "\n"
     ATTRIBUTIONS.write_text(body, encoding="utf-8")
     print(f"Wrote {ATTRIBUTIONS} — {len(rows)} packages.")
 
