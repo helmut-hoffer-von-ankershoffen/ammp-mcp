@@ -280,6 +280,10 @@ pytest                  # all of the above (e2e self-skips without key)
 
 The mentee selects the mentor *per call* via the `mentor` argument; omit it to fall through to the server default.
 
+## Deployment
+
+For the public deployment at `https://ammp.helmguild.com`, see [`docs/deployment.md`](docs/deployment.md). Two paths (small VPS + Caddy + Tailscale, or Cloudflare Tunnel), and a quick `cloudflared --url` spike for one-off testing.
+
 ## Status
 
 **v0.2** — multi-mentor + multi-mentee + LLM-synthesised AskMentor + Typer CLI + tagged test suite. Ships open-source under MIT.
