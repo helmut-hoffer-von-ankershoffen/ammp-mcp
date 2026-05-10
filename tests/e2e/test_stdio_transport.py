@@ -22,7 +22,10 @@ import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
 
-pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
+# Marked `integration` (not `e2e`) because no paid external services are
+# touched — the subprocess uses the stub backend with no Anthropic key. CI
+# runs `pytest -m "unit or integration"` so these are exercised on every push.
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
 def _stdio_env(isolated_tree: Path) -> dict[str, str]:

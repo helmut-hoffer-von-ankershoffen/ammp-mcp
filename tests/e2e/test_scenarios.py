@@ -45,7 +45,10 @@ from .harness import (
     write_mentor_with_openclaw_backend,
 )
 
-pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
+# `integration`, not `e2e`: subprocess-spawning tests but no paid external
+# services (mock OpenClaw webhook, stub backend). CI runs `pytest -m "unit
+# or integration"` so these are exercised on every push.
+pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
 
 def _client(isolated_tree: Path) -> Client:
