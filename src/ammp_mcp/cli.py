@@ -5,10 +5,16 @@ Subject-then-action layout (mirrors `git remote list`, `kubectl get pods`):
     ammp mentor list
     ammp mentee list / add / remove / rotate-key / check-key
     ammp playbook list / show
-    ammp setup / status / usage / capability / serve
+    ammp system setup / status / health / usage / capability / serve
 
-The five top-level verbs (setup, status, usage, capability, serve) are
-not subject-bound — they act on the install as a whole.
+Top-level shortcuts for the most common system verbs:
+
+    ammp serve       → ammp system serve
+    ammp setup       → ammp system setup
+    ammp status      → ammp system status
+    ammp health      → ammp system health
+    ammp usage       → ammp system usage
+    ammp capability  → ammp system capability
 """
 
 from __future__ import annotations
@@ -65,9 +71,16 @@ playbook_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+system_app = typer.Typer(
+    name="system",
+    help="Operate the install as a whole (setup, status, health, usage, capability, serve).",
+    no_args_is_help=True,
+    add_completion=False,
+)
 app.add_typer(mentor_app)
 app.add_typer(mentee_app)
 app.add_typer(playbook_app)
+app.add_typer(system_app)
 
 
 # ─── ammp mentor … ────────────────────────────────────────────────────────
@@ -243,10 +256,10 @@ def mentee_check_key(api_key: str = typer.Argument(..., help="Plaintext key to t
     console.print(f"[green]Match: {found.slug} (operator={found.operator}, runtime={found.runtime})[/green]")
 
 
-# ─── Top-level verbs (act on the install as a whole) ──────────────────────
+# ─── ammp system … (act on the install as a whole) ───────────────────────
 
 
-@app.command("capability")
+@system_app.command("capability")
 def capability() -> None:
     """Print the AMMP capability advertisement (offline render)."""
     from . import __ammp_draft__, __version__
@@ -285,7 +298,7 @@ def capability() -> None:
     console.print_json(json.dumps(payload))
 
 
-@app.command("serve")
+@system_app.command("serve")
 def serve(
     host: str = typer.Option("", help="Override bind host (default from settings)."),
     port: int = typer.Option(0, help="Override bind port (default from settings)."),
@@ -301,10 +314,10 @@ def serve(
     server.run(transport="http", host=host or s.host, port=port or s.port)
 
 
-# ─── ammp setup ───────────────────────────────────────────────────────────
+# ─── ammp system setup ────────────────────────────────────────────────────
 
 
-@app.command("setup")
+@system_app.command("setup")
 def setup(
     yes: bool = typer.Option(False, "--yes", "-y", help="Accept all defaults; no prompts."),
     mentor_slug: str = typer.Option(
@@ -460,10 +473,10 @@ def setup(
         console.print(f"  {api_key}")
 
 
-# ─── ammp status ──────────────────────────────────────────────────────────
+# ─── ammp system status ───────────────────────────────────────────────────
 
 
-@app.command("status")
+@system_app.command("status")
 def status() -> None:
     """Validate the current installation. Exits non-zero if anything is broken.
 
@@ -566,7 +579,7 @@ def status() -> None:
         console.print("[bold green]Status: OK.[/bold green]")
 
 
-# ─── ammp usage ───────────────────────────────────────────────────────────
+# ─── ammp system usage ────────────────────────────────────────────────────
 
 
 _AUDIT_LINE_RE = re.compile(
@@ -574,7 +587,7 @@ _AUDIT_LINE_RE = re.compile(
 )
 
 
-@app.command("usage")
+@system_app.command("usage")
 def usage(
     days: int = typer.Option(7, help="Aggregation window — last N days. 0 = all-time."),
     by_mentee: bool = typer.Option(True, help="Show per-mentee breakdown."),
@@ -668,6 +681,134 @@ def usage(
         for mentee, n in mentee_counts.most_common():
             u_table.add_row(mentee, str(n))
         console.print(u_table)
+
+
+# ─── ammp system health ───────────────────────────────────────────────────
+
+
+@system_app.command("health")
+def health(
+    url: str = typer.Option("", help="Override the URL to probe. Default: configured public_url, fallback localhost."),
+    timeout: float = typer.Option(5.0, help="Per-probe timeout in seconds."),
+    probe_backends: bool = typer.Option(True, help="Probe each mentor's openclaw webhook URL too."),
+) -> None:
+    """Active runtime probe.
+
+    `status` validates the install statically (paths, files, env vars).
+    `health` validates that the running thing actually answers — it
+    GETs `/.well-known/agent.json` from the server and (optionally)
+    HEADs each openclaw mentor backend's webhook URL.
+
+    Boot the server (`ammp serve`) before running this; otherwise the
+    server probe will fail with a helpful hint.
+    """
+    import urllib.error
+    import urllib.request
+
+    s = get_settings()
+    target = (url or s.public_url or f"http://{s.host}:{s.port}").rstrip("/")
+    agent_url = f"{target}/.well-known/agent.json"
+
+    table = Table(title=f"ammp-mcp runtime health · target={target}", show_lines=False)
+    table.add_column("probe", style="white", no_wrap=True)
+    table.add_column("result", justify="left")
+    table.add_column("detail", style="dim")
+
+    problems: list[str] = []
+
+    # Probe 1: capability advertisement
+    try:
+        req = urllib.request.Request(agent_url, headers={"User-Agent": "ammp-health/1"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read())
+        ammp_block = body.get("ammp", {})
+        mentor_count = len(ammp_block.get("mentors", []))
+        live_count = sum(1 for m in ammp_block.get("mentors", []) if m.get("backendLive"))
+        table.add_row(
+            "Capability advertisement",
+            "[green]✓[/green]",
+            f"name={body.get('name')} v{body.get('version')} · {mentor_count} mentor(s), {live_count} live",
+        )
+    except urllib.error.URLError as e:
+        table.add_row("Capability advertisement", "[red]✗[/red]", f"GET {agent_url} failed: {e}")
+        problems.append(f"server unreachable at {target} — boot it with `ammp serve`")
+    except Exception as e:
+        table.add_row("Capability advertisement", "[red]✗[/red]", f"unexpected error: {e}")
+        problems.append(f"capability probe error: {e}")
+
+    # Probe 2: each openclaw backend webhook
+    if probe_backends:
+        mentors = load_mentors(s.mentors_root)
+        for slug, m in mentors.items():
+            if m.backend is None or m.backend.kind != "openclaw":
+                continue
+            try:
+                req = urllib.request.Request(m.backend.url, method="HEAD", headers={"User-Agent": "ammp-health/1"})
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    table.add_row(
+                        f"  backend {slug} (openclaw)",
+                        "[green]✓[/green]",
+                        f"HEAD {m.backend.url} → {resp.status}",
+                    )
+            except urllib.error.HTTPError as e:
+                # 405 Method Not Allowed is fine — server is up, just rejects HEAD.
+                if e.code in {405, 501}:
+                    table.add_row(
+                        f"  backend {slug} (openclaw)",
+                        "[green]✓[/green]",
+                        f"reachable (HEAD rejected: {e.code})",
+                    )
+                else:
+                    table.add_row(f"  backend {slug} (openclaw)", "[yellow]![/yellow]", f"{m.backend.url} → {e}")
+            except urllib.error.URLError as e:
+                table.add_row(
+                    f"  backend {slug} (openclaw)",
+                    "[red]✗[/red]",
+                    f"unreachable: {e.reason}",
+                )
+                problems.append(f"openclaw backend for {slug!r} unreachable: {m.backend.url}")
+            except Exception as e:
+                table.add_row(f"  backend {slug} (openclaw)", "[red]✗[/red]", f"unexpected error: {e}")
+                problems.append(f"openclaw backend probe error for {slug!r}: {e}")
+
+    console.print(table)
+    console.print()
+    if problems:
+        console.print(f"[bold red]{len(problems)} health problem(s):[/bold red]")
+        for p in problems:
+            console.print(f"  • {p}")
+        raise typer.Exit(code=1)
+    console.print("[bold green]Health: OK.[/bold green]")
+
+
+# ─── Top-level aliases ────────────────────────────────────────────────────
+# Common system verbs are also exposed at the top level for muscle memory.
+# Canonical home stays on `ammp system <verb>`; these are just shortcuts.
+
+app.command(
+    "serve",
+    help="Alias for `ammp system serve`.",
+)(serve)
+app.command(
+    "setup",
+    help="Alias for `ammp system setup`.",
+)(setup)
+app.command(
+    "status",
+    help="Alias for `ammp system status`.",
+)(status)
+app.command(
+    "health",
+    help="Alias for `ammp system health`.",
+)(health)
+app.command(
+    "usage",
+    help="Alias for `ammp system usage`.",
+)(usage)
+app.command(
+    "capability",
+    help="Alias for `ammp system capability`.",
+)(capability)
 
 
 if __name__ == "__main__":

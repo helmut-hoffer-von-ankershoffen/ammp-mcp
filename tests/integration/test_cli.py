@@ -255,3 +255,34 @@ def test_usage_aggregates_audit_log(runner: CliRunner, isolated_tree: Path) -> N
     assert "AskMentor" in r.output
     assert "pepe" in r.output
     assert "alice" in r.output
+
+
+# ─── system subgroup + aliases + health ──────────────────────────────────
+
+
+def test_system_status_resolves_via_subgroup(runner: CliRunner) -> None:
+    """`ammp system status` and the top-level alias `ammp status` route to the same callable."""
+    r1 = runner.invoke(app, ["status"])
+    r2 = runner.invoke(app, ["system", "status"])
+    assert r1.exit_code == r2.exit_code == 0
+    assert "Settings loaded" in r1.output
+    assert "Settings loaded" in r2.output
+
+
+def test_system_capability_resolves_via_subgroup(runner: CliRunner) -> None:
+    r = runner.invoke(app, ["system", "capability"])
+    assert r.exit_code == 0
+    assert "ammp-mcp" in r.output
+    assert "draft-ammp" in r.output
+
+
+def test_system_health_fails_when_unreachable(runner: CliRunner) -> None:
+    """`ammp system health` against a closed port should exit 1."""
+    r = runner.invoke(app, ["system", "health", "--url", "http://127.0.0.1:1", "--no-probe-backends"])
+    assert r.exit_code == 1
+    assert "unreachable" in r.output.lower() or "connection" in r.output.lower()
+
+
+def test_health_alias_works(runner: CliRunner) -> None:
+    r = runner.invoke(app, ["health", "--url", "http://127.0.0.1:1", "--no-probe-backends"])
+    assert r.exit_code == 1
