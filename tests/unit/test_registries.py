@@ -20,7 +20,7 @@ def test_load_mentors_discovers_subdirs(isolated_tree: Path) -> None:
     mentors = load_mentors(isolated_tree / "mentors")
     assert set(mentors) == {"pepe", "strict", "stubmentor"}
     assert mentors["pepe"].name == "Pepe Arturo"
-    assert mentors["strict"].confidence_threshold == 0.9
+    assert mentors["strict"].confidence_threshold == pytest.approx(0.9)
 
 
 def test_load_mentors_missing_root_returns_empty(tmp_path: Path) -> None:

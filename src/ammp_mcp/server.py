@@ -10,6 +10,7 @@ an entry in the mentee allowlist.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from fastmcp import FastMCP
@@ -24,6 +25,8 @@ from .models import (
     EscalateToHumanResponse,
     GetPlaybookResponse,
     ListPlaybooksResponse,
+    Mentee,
+    Mentor,
     PlaybookSummary,
     SearchMatch,
     SearchPlaybooksResponse,
@@ -35,19 +38,294 @@ from .settings import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 
+# ─── Per-server runtime context ───────────────────────────────────────────
+
+
+@dataclass(slots=True, frozen=True)
+class ServerContext:
+    """Everything a tool handler needs to do its work.
+
+    Built once at boot by ``create_server``; passed by reference to every
+    handler so the factory function itself stays small enough that
+    SonarCloud's cognitive-complexity check (S3776) doesn't trip.
+    """
+
+    settings: Settings
+    mentors: dict[str, Mentor]
+    mentees: dict[str, Mentee]
+    backends: dict[str, MentorBackend]
+
+
+def _authenticate(ctx: ServerContext, api_key: str | None) -> str:
+    """Resolve a request to a mentee slug.
+
+    Returns ``'anonymous'`` when ``require_auth`` is off; raises
+    ``ValueError`` with a stable error code when auth is required and
+    the key is missing or unrecognised. Callers translate the error
+    code into an in-band ``{"error": "auth_failed"}`` response.
+    """
+    if not ctx.settings.require_auth:
+        return "anonymous"
+    if not api_key:
+        raise ValueError("api_key_required")
+    m = find_mentee_by_api_key(ctx.mentees, api_key)
+    if not m:
+        raise ValueError("api_key_invalid")
+    return m.slug
+
+
+def _resolve_mentor(ctx: ServerContext, slug: str) -> Mentor | None:
+    return get_mentor(ctx.mentors, slug, ctx.settings.default_mentor)
+
+
+# ─── Tool handlers (pure functions; testable without FastMCP) ─────────────
+
+
+def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None) -> dict[str, Any]:
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    m = _resolve_mentor(ctx, mentor)
+    if not m:
+        return {"error": "unknown_mentor", "detail": f"slug={mentor or ctx.settings.default_mentor!r}"}
+    log_event(ctx.settings.audit_log_path, "ListPlaybooks", mentor=m.slug, mentee=mentee_slug)
+    corpus = load_corpus(m.playbook_dir)
+    return ListPlaybooksResponse(
+        mentor=m.slug,
+        count=len(corpus),
+        playbooks=[PlaybookSummary(id=pb.id, title=pb.title, summary=pb.summary) for pb in corpus],
+    ).model_dump()
+
+
+def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_key: str | None) -> dict[str, Any]:
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    m = _resolve_mentor(ctx, mentor)
+    if not m:
+        return {"error": "unknown_mentor"}
+    clean_id = safe_id(playbook_id)
+    if not clean_id:
+        return {"error": "invalid_id"}
+    log_event(
+        ctx.settings.audit_log_path,
+        "GetPlaybook",
+        mentor=m.slug,
+        mentee=mentee_slug,
+        request_hash=short_hash(clean_id),
+    )
+    target = m.playbook_dir / f"{clean_id}.md"
+    if not target.is_file():
+        return {"error": "not_found", "detail": f"id={clean_id}"}
+    from .playbooks import _load_one  # lazy import to avoid widening the public surface
+
+    pb = _load_one(target)
+    return GetPlaybookResponse(mentor=m.slug, id=pb.id, title=pb.title, body=pb.body).model_dump()
+
+
+def _handle_search_playbooks(
+    ctx: ServerContext, query: str, mentor: str, limit: int, api_key: str | None
+) -> dict[str, Any]:
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    m = _resolve_mentor(ctx, mentor)
+    if not m:
+        return {"error": "unknown_mentor"}
+    if not query or not query.strip():
+        return {"error": "empty_query"}
+    log_event(
+        ctx.settings.audit_log_path,
+        "SearchPlaybooks",
+        mentor=m.slug,
+        mentee=mentee_slug,
+        request_hash=short_hash(query),
+    )
+    corpus = load_corpus(m.playbook_dir)
+    rows = search(corpus, query, limit=limit)
+    return SearchPlaybooksResponse(
+        mentor=m.slug,
+        query=query,
+        count=len(rows),
+        matches=[SearchMatch(id=pb.id, title=pb.title, rank=rank, snippet=snippet) for pb, rank, snippet in rows],
+    ).model_dump()
+
+
+def _build_escalation_prompt(question: str, confidence: float, threshold: float) -> str:
+    return (
+        f'To your operator: "My mentor returned an answer at confidence '
+        f"{confidence:.2f}, below their threshold of "
+        f"{threshold:.2f}, on this question — could you take a look "
+        f'before I act on it? Question: {question[:300]}"'
+    )
+
+
+async def _handle_ask_mentor(
+    ctx: ServerContext, question: str, mentor: str, context: str, api_key: str | None
+) -> dict[str, Any]:
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    m = _resolve_mentor(ctx, mentor)
+    if not m:
+        return {"error": "unknown_mentor"}
+    q = (question or "").strip()
+    if not q:
+        return {"error": "empty_question"}
+
+    log_event(
+        ctx.settings.audit_log_path,
+        "AskMentor",
+        mentor=m.slug,
+        mentee=mentee_slug,
+        request_hash=short_hash(q),
+    )
+
+    corpus = load_corpus(m.playbook_dir)
+    ranked = keyword_rank(corpus, q + " " + context, limit=3)
+    relevant = [PlaybookSummary(id=pb.id, title=pb.title, summary=pb.summary) for pb, _ in ranked]
+    playbook_bodies = [(pb.title, pb.body) for pb, _ in ranked]
+
+    backend = ctx.backends.get(m.slug)
+    if backend is None:
+        return {"error": "unknown_mentor"}
+    try:
+        llm_answer: LLMAnswer = await backend.ask(
+            mentor_name=m.name,
+            persona=m.persona,
+            question=q if not context else f"{q}\n\nContext:\n{context}",
+            playbook_bodies=playbook_bodies,
+        )
+    except Exception as e:
+        logger.warning("AskMentor backend call failed (%s): %s", backend.mode_label, e)
+        return {
+            "error": "llm_failed",
+            "detail": "the mentor is currently unable to synthesise an answer; try GetPlaybook on a relevant id",
+            "relevant_playbooks": [r.model_dump() for r in relevant],
+        }
+
+    threshold = m.confidence_threshold
+    escalation_recommended = llm_answer.confidence < threshold
+    suggested = _build_escalation_prompt(q, llm_answer.confidence, threshold) if escalation_recommended else None
+
+    return AskMentorResponse(
+        mentor=m.slug,
+        question=q[:500],
+        answer=llm_answer.answer,
+        confidence=llm_answer.confidence,
+        relevant_playbooks=relevant,
+        escalation_recommended=escalation_recommended,
+        suggested_message_to_your_operator=suggested,
+    ).model_dump()
+
+
+def _handle_escalate_to_human(
+    ctx: ServerContext, situation: str, mentor: str, why_stuck: str, api_key: str | None
+) -> dict[str, Any]:
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    m = _resolve_mentor(ctx, mentor)
+    if not m:
+        return {"error": "unknown_mentor"}
+    s_situation = (situation or "").strip()
+    if not s_situation:
+        return {"error": "empty_situation"}
+    log_event(
+        ctx.settings.audit_log_path,
+        "EscalateToHuman",
+        mentor=m.slug,
+        mentee=mentee_slug,
+        request_hash=short_hash(s_situation),
+    )
+    suggested = (
+        f"To your operator: \"I'm stuck on the following situation and "
+        f"I think it needs your call. Situation: {s_situation[:300]}"
+        + (f" — what's making me unsure: {why_stuck[:200]}" if why_stuck else "")
+        + ". Could you take a look and tell me how to proceed? I won't "
+        'act until you respond."'
+    )
+    return EscalateToHumanResponse(
+        mentor=m.slug,
+        guidance=(
+            "The mentor cannot reach your operator. Use the suggested "
+            "phrasing below to ask them yourself. Wait for their decision "
+            "before acting."
+        ),
+        suggested_message_to_your_operator=suggested,
+    ).model_dump()
+
+
+# ─── Capability advertisement helper ──────────────────────────────────────
+
+
+def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
+    mentor_summaries = []
+    for slug, m in ctx.mentors.items():
+        corpus = load_corpus(m.playbook_dir)
+        backend = ctx.backends.get(slug)
+        mentor_summaries.append(
+            {
+                "slug": slug,
+                "name": m.name,
+                "playbookCount": len(corpus),
+                "backend": backend.mode_label if backend else "unknown",
+                "backendLive": backend.is_live if backend else False,
+            }
+        )
+    any_live = any(b.is_live for b in ctx.backends.values())
+    return {
+        "name": "ammp-mcp",
+        "version": __version__,
+        "url": ctx.settings.public_url,
+        "description": (
+            "Reference AMMP server (Mentoring track). Multi-mentor: each "
+            "tool call routes to the named mentor's corpus. Privacy "
+            "posture: no-retention; hash-only audit log; "
+            "cross-compartment escalation prohibited."
+        ),
+        "ammp": {
+            "draft": __ammp_draft__,
+            "tracks": ["mentoring"],
+            "mentors": mentor_summaries,
+            "mentoring": {
+                "askMentorMode": "per-mentor" if any_live else "structured-pointer",
+                "askMentorMaxConcurrent": ctx.settings.llm_max_concurrent,
+                "playbookLanguages": ["en"],
+            },
+            "privacyPosture": {
+                "retention": "no-retention",
+                "auditLog": "hash-only",
+                "crossCompartmentEscalation": "prohibited",
+                "requireAuth": ctx.settings.require_auth,
+            },
+            "bindings": ["mcp"],
+            "invariants": ["compartmentalisation", "human-gated-escalation"],
+        },
+        "operations": [
+            "ListPlaybooks",
+            "GetPlaybook",
+            "SearchPlaybooks",
+            "AskMentor",
+            "EscalateToHuman",
+        ],
+    }
+
+
 # ─── Server factory ──────────────────────────────────────────────────────
 
 
 def create_server(settings: Settings | None = None) -> FastMCP:
     """Build a FastMCP server bound to the given settings (or the env-derived
-    singleton). Returns the server ready to `.run()`."""
+    singleton). Returns the server ready to ``.run()``."""
     s = settings or get_settings()
-
     mentors = load_mentors(s.mentors_root)
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
-
-    # Resolve a backend per mentor. mentor.json may declare its own; if
-    # not, the factory falls back to a global Anthropic backend.
     backends: dict[str, MentorBackend] = {slug: build_backend(m.backend, s) for slug, m in mentors.items()}
 
     logger.info(
@@ -59,6 +337,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         or "none",
     )
 
+    ctx = ServerContext(settings=s, mentors=mentors, mentees=mentees, backends=backends)
     mcp: FastMCP[Any] = FastMCP(
         name="ammp-mcp",
         instructions=(
@@ -71,103 +350,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         ),
     )
 
-    # ─── Auth helper (no-op when require_auth=False) ─────────────────────
-    def _auth(api_key: str | None) -> str:
-        """Return the mentee slug for this request, or `'anonymous'` when
-        auth is disabled. Raises ValueError when auth is required and the
-        key is missing or unrecognised."""
-        if not s.require_auth:
-            return "anonymous"
-        if not api_key:
-            raise ValueError("api_key_required")
-        m = find_mentee_by_api_key(mentees, api_key)
-        if not m:
-            raise ValueError("api_key_invalid")
-        return m.slug
+    # The five MCP tool functions are deliberately PascalCase — the function
+    # name becomes the on-the-wire AMMP operation name. They are thin wrappers
+    # that delegate to the module-level handlers above so the cognitive
+    # complexity of `create_server` stays well under SonarCloud's S3776 limit.
 
-    # ─── Tool: ListPlaybooks ─────────────────────────────────────────────
     @mcp.tool
     def ListPlaybooks(mentor: str = "", api_key: str | None = None) -> dict[str, Any]:
-        """Enumerate the curated playbook corpus for the given mentor.
+        """Enumerate the curated playbook corpus for the given mentor."""
+        return _handle_list_playbooks(ctx, mentor, api_key)
 
-        Args:
-            mentor: Mentor slug (e.g. 'pepe'). Empty → server default.
-            api_key: Bearer token (only required when server runs with auth on).
-        """
-        try:
-            mentee_slug = _auth(api_key)
-        except ValueError as e:
-            return {"error": "auth_failed", "detail": str(e)}
-        m = get_mentor(mentors, mentor, s.default_mentor)
-        if not m:
-            return {"error": "unknown_mentor", "detail": f"slug={mentor or s.default_mentor!r}"}
-        log_event(s.audit_log_path, "ListPlaybooks", mentor=m.slug, mentee=mentee_slug)
-        corpus = load_corpus(m.playbook_dir)
-        return ListPlaybooksResponse(
-            mentor=m.slug,
-            count=len(corpus),
-            playbooks=[PlaybookSummary(id=pb.id, title=pb.title, summary=pb.summary) for pb in corpus],
-        ).model_dump()
-
-    # ─── Tool: GetPlaybook ───────────────────────────────────────────────
     @mcp.tool
     def GetPlaybook(id: str, mentor: str = "", api_key: str | None = None) -> dict[str, Any]:
         """Retrieve a single playbook from the given mentor's corpus."""
-        try:
-            mentee_slug = _auth(api_key)
-        except ValueError as e:
-            return {"error": "auth_failed", "detail": str(e)}
-        m = get_mentor(mentors, mentor, s.default_mentor)
-        if not m:
-            return {"error": "unknown_mentor"}
-        clean_id = safe_id(id)
-        if not clean_id:
-            return {"error": "invalid_id"}
-        log_event(
-            s.audit_log_path,
-            "GetPlaybook",
-            mentor=m.slug,
-            mentee=mentee_slug,
-            request_hash=short_hash(clean_id),
-        )
-        target = m.playbook_dir / f"{clean_id}.md"
-        if not target.is_file():
-            return {"error": "not_found", "detail": f"id={clean_id}"}
-        from .playbooks import _load_one  # lazy import to avoid widening public surface
+        return _handle_get_playbook(ctx, id, mentor, api_key)
 
-        pb = _load_one(target)
-        return GetPlaybookResponse(mentor=m.slug, id=pb.id, title=pb.title, body=pb.body).model_dump()
-
-    # ─── Tool: SearchPlaybooks ───────────────────────────────────────────
     @mcp.tool
     def SearchPlaybooks(query: str, mentor: str = "", limit: int = 5, api_key: str | None = None) -> dict[str, Any]:
         """Substring-search the mentor's corpus. Returns ranked matches."""
-        try:
-            mentee_slug = _auth(api_key)
-        except ValueError as e:
-            return {"error": "auth_failed", "detail": str(e)}
-        m = get_mentor(mentors, mentor, s.default_mentor)
-        if not m:
-            return {"error": "unknown_mentor"}
-        if not query or not query.strip():
-            return {"error": "empty_query"}
-        log_event(
-            s.audit_log_path,
-            "SearchPlaybooks",
-            mentor=m.slug,
-            mentee=mentee_slug,
-            request_hash=short_hash(query),
-        )
-        corpus = load_corpus(m.playbook_dir)
-        rows = search(corpus, query, limit=limit)
-        return SearchPlaybooksResponse(
-            mentor=m.slug,
-            query=query,
-            count=len(rows),
-            matches=[SearchMatch(id=pb.id, title=pb.title, rank=rank, snippet=snippet) for pb, rank, snippet in rows],
-        ).model_dump()
+        return _handle_search_playbooks(ctx, query, mentor, limit, api_key)
 
-    # ─── Tool: AskMentor ─────────────────────────────────────────────────
     @mcp.tool
     async def AskMentor(
         question: str,
@@ -182,71 +384,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         EscalateToHuman with suggested phrasing — *mentor-triggered*
         escalation, in addition to the mentee being free to call
         EscalateToHuman directly."""
-        try:
-            mentee_slug = _auth(api_key)
-        except ValueError as e:
-            return {"error": "auth_failed", "detail": str(e)}
-        m = get_mentor(mentors, mentor, s.default_mentor)
-        if not m:
-            return {"error": "unknown_mentor"}
-        q = (question or "").strip()
-        if not q:
-            return {"error": "empty_question"}
+        return await _handle_ask_mentor(ctx, question, mentor, context, api_key)
 
-        log_event(
-            s.audit_log_path,
-            "AskMentor",
-            mentor=m.slug,
-            mentee=mentee_slug,
-            request_hash=short_hash(q),
-        )
-
-        corpus = load_corpus(m.playbook_dir)
-        ranked = keyword_rank(corpus, q + " " + context, limit=3)
-        relevant = [PlaybookSummary(id=pb.id, title=pb.title, summary=pb.summary) for pb, _ in ranked]
-        playbook_bodies = [(pb.title, pb.body) for pb, _ in ranked]
-
-        backend = backends.get(m.slug)
-        if backend is None:
-            # Defensive — every loaded mentor gets a backend at boot.
-            return {"error": "unknown_mentor"}
-        try:
-            llm_answer: LLMAnswer = await backend.ask(
-                mentor_name=m.name,
-                persona=m.persona,
-                question=q if not context else f"{q}\n\nContext:\n{context}",
-                playbook_bodies=playbook_bodies,
-            )
-        except Exception as e:
-            logger.warning("AskMentor backend call failed (%s): %s", backend.mode_label, e)
-            return {
-                "error": "llm_failed",
-                "detail": "the mentor is currently unable to synthesise an answer; try GetPlaybook on a relevant id",
-                "relevant_playbooks": [r.model_dump() for r in relevant],
-            }
-
-        threshold = m.confidence_threshold
-        escalation_recommended = llm_answer.confidence < threshold
-        suggested = None
-        if escalation_recommended:
-            suggested = (
-                f'To your operator: "My mentor returned an answer at confidence '
-                f"{llm_answer.confidence:.2f}, below their threshold of "
-                f"{threshold:.2f}, on this question — could you take a look "
-                f'before I act on it? Question: {q[:300]}"'
-            )
-
-        return AskMentorResponse(
-            mentor=m.slug,
-            question=q[:500],
-            answer=llm_answer.answer,
-            confidence=llm_answer.confidence,
-            relevant_playbooks=relevant,
-            escalation_recommended=escalation_recommended,
-            suggested_message_to_your_operator=suggested,
-        ).model_dump()
-
-    # ─── Tool: EscalateToHuman ───────────────────────────────────────────
     @mcp.tool
     def EscalateToHuman(
         situation: str,
@@ -258,100 +397,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         mentee hands to its own operator. The mentor does not page or
         message anyone — that's the Human-Gated Escalation Invariant
         (AMMP §3.4)."""
-        try:
-            mentee_slug = _auth(api_key)
-        except ValueError as e:
-            return {"error": "auth_failed", "detail": str(e)}
-        m = get_mentor(mentors, mentor, s.default_mentor)
-        if not m:
-            return {"error": "unknown_mentor"}
-        s_situation = (situation or "").strip()
-        if not s_situation:
-            return {"error": "empty_situation"}
-        log_event(
-            s.audit_log_path,
-            "EscalateToHuman",
-            mentor=m.slug,
-            mentee=mentee_slug,
-            request_hash=short_hash(s_situation),
-        )
-        suggested = (
-            f"To your operator: \"I'm stuck on the following situation and "
-            f"I think it needs your call. Situation: {s_situation[:300]}"
-            + (f" — what's making me unsure: {why_stuck[:200]}" if why_stuck else "")
-            + ". Could you take a look and tell me how to proceed? I won't "
-            'act until you respond."'
-        )
-        return EscalateToHumanResponse(
-            mentor=m.slug,
-            guidance=(
-                "The mentor cannot reach your operator. Use the suggested "
-                "phrasing below to ask them yourself. Wait for their decision "
-                "before acting."
-            ),
-            suggested_message_to_your_operator=suggested,
-        ).model_dump()
+        return _handle_escalate_to_human(ctx, situation, mentor, why_stuck, api_key)
 
-    # ─── Capability advertisement ────────────────────────────────────────
     @mcp.custom_route("/.well-known/agent.json", methods=["GET"])
     async def agent_card(_request: Request) -> JSONResponse:
         """AMMP capability advertisement. AMMP §10."""
-        mentor_summaries = []
-        for slug, m in mentors.items():
-            corpus = load_corpus(m.playbook_dir)
-            backend = backends.get(slug)
-            mentor_summaries.append(
-                {
-                    "slug": slug,
-                    "name": m.name,
-                    "playbookCount": len(corpus),
-                    "backend": backend.mode_label if backend else "unknown",
-                    "backendLive": backend.is_live if backend else False,
-                }
-            )
-        return JSONResponse(
-            {
-                "name": "ammp-mcp",
-                "version": __version__,
-                "url": s.public_url,
-                "description": (
-                    "Reference AMMP server (Mentoring track). Multi-mentor: each "
-                    "tool call routes to the named mentor's corpus. Privacy "
-                    "posture: no-retention; hash-only audit log; "
-                    "cross-compartment escalation prohibited."
-                ),
-                "ammp": {
-                    "draft": __ammp_draft__,
-                    "tracks": ["mentoring"],
-                    "mentors": mentor_summaries,
-                    "mentoring": {
-                        # Per-mentor mode is in `mentors[].backend`; this is
-                        # the "any of them live?" signal for clients that
-                        # only care about the global picture.
-                        "askMentorMode": (
-                            "per-mentor" if any(b.is_live for b in backends.values()) else "structured-pointer"
-                        ),
-                        "askMentorMaxConcurrent": s.llm_max_concurrent,
-                        "playbookLanguages": ["en"],
-                    },
-                    "privacyPosture": {
-                        "retention": "no-retention",
-                        "auditLog": "hash-only",
-                        "crossCompartmentEscalation": "prohibited",
-                        "requireAuth": s.require_auth,
-                    },
-                    "bindings": ["mcp"],
-                    "invariants": ["compartmentalisation", "human-gated-escalation"],
-                },
-                "operations": [
-                    "ListPlaybooks",
-                    "GetPlaybook",
-                    "SearchPlaybooks",
-                    "AskMentor",
-                    "EscalateToHuman",
-                ],
-            }
-        )
+        return JSONResponse(_build_capability_payload(ctx))
 
     return mcp
 

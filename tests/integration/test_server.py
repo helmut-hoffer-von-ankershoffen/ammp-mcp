@@ -171,7 +171,8 @@ async def test_auth_required_rejects_wrong_key(settings: Settings) -> None:
     assert result.data["detail"] == "api_key_invalid"
 
 
-async def test_capability_advertises_auth_setting(settings: Settings) -> None:
+def test_capability_advertises_auth_setting(settings: Settings) -> None:
+    # Sync — TestClient handles its own event loop; no `await` needed here.
     settings_auth = settings.model_copy(update={"require_auth": True})
     server = create_server(settings_auth)
     from starlette.testclient import TestClient
