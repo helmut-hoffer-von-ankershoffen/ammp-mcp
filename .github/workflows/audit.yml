@@ -39,9 +39,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.13"
           cache: pip
@@ -170,7 +170,7 @@ jobs:
 
       # -- Trivy: filesystem scan + SPDX SBOM ------------------------------
       - name: Trivy filesystem scan (vulnerabilities)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -182,7 +182,7 @@ jobs:
           exit-code: 0
 
       - name: Trivy SBOM (SPDX)
-        uses: aquasecurity/trivy-action@0.35.0
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -191,7 +191,7 @@ jobs:
 
       - name: Upload Trivy SARIF to Code Scanning
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
         with:
           sarif_file: reports/trivy.sarif
           category: trivy
@@ -199,7 +199,7 @@ jobs:
       # -- Artefact --------------------------------------------------------
       - name: Upload audit results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: audit-results
           path: |

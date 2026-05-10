@@ -1,0 +1,43 @@
+# Dependabot keeps SHA-pinned GitHub Actions current. Without this,
+# pinning to a specific SHA means we never see updates — which is the
+# point of pinning, but you do want a managed update path.
+#
+# Dependabot opens a PR per outdated action with the new SHA + a
+# version comment, the CI workflows then verify nothing breaks.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      # Roll non-major bumps together so we don't fan out PRs every week.
+      actions-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # Python deps live in pyproject.toml — Dependabot watches them too so
+  # the audit workflow's "is anything vulnerable" check has fewer chances
+  # of catching a known issue we could have rolled before it shipped.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      python-minor:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
