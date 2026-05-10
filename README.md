@@ -2,6 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/ci.yml)
+[![Audit](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml)
+[![CodeQL](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/codeql.yml)
 [![Coverage](https://codecov.io/gh/helmut-hoffer-von-ankershoffen/ammp-mcp/graph/badge.svg)](https://codecov.io/gh/helmut-hoffer-von-ankershoffen/ammp-mcp)
 [![Linter: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Type-checked: mypy](https://img.shields.io/badge/typed-mypy_strict-blue.svg)](http://mypy-lang.org/)

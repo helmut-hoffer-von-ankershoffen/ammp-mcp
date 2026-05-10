@@ -1,0 +1,48 @@
+name: CodeQL
+
+# Static security analysis via GitHub's CodeQL engine. Findings show up at:
+#   https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/security/code-scanning
+#
+# Runs on every push/PR to main, plus a weekly schedule so a newly-published
+# query pack still finds issues in unchanged code within ~7 days.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "30 6 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (Python)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write   # SARIF upload to Code Scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ["python"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+          # Trim the default extraction set — we don't have native code,
+          # docs build, or large vendor trees.
+          paths: src/ammp_mcp
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
