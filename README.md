@@ -186,6 +186,16 @@ All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
 | `AMMP_LLM_CONFIDENCE_THRESHOLD` | `0.6` | Below this, mentor-triggered escalation kicks in. |
 | `AMMP_AUDIT_LOG_PATH` | `./audit.log` | Hash-only audit log. |
 
+## Pre-push hook
+
+Activate the hook once after cloning so `git push` blocks on a ruff failure (same checks CI runs):
+
+```bash
+uv run pre-commit install --hook-type pre-push
+```
+
+The hooks (ruff, ruff-format, basic hygiene) live in `.pre-commit-config.yaml`. Run them on demand with `uv run pre-commit run --all-files`.
+
 ## Tests
 
 Tagged unit / integration / e2e:

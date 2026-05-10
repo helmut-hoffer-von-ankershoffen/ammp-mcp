@@ -66,6 +66,7 @@ dev = [
     "pytest-cov>=6,<8",
     "pytest-timeout>=2.3,<3",
     "httpx>=0.28,<1",
+    "pre-commit>=4,<5",
 ]
 
 [project.scripts]

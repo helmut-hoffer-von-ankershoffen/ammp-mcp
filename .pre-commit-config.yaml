@@ -1,0 +1,30 @@
+# Pre-push hooks. Install once with:
+#   uv run pre-commit install --hook-type pre-push
+#
+# Runs on `git push` — fail fast, identical signal to CI's lint job, so a
+# failed push tells you what CI would tell you in 30s instead of in 3min.
+
+default_install_hook_types:
+  - pre-push
+fail_fast: true
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: check-json
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
