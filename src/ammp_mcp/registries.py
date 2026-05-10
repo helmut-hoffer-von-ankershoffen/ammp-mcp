@@ -99,7 +99,7 @@ def save_mentees(path: Path, mentees: dict[str, Mentee]) -> None:
     """Persist the mentee allowlist back to disk (used by the CLI)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     serialised = [m.model_dump() for m in mentees.values()]
-    path.write_text(json.dumps(serialised, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(serialised, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def hash_api_key(api_key: str) -> str:

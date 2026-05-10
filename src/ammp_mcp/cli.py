@@ -376,7 +376,7 @@ def _setup_apply_backend(mentor_json_path: Path, backend: str, openclaw_url: str
     raw = json.loads(mentor_json_path.read_text(encoding="utf-8"))
     raw = {k: v for k, v in raw.items() if not k.startswith("_")}
     raw["backend"] = backend_block
-    mentor_json_path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
+    mentor_json_path.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def _setup_mint_mentee_if_needed(mentees_file: Path) -> str | None:
