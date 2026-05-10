@@ -1,0 +1,23 @@
+[
+  {
+    "slug": "claude-cowork-sandra",
+    "operator": "human:sandra",
+    "runtime": "claude-cowork",
+    "api_key_hash": "REPLACE_ME_after_running_ammp_add-mentee",
+    "rate_limit_per_minute": 60
+  },
+  {
+    "slug": "claude-ai-sandra",
+    "operator": "human:sandra",
+    "runtime": "claude-ai",
+    "api_key_hash": "REPLACE_ME_after_running_ammp_add-mentee",
+    "rate_limit_per_minute": 60
+  },
+  {
+    "slug": "claude-code-sandra",
+    "operator": "human:sandra",
+    "runtime": "claude-code",
+    "api_key_hash": "REPLACE_ME_after_running_ammp_add-mentee",
+    "rate_limit_per_minute": 60
+  }
+]

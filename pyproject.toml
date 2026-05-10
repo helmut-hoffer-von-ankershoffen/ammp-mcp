@@ -1,0 +1,169 @@
+[project]
+name = "ammp-mcp"
+version = "0.2.0"
+description = "🍝 Reference implementation of AMMP — the Agentic Mentor-Mentee Protocol — Mentoring track. Pepe Arturo, exposing his curated playbook corpus to mentee agents (Claude Cowork, Claude.ai, Claude Code, …) over the MCP wire."
+readme = "README.md"
+authors = [
+    { name = "Helmut Hoffer von Ankershoffen", email = "helmuthva@googlemail.com" },
+    { name = "Pepe Arturo AI", email = "pepe@helmguild.com" },
+]
+license = { file = "LICENSE" }
+
+keywords = [
+    "ammp",
+    "mcp",
+    "agentic",
+    "mentor",
+    "mentee",
+    "ietf",
+    "internet-draft",
+    "fastmcp",
+    "claude",
+    "anthropic",
+    "helmguild",
+    "pydantic",
+    "pytest",
+    "ruff",
+    "mypy",
+    "typer",
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Framework :: Pydantic",
+    "Framework :: Pytest",
+    "Typing :: Typed",
+    "Natural Language :: English",
+]
+
+requires-python = ">=3.11, <3.15"
+
+dependencies = [
+    "fastmcp>=3.2,<4",
+    "pydantic>=2.10,<3",
+    "pydantic-settings>=2.7,<3",
+    "typer>=0.15,<1",
+    "rich>=13,<15",
+    "anthropic>=0.40,<1",
+    "starlette>=0.47,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8,<1",
+    "mypy>=1.13,<2",
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.25,<1",
+    "pytest-cov>=6,<8",
+    "pytest-timeout>=2.3,<3",
+    "httpx>=0.28,<1",
+]
+
+[project.scripts]
+ammp = "ammp_mcp.cli:app"
+ammp-server = "ammp_mcp.server:run"
+
+[project.urls]
+Homepage = "https://www.helmguild.com/rfc/ammp/"
+Repository = "https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp"
+Specification = "https://www.helmguild.com/rfc/ammp/draft-arturo-ammp-01.txt"
+Issues = "https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ammp_mcp"]
+
+# ─── Ruff ────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle / pyflakes
+    "I",                # isort
+    "B",                # bugbear
+    "UP",               # pyupgrade
+    "SIM",              # simplify
+    "C90",              # mccabe complexity
+    "N",                # pep8-naming
+    "ARG",              # unused arguments
+    "RUF",              # ruff-specific
+]
+ignore = [
+    "E501",   # line length handled by formatter where unavoidable
+    "N803",   # MCP operation names are PascalCase per AMMP
+    "N802",   # MCP operation function names are PascalCase per AMMP
+    "RUF001", # ambiguous unicode in strings — used deliberately in operator-facing prose
+    "RUF002", # ambiguous unicode in docstrings — same
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 30  # FastMCP factories wire many tools; raising over the default 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG", "B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ─── Mypy ────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+disallow_untyped_decorators = false
+ignore_missing_imports = true
+pretty = true
+show_column_numbers = true
+show_error_codes = true
+warn_unreachable = true
+exclude = ["build", "dist", ".venv"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+# ─── Pytest ──────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --strict-markers --cov=ammp_mcp --cov-report=term-missing --cov-report=xml:reports/coverage.xml --cov-report=html:reports/coverage_html"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+timeout = 10
+markers = [
+    "unit: Solitary unit tests — module-in-isolation, deps mocked, offline, <10s.",
+    "integration: Sociable integration tests — real I/O across modules (server routes, CLI, file system), still offline (LLM mocked), <10s.",
+    "e2e: End-to-end tests with real external services (Claude API, deployed AMMP endpoint). Skipped by default; run with -m e2e.",
+]
+
+[tool.coverage.run]
+source = ["src/ammp_mcp"]
+omit = ["*/tests/*", "*/__main__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
