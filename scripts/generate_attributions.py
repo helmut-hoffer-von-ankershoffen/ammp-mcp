@@ -29,6 +29,7 @@ to see attributions.
 
 from __future__ import annotations
 
+import html
 import json
 import subprocess
 import sys
@@ -89,8 +90,12 @@ def _format_package(pkg: dict[str, str]) -> str:
     url = (pkg.get("URL") or "").strip()
     authors = (pkg.get("Author") or "").strip()
     maintainers = (pkg.get("Maintainer") or "").strip()
-    license_text = (pkg.get("LicenseText") or "").strip()
-    notice_text = (pkg.get("NoticeText") or "").strip()
+    # pip-licenses sometimes hands us HTML-escaped license bodies (e.g. the
+    # Apache-2.0 NOTICE that ships with aiofile contains literal `&lt;…&gt;`
+    # for an autolink URL). Unescape before rendering so the code fence shows
+    # the original text, not the entity-escaped form.
+    license_text = html.unescape((pkg.get("LicenseText") or "").strip())
+    notice_text = html.unescape((pkg.get("NoticeText") or "").strip())
 
     out = f"## {name} ({version}) — {license_name}\n\n"
 
