@@ -10,10 +10,18 @@ jobs:
   lint-and-test:
     name: Lint, type-check, test (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
+    # Python 3.14 is still in beta/RC at time of writing — mark its row
+    # experimental so a 3.14-only regression (typically a transitive dep
+    # not yet shipping wheels) doesn't fail the gate. The `experimental`
+    # column is set per-include below.
+    continue-on-error: ${{ matrix.experimental || false }}
     strategy:
       fail-fast: false
       matrix:
         python: ["3.11", "3.12", "3.13"]
+        include:
+          - python: "3.14"
+            experimental: true
 
     steps:
       - uses: actions/checkout@v4
@@ -21,6 +29,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+          allow-prereleases: true
           cache: pip
           cache-dependency-path: pyproject.toml
 
