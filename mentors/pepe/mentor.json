@@ -10,5 +10,8 @@
     "auth_bearer_env": "OPENCLAW_BEARER",
     "timeout_seconds": 60,
     "max_concurrent": 10
+  },
+  "backend": {
+    "kind": "stub"
   }
 }

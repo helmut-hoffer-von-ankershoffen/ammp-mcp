@@ -16,7 +16,7 @@ from typer.testing import CliRunner
 
 from ammp_mcp import settings as settings_module
 from ammp_mcp.cli import app
-from ammp_mcp.registries import find_mentee_by_api_key, load_mentees
+from ammp_mcp.mentee import find_mentee_by_api_key, load_mentees
 
 pytestmark = pytest.mark.integration
 

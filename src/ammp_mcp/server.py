@@ -20,19 +20,18 @@ from starlette.responses import JSONResponse
 from . import __ammp_draft__, __version__
 from .audit import log_event, short_hash
 from .backends import LLMAnswer, MentorBackend, build_backend
+from .mentee import Mentee, find_mentee_by_api_key, load_mentees
+from .mentor import Mentor, get_mentor, load_mentors
 from .models import (
     AskMentorResponse,
     EscalateToHumanResponse,
     GetPlaybookResponse,
     ListPlaybooksResponse,
-    Mentee,
-    Mentor,
     PlaybookSummary,
     SearchMatch,
     SearchPlaybooksResponse,
 )
-from .playbooks import keyword_rank, load_corpus, safe_id, search
-from .registries import find_mentee_by_api_key, get_mentor, load_mentees, load_mentors
+from .playbook import keyword_rank, load_corpus, safe_id, search
 from .settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -119,7 +118,7 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
     target = m.playbook_dir / f"{clean_id}.md"
     if not target.is_file():
         return {"error": "not_found", "detail": f"id={clean_id}"}
-    from .playbooks import _load_one  # lazy import to avoid widening the public surface
+    from .playbook._service import _load_one  # lazy import to avoid widening the public surface
 
     pb = _load_one(target)
     return GetPlaybookResponse(mentor=m.slug, id=pb.id, title=pb.title, body=pb.body).model_dump()

@@ -14,7 +14,7 @@ import pytest
 
 from ammp_mcp import audit
 from ammp_mcp import settings as settings_module
-from ammp_mcp.registries import hash_api_key
+from ammp_mcp.mentee import hash_api_key
 from ammp_mcp.settings import Settings
 
 

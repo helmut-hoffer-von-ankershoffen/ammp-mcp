@@ -12,7 +12,7 @@ from ammp_mcp.backends import (
     build_backend,
     parse_envelope,
 )
-from ammp_mcp.models import (
+from ammp_mcp.mentor import (
     AnthropicBackendConfig,
     OpenClawBackendConfig,
     StubBackendConfig,
@@ -250,7 +250,7 @@ def test_factory_builds_stub(tmp_path) -> None:
 
 
 def test_mentor_model_accepts_backend_block(tmp_path) -> None:
-    from ammp_mcp.models import Mentor
+    from ammp_mcp.mentor import Mentor
 
     m = Mentor(
         slug="pepe",
@@ -270,7 +270,7 @@ def test_mentor_model_accepts_backend_block(tmp_path) -> None:
 def test_mentor_model_rejects_unknown_backend_kind(tmp_path) -> None:
     from pydantic import ValidationError
 
-    from ammp_mcp.models import Mentor
+    from ammp_mcp.mentor import Mentor
 
     with pytest.raises(ValidationError):
         Mentor(

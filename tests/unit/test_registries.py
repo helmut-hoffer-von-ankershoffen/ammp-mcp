@@ -4,14 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from ammp_mcp.registries import (
+from ammp_mcp.mentee import (
     find_mentee_by_api_key,
-    get_mentor,
     hash_api_key,
     load_mentees,
-    load_mentors,
     save_mentees,
 )
+from ammp_mcp.mentor import get_mentor, load_mentors
 
 pytestmark = pytest.mark.unit
 

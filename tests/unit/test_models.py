@@ -3,7 +3,9 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from ammp_mcp.models import AskMentorResponse, Mentee, Mentor, PlaybookSummary
+from ammp_mcp.mentee import Mentee
+from ammp_mcp.mentor import Mentor
+from ammp_mcp.models import AskMentorResponse, PlaybookSummary
 
 pytestmark = pytest.mark.unit
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 
-from ..models import (
+from ..mentor import (
     AnthropicBackendConfig,
     BackendConfig,
     OpenClawBackendConfig,

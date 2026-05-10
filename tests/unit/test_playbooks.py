@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from ammp_mcp.playbooks import (
+from ammp_mcp.playbook import (
     keyword_rank,
     load_corpus,
     safe_id,
