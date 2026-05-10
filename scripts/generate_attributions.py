@@ -69,8 +69,9 @@ def run_pip_licenses() -> list[dict[str, str]]:
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         # Older pip-licenses versions don't expose `python -m piplicenses`;
-        # fall back to the entry-point.
-        proc = subprocess.run(
+        # fall back to the entry-point. `check=True` raises on failure;
+        # we don't read the result because the JSON is written to disk.
+        subprocess.run(
             ["pip-licenses", *cmd[2:]],
             capture_output=True,
             text=True,

@@ -82,8 +82,22 @@ def save_mentees(path: Path, mentees: dict[str, Mentee]) -> None:
 
 
 def hash_api_key(api_key: str) -> str:
-    """Hex sha256 — same hashing the server uses to compare incoming
-    Bearer tokens against the stored allowlist."""
+    """Hex sha256 of the Bearer token.
+
+    Plain SHA-256 is appropriate here — *not* a slow KDF (bcrypt /
+    argon2 / scrypt). API keys are minted by ``ammp mentee add`` as
+    ``"ammp-" + secrets.token_urlsafe(32)``: 32 bytes (256 bits) of
+    cryptographically secure randomness from the OS CSPRNG. Brute-
+    forcing a 256-bit-entropy preimage of a 256-bit hash is
+    computationally infeasible regardless of the hash's cost factor;
+    the slow-KDF protections that matter for *human-chosen* passwords
+    are irrelevant for high-entropy random tokens. Same convention as
+    PyPI tokens, Stripe API keys, GitHub PATs, etc.
+
+    (CodeQL's `py/weak-cryptographic-algorithm` rule flags this
+    because it can't see the input-entropy assumption — see the
+    repo's Code Scanning dismissals for the rationale.)
+    """
     return hashlib.sha256(api_key.encode("utf-8")).hexdigest()
 
 
