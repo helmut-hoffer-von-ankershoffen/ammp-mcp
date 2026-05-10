@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  # Opt every JavaScript action into Node 24 even when an action's
+  # default runtime is still Node 20. Removes the deprecation warning
+  # uniformly across actions; can be removed once every pinned action
+  # ships its Node 24 release.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   lint-and-test:
     name: Lint, type-check, test (Python ${{ matrix.python }})
