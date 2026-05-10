@@ -170,7 +170,7 @@ jobs:
 
       # -- Trivy: filesystem scan + SPDX SBOM ------------------------------
       - name: Trivy filesystem scan (vulnerabilities)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -182,7 +182,7 @@ jobs:
           exit-code: 0
 
       - name: Trivy SBOM (SPDX)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
