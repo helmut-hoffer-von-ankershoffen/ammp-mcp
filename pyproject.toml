@@ -159,8 +159,17 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["src/ammp_mcp"]
+source_pkgs = ["ammp_mcp"]
 omit = ["*/tests/*", "*/__main__.py"]
+
+# Alias paths in coverage.xml so SonarCloud's `sonar.sources=src`
+# can resolve them. Without this, pytest-cov writes filenames as
+# `src/ammp_mcp/server.py` and Sonar (which looks under `src/`) tries
+# to match `src/src/ammp_mcp/server.py` and fails — coverage stays 0.
+# `source_pkgs = ["ammp_mcp"]` tracks the package by name; the alias
+# rewrites the working-tree path to a src-relative one.
+[tool.coverage.paths]
+source = ["src/ammp_mcp", "*/site-packages/ammp_mcp"]
 
 [tool.coverage.report]
 exclude_lines = [
