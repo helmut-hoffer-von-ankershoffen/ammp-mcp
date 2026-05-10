@@ -225,9 +225,15 @@ Out of scope (for now):
 - The AMMP **Review track**'s 4 ops — needs a federated guild of human staff-plus engineers behind a Reviewer Service. Larger build.
 - Embedding-based search ranking — v0.2 is substring + token-rank.
 
-## License
+## License & Attributions
 
-MIT — see [`LICENSE`](LICENSE).
+`ammp-mcp` is **MIT-licensed** — see [`LICENSE`](LICENSE).
+
+Attributions for the open-source projects this server depends on are in [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md). Regenerate after dependency bumps with `python scripts/generate_attributions.py`.
+
+## Security
+
+Vulnerability disclosure, supported-version policy, threat-surface notes, and the full automated-tooling inventory (pip-audit, Trivy, CodeQL, Dependabot, …) are in [`SECURITY.md`](SECURITY.md). Report issues via [GitHub Security Advisories](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/security/advisories/new).
 
 ## See also
 
