@@ -27,9 +27,12 @@ class Playbook:
 # match semantics with re.MULTILINE — the title is whatever follows
 # `# ` on a single line.
 _TITLE_RE = re.compile(r"^#\s+([^\n]+)$", re.MULTILINE)
-# Bounded `[\s\S]*?` instead of `.*?` for the same reason — non-greedy
-# but with explicit any-char including newlines.
-_FRONTMATTER_RE = re.compile(r"^---\n[\s\S]*?\n---\n")
+# Bounded quantifier (`{0,32768}?`) avoids the unbounded backtracking
+# class S5852 still flags. Frontmatter on a real playbook is well under
+# 32 KB; capping the quantifier keeps the pattern matching the same set
+# of inputs we care about while making catastrophic backtracking
+# impossible by construction.
+_FRONTMATTER_RE = re.compile(r"^---\n[\s\S]{0,32768}?\n---\n")
 
 
 def _summarise(body: str) -> str:
