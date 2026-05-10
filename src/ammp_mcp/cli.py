@@ -62,9 +62,7 @@ def list_mentors() -> None:
     for slug, m in mentors.items():
         corpus = load_corpus(m.playbook_dir)
         marker = " (default)" if slug == s.default_mentor else ""
-        table.add_row(
-            slug + marker, m.name, str(len(corpus)), f"{m.confidence_threshold:.2f}", str(m.playbook_dir)
-        )
+        table.add_row(slug + marker, m.name, str(len(corpus)), f"{m.confidence_threshold:.2f}", str(m.playbook_dir))
     console.print(table)
 
 
@@ -136,9 +134,7 @@ def list_mentees() -> None:
 def add_mentee(
     slug: str = typer.Argument(..., help="Mentee slug, e.g. 'claude-cowork-sandra'."),
     operator: str = typer.Option(..., help="Operator, e.g. 'human:sandra'."),
-    runtime: str = typer.Option(
-        ..., help="Runtime, e.g. 'claude-cowork', 'claude-ai', 'claude-code'."
-    ),
+    runtime: str = typer.Option(..., help="Runtime, e.g. 'claude-cowork', 'claude-ai', 'claude-code'."),
     rate_limit: int = typer.Option(60, help="Per-minute request budget."),
 ) -> None:
     """Add a mentee. Mints a fresh API key, prints it ONCE, stores only the hash."""

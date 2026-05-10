@@ -28,8 +28,7 @@ class Settings(BaseSettings):
     public_url: str = Field(
         default="http://127.0.0.1:8765",
         description=(
-            "URL the server advertises in /.well-known/agent.json. "
-            "In production set to https://ammp.helmguild.com."
+            "URL the server advertises in /.well-known/agent.json. In production set to https://ammp.helmguild.com."
         ),
     )
 

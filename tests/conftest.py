@@ -36,8 +36,7 @@ def isolated_tree(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (pepe / "auth.md").write_text(
-        "# OAuth callback resilience\n\n"
-        "Treat the callback as an unreliable handoff. Idempotent retries.\n",
+        "# OAuth callback resilience\n\nTreat the callback as an unreliable handoff. Idempotent retries.\n",
         encoding="utf-8",
     )
     (pepe / "README.md").write_text(
@@ -45,11 +44,13 @@ def isolated_tree(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (mentors_root / "pepe" / "mentor.json").write_text(
-        json.dumps({
-            "name": "Pepe Arturo",
-            "persona": "calm operator",
-            "confidence_threshold": 0.6,
-        }),
+        json.dumps(
+            {
+                "name": "Pepe Arturo",
+                "persona": "calm operator",
+                "confidence_threshold": 0.6,
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -60,32 +61,36 @@ def isolated_tree(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (mentors_root / "strict" / "mentor.json").write_text(
-        json.dumps({
-            "name": "Strict Mentor",
-            "persona": "high-bar operator",
-            "confidence_threshold": 0.9,
-        }),
+        json.dumps(
+            {
+                "name": "Strict Mentor",
+                "persona": "high-bar operator",
+                "confidence_threshold": 0.9,
+            }
+        ),
         encoding="utf-8",
     )
 
     mentees_file = tmp_path / "mentees.json"
     mentees_file.write_text(
-        json.dumps([
-            {
-                "slug": "claude-cowork-sandra",
-                "operator": "human:sandra",
-                "runtime": "claude-cowork",
-                "api_key_hash": hash_api_key("ammp-test-key-1"),
-                "rate_limit_per_minute": 60,
-            },
-            {
-                "slug": "claude-code-sandra",
-                "operator": "human:sandra",
-                "runtime": "claude-code",
-                "api_key_hash": hash_api_key("ammp-test-key-2"),
-                "rate_limit_per_minute": 60,
-            },
-        ]),
+        json.dumps(
+            [
+                {
+                    "slug": "claude-cowork-sandra",
+                    "operator": "human:sandra",
+                    "runtime": "claude-cowork",
+                    "api_key_hash": hash_api_key("ammp-test-key-1"),
+                    "rate_limit_per_minute": 60,
+                },
+                {
+                    "slug": "claude-code-sandra",
+                    "operator": "human:sandra",
+                    "runtime": "claude-code",
+                    "api_key_hash": hash_api_key("ammp-test-key-2"),
+                    "rate_limit_per_minute": 60,
+                },
+            ]
+        ),
         encoding="utf-8",
     )
     return tmp_path

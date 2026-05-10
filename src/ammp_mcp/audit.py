@@ -44,10 +44,7 @@ def log_event(
     """Append a single audit line. Thread-safe; opens + closes the file
     each call (small cost, big simplicity for a low-volume server)."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
-    line = (
-        f"{dt.datetime.now(dt.UTC).isoformat()} "
-        f"op={operation} mentor={mentor} mentee={mentee} hash={request_hash}"
-    )
+    line = f"{dt.datetime.now(dt.UTC).isoformat()} op={operation} mentor={mentor} mentee={mentee} hash={request_hash}"
     if extra:
         line += f" {extra}"
     line += "\n"

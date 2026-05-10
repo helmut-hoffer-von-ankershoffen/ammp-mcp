@@ -74,8 +74,10 @@ def test_add_mentee_round_trip(runner: CliRunner, isolated_tree: Path) -> None:
         [
             "add-mentee",
             "claude-ai-sandra",
-            "--operator", "human:sandra",
-            "--runtime", "claude-ai",
+            "--operator",
+            "human:sandra",
+            "--runtime",
+            "claude-ai",
         ],
     )
     assert r.exit_code == 0, r.output
@@ -97,8 +99,10 @@ def test_add_mentee_duplicate_rejected(runner: CliRunner) -> None:
         [
             "add-mentee",
             "claude-cowork-sandra",
-            "--operator", "human:sandra",
-            "--runtime", "claude-cowork",
+            "--operator",
+            "human:sandra",
+            "--runtime",
+            "claude-cowork",
         ],
     )
     assert r.exit_code == 2

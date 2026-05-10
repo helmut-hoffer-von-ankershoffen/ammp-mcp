@@ -227,10 +227,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         suggested = None
         if escalation_recommended:
             suggested = (
-                f"To your operator: \"My mentor returned an answer at confidence "
+                f'To your operator: "My mentor returned an answer at confidence '
                 f"{llm_answer.confidence:.2f}, below their threshold of "
                 f"{threshold:.2f}, on this question — could you take a look "
-                f"before I act on it? Question: {q[:300]}\""
+                f'before I act on it? Question: {q[:300]}"'
             )
 
         return AskMentorResponse(
@@ -277,7 +277,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             f"I think it needs your call. Situation: {s_situation[:300]}"
             + (f" — what's making me unsure: {why_stuck[:200]}" if why_stuck else "")
             + ". Could you take a look and tell me how to proceed? I won't "
-            "act until you respond.\""
+            'act until you respond."'
         )
         return EscalateToHumanResponse(
             mentor=m.slug,
