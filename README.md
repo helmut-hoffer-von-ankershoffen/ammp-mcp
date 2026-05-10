@@ -118,10 +118,16 @@ When the model's self-reported confidence falls below the mentor's threshold (de
 
 ## Quickstart (local)
 
+Once published to PyPI, the simplest path will be `uvx ammp-mcp` — no clone, no venv. Until then, run from a checkout via `uv run ammp <command>` (uv builds an env from `pyproject.toml` on the fly):
+
 ```bash
 git clone https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp
 cd ammp-mcp
 
+uv run ammp --help              # housekeeping CLI
+uv run ammp-server              # boot the HTTP MCP server
+
+# Or, with pip in a venv:
 python3.13 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
