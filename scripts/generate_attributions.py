@@ -124,9 +124,12 @@ def render(rows: list[dict[str, str]]) -> str:
     body = HEADER + "\n"
     for pkg in rows:
         body += _format_package(pkg)
-    # Right-strip per line so the pre-commit hygiene hook doesn't need to "fix" us.
-    body = "\n".join(line.rstrip() for line in body.splitlines()) + "\n"
-    return body
+    # Right-strip per line + collapse trailing blank lines + ensure exactly
+    # one final newline. Stays hook-clean across regenerations.
+    lines = [line.rstrip() for line in body.splitlines()]
+    while lines and lines[-1] == "":
+        lines.pop()
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
