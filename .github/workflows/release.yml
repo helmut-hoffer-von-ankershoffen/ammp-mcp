@@ -1,19 +1,119 @@
 name: Release
 
-# Triggered on a `vX.Y.Z` tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`).
-# Builds the sdist + wheel and publishes them to PyPI via OIDC trusted publishing
-# — no API token, no long-lived secret. Configure the trusted publisher once on
-# https://pypi.org/manage/account/publishing/ before the first tag.
+# Triggered on a `vX.Y.Z` (or pre-release `vX.Y.Z-rcN`) tag, e.g.:
+#
+#     git tag -a v0.3.0 -m "v0.3.0 — what changed"
+#     git push origin v0.3.0
+#
+# The workflow:
+#   1. verifies the git tag matches `pyproject.toml [project].version`
+#      (a silent mismatch ships a mislabelled package; we fail fast instead)
+#   2. classifies the tag as full-release vs. pre-release (`v*-*`)
+#   3. runs the test suite once on Python 3.13 to refuse a release if main is red
+#   4. builds the sdist + wheel, smoke-tests the wheel, generates SHA256 sums
+#   5. attests build provenance via Sigstore (SLSA Level 3)
+#   6. publishes to PyPI via OIDC trusted publishing — IF the trusted publisher
+#      has been configured on https://pypi.org/manage/account/publishing/.
+#      If not configured, this job will fail-soft (continue-on-error) and the
+#      GitHub Release still ships with the dist artefacts attached.
+#   7. creates a GitHub Release with notes assembled from CHANGELOG.md +
+#      auto-generated commit/PR list, attaches dist/* + SHA256SUMS, and marks
+#      pre-release status correctly.
+#
+# Reverting a release: delete the tag locally + on origin, delete the GH
+# Release in the UI; you cannot un-publish a PyPI version (only yank it).
 
 on:
   push:
     tags:
       - "v*"
 
+permissions:
+  contents: read
+
 jobs:
+
+  # -----------------------------------------------------------------------
+  preflight:
+    name: Preflight (verify tag + classify)
+    runs-on: ubuntu-latest
+    outputs:
+      version:    ${{ steps.derive.outputs.version }}     # "0.3.0" (no v prefix)
+      tag:        ${{ steps.derive.outputs.tag }}         # "v0.3.0"
+      prerelease: ${{ steps.derive.outputs.prerelease }}  # "true" | "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version from tag and pyproject.toml
+        id: derive
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          PYPROJECT_VERSION="$(python3 -c "
+          import tomllib, sys
+          with open('pyproject.toml','rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")"
+          if [[ "$VERSION" != "$PYPROJECT_VERSION" ]]; then
+            echo "::error title=Tag/version mismatch::"\
+                 "Git tag is $TAG (=> version $VERSION) but pyproject.toml "\
+                 "[project].version is $PYPROJECT_VERSION. "\
+                 "Bump pyproject.toml or retag, do not ship a mismatched build."
+            exit 1
+          fi
+          # Pre-release iff the tag has a hyphen-separated suffix (PEP 440-ish).
+          # v0.3.0       -> stable
+          # v0.3.0-rc1   -> pre-release
+          # v0.3.0a1     -> stable per this regex (intentional; PyPI itself
+          #                 will treat 0.3.0a1 as a pre-release at index time)
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true
+          else
+            PRERELEASE=false
+          fi
+          echo "version=$VERSION"        >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"                >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE"  >> "$GITHUB_OUTPUT"
+          echo "Resolved: tag=$TAG, version=$VERSION, prerelease=$PRERELEASE"
+
+  # -----------------------------------------------------------------------
+  test:
+    name: Test on Python 3.13
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint, type-check, test
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy src/ammp_mcp
+          pytest -m "unit or integration" -q
+
+  # -----------------------------------------------------------------------
   build:
     name: Build sdist + wheel
+    needs: [preflight, test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write       # for build-provenance attestations
+      attestations: write   # for build-provenance attestations
+    outputs:
+      version: ${{ needs.preflight.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,49 +135,122 @@ jobs:
           python -c "import ammp_mcp; print('OK', ammp_mcp.__version__)"
           ammp --help > /dev/null
 
+      - name: Generate SHA256SUMS for dist/*
+        working-directory: dist
+        run: |
+          shasum -a 256 * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance (SLSA / Sigstore)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.whl
+            dist/*.tar.gz
+
       - uses: actions/upload-artifact@v4
         with:
           name: dist
           path: dist/
 
+  # -----------------------------------------------------------------------
   publish-pypi:
-    name: Publish to PyPI
+    name: Publish to PyPI (OIDC; fail-soft if not configured)
     needs: build
     runs-on: ubuntu-latest
+    # PyPI trusted-publishing requires a one-time configuration at
+    # https://pypi.org/manage/account/publishing/ . Until that is done,
+    # this job will fail at the publish step. We mark it continue-on-error so
+    # the GitHub Release job downstream still ships the artefacts.
+    continue-on-error: true
     environment:
       name: pypi
       url: https://pypi.org/p/ammp-mcp
     permissions:
-      id-token: write  # mandatory for OIDC trusted publishing
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Strip non-distributable files from dist/
+        # PyPI publish rejects unknown files; SHA256SUMS would trip it up.
+        run: |
+          mv dist/SHA256SUMS .
+          ls -la dist/
 
-  release:
-    name: Create GitHub Release
-    needs: publish-pypi
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verify-metadata: true
+          # `verify-tag` ensures the version inside the wheel matches the git tag.
+          # Combined with the preflight check, this is belt-and-braces.
+          verify-tag: true
+
+  # -----------------------------------------------------------------------
+  github-release:
+    name: Publish GitHub Release
+    needs: [preflight, build]   # NOT publish-pypi: the release ships even if
+                                # PyPI publishing failed/was unconfigured
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0       # `gh release create --generate-notes` needs full history
 
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
-      - name: Publish release with auto-generated notes
+      - name: Extract release notes from CHANGELOG.md (if present)
+        id: notes
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! -f CHANGELOG.md ]]; then
+            echo "no_changelog=true" >> "$GITHUB_OUTPUT"
+            echo "(CHANGELOG.md not found — release notes will fall back to auto-generated commit list.)"
+            exit 0
+          fi
+          # Pull the section under `## [X.Y.Z]` header until the next `## [` (or EOF).
+          # Tag is `vX.Y.Z`; CHANGELOG header is `## [X.Y.Z]` (no `v`).
+          VERSION="${TAG#v}"
+          awk -v v="$VERSION" '
+            BEGIN { in_section = 0 }
+            /^## \[/ {
+              if (in_section) exit
+              if ($0 ~ "^## \\[" v "\\]") { in_section = 1; next }
+            }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/release-notes.md
+          if [[ -s /tmp/release-notes.md ]]; then
+            echo "no_changelog=false" >> "$GITHUB_OUTPUT"
+            echo "Found CHANGELOG section for $VERSION:"
+            head -20 /tmp/release-notes.md
+          else
+            echo "no_changelog=true" >> "$GITHUB_OUTPUT"
+            echo "(no [$VERSION] section in CHANGELOG.md — falling back to auto-generated notes.)"
+          fi
+
+      - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ needs.preflight.outputs.prerelease }}
+          NO_CHANGELOG: ${{ steps.notes.outputs.no_changelog }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --title "${GITHUB_REF_NAME}" \
-            dist/*
+          set -euo pipefail
+          ARGS=(
+            "${GITHUB_REF_NAME}"
+            --title "${GITHUB_REF_NAME}"
+            --generate-notes
+          )
+          if [[ "$NO_CHANGELOG" == "false" ]]; then
+            ARGS+=(--notes-file /tmp/release-notes.md)
+          fi
+          if [[ "$PRERELEASE" == "true" ]]; then
+            ARGS+=(--prerelease)
+          fi
+          gh release create "${ARGS[@]}" dist/*

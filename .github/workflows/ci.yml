@@ -39,12 +39,27 @@ jobs:
         run: mypy src/ammp_mcp
 
       - name: Pytest (unit + integration)
-        run: pytest -m "unit or integration" --cov=ammp_mcp --cov-report=xml:reports/coverage.xml
+        run: pytest -m "unit or integration" --cov=ammp_mcp --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
 
+      # Codecov upload — runs only on the canonical Python (3.13) so we don't
+      # double-count coverage across the matrix. `slug` is required for the
+      # action to associate the upload with the right project; without it the
+      # badge sits empty even when uploads succeed elsewhere.
       - name: Upload coverage to Codecov
         if: matrix.python == '3.13'
         uses: codecov/codecov-action@v5
         with:
+          slug: helmut-hoffer-von-ankershoffen/ammp-mcp
           files: reports/coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+        continue-on-error: true
+
+      - name: Upload test results to Codecov
+        if: matrix.python == '3.13' && !cancelled()
+        uses: codecov/test-results-action@v1
+        with:
+          slug: helmut-hoffer-von-ankershoffen/ammp-mcp
+          files: reports/junit.xml
           token: ${{ secrets.CODECOV_TOKEN }}
         continue-on-error: true
