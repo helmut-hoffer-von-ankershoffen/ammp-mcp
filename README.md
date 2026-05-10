@@ -211,18 +211,23 @@ curl -s http://127.0.0.1:8765/.well-known/agent.json | python -m json.tool
 
 ## CLI
 
-The Typer-based CLI handles housekeeping. `ammp --help` lists everything.
+The Typer-based CLI handles housekeeping. Subject-then-action layout (`ammp <subject> <action>`); `ammp --help` lists everything.
 
 ```bash
-ammp list-mentors                     # registered mentors + corpus sizes
-ammp list-playbooks --mentor pepe     # playbooks for a mentor
-ammp show-playbook 07-compartmentalization
-ammp list-mentees                     # allowlist (hashes only)
-ammp add-mentee claude-cowork-sandra --operator human:sandra --runtime claude-cowork
-ammp rotate-mentee-key claude-cowork-sandra
-ammp remove-mentee claude-cowork-sandra
-ammp check-key ammp-…                 # debug: which mentee owns this key?
-ammp capability                       # offline /.well-known/agent.json
+ammp mentor list                                # registered mentors + corpus sizes
+ammp playbook list --mentor pepe                # playbooks for a mentor
+ammp playbook show 07-compartmentalization
+
+ammp mentee list                                # allowlist (hashes only)
+ammp mentee add claude-cowork-sandra --operator human:sandra --runtime claude-cowork
+ammp mentee rotate-key claude-cowork-sandra
+ammp mentee remove claude-cowork-sandra
+ammp mentee check-key ammp-…                    # debug: which mentee owns this key?
+
+ammp setup                                      # first-run install wizard
+ammp status                                     # validate the install
+ammp usage --days 7                             # aggregate the audit log
+ammp capability                                 # offline /.well-known/agent.json
 ammp serve                            # same as ammp-server
 ```
 

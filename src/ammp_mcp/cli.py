@@ -1,23 +1,14 @@
 """Typer-based CLI for housekeeping.
 
-Commands:
-    setup                — interactive first-run wizard (mentor backend +
-                           first mentee + .env scaffold)
-    status               — validate the current installation: mentor.json
-                           parses, playbook dirs exist, mentees allow-list
-                           is well-formed, env vars set, OpenClaw webhook
-                           reachable, audit log writable
-    usage                — aggregate the audit log (per-operation,
-                           per-mentor, per-mentee, last-N-days)
-    list-mentors         — show registered mentors and their corpus size
-    list-playbooks       — list playbooks for a mentor
-    show-playbook        — print one playbook to stdout
-    list-mentees         — show the mentee allowlist (slugs only)
-    add-mentee           — add a mentee; mints + prints a fresh API key
-    remove-mentee        — drop a mentee from the allowlist
-    rotate-mentee-key    — issue a fresh API key for an existing mentee
-    capability           — print /.well-known/agent.json offline
-    serve                — start the HTTP MCP server (same as `ammp-server`)
+Subject-then-action layout (mirrors `git remote list`, `kubectl get pods`):
+
+    ammp mentor list
+    ammp mentee list / add / remove / rotate-key / check-key
+    ammp playbook list / show
+    ammp setup / status / usage / capability / serve
+
+The five top-level verbs (setup, status, usage, capability, serve) are
+not subject-bound — they act on the install as a whole.
 """
 
 from __future__ import annotations
@@ -36,7 +27,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
-from .models import Mentee
+from .models import Mentee, Mentor
 from .playbooks import load_corpus, safe_id
 from .registries import (
     find_mentee_by_api_key,
@@ -56,12 +47,34 @@ app = typer.Typer(
 )
 console = Console()
 
+mentor_app = typer.Typer(
+    name="mentor",
+    help="Inspect registered mentors.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+mentee_app = typer.Typer(
+    name="mentee",
+    help="Manage the mentee allowlist (add / remove / rotate-key / list / check-key).",
+    no_args_is_help=True,
+    add_completion=False,
+)
+playbook_app = typer.Typer(
+    name="playbook",
+    help="Inspect and read the playbook corpus of a mentor.",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(mentor_app)
+app.add_typer(mentee_app)
+app.add_typer(playbook_app)
 
-# ─── Mentors ──────────────────────────────────────────────────────────────
+
+# ─── ammp mentor … ────────────────────────────────────────────────────────
 
 
-@app.command("list-mentors")
-def list_mentors() -> None:
+@mentor_app.command("list")
+def mentor_list() -> None:
     """List registered mentors and their corpus sizes."""
     s = get_settings()
     mentors = load_mentors(s.mentors_root)
@@ -73,16 +86,28 @@ def list_mentors() -> None:
     table.add_column("name", style="white")
     table.add_column("playbooks", justify="right", style="green")
     table.add_column("threshold", justify="right", style="magenta")
+    table.add_column("backend", style="white")
     table.add_column("playbook_dir", style="dim")
     for slug, m in mentors.items():
         corpus = load_corpus(m.playbook_dir)
         marker = " (default)" if slug == s.default_mentor else ""
-        table.add_row(slug + marker, m.name, str(len(corpus)), f"{m.confidence_threshold:.2f}", str(m.playbook_dir))
+        backend = m.backend.kind if m.backend else "fallback"
+        table.add_row(
+            slug + marker,
+            m.name,
+            str(len(corpus)),
+            f"{m.confidence_threshold:.2f}",
+            backend,
+            str(m.playbook_dir),
+        )
     console.print(table)
 
 
-@app.command("list-playbooks")
-def list_playbooks(mentor: str = typer.Option("", help="Mentor slug. Empty → server default.")) -> None:
+# ─── ammp playbook … ──────────────────────────────────────────────────────
+
+
+@playbook_app.command("list")
+def playbook_list(mentor: str = typer.Option("", help="Mentor slug. Empty → server default.")) -> None:
     """List the playbook corpus for a mentor."""
     s = get_settings()
     mentors = load_mentors(s.mentors_root)
@@ -100,8 +125,8 @@ def list_playbooks(mentor: str = typer.Option("", help="Mentor slug. Empty → s
     console.print(table)
 
 
-@app.command("show-playbook")
-def show_playbook(
+@playbook_app.command("show")
+def playbook_show(
     playbook_id: str = typer.Argument(..., help="Playbook id (filename stem)."),
     mentor: str = typer.Option("", help="Mentor slug."),
 ) -> None:
@@ -123,11 +148,11 @@ def show_playbook(
     console.print(target.read_text(encoding="utf-8"))
 
 
-# ─── Mentees ──────────────────────────────────────────────────────────────
+# ─── ammp mentee … ────────────────────────────────────────────────────────
 
 
-@app.command("list-mentees")
-def list_mentees() -> None:
+@mentee_app.command("list")
+def mentee_list() -> None:
     """Show the mentee allowlist. Plaintext keys are NEVER shown — only hashes."""
     s = get_settings()
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
@@ -145,8 +170,8 @@ def list_mentees() -> None:
     console.print(table)
 
 
-@app.command("add-mentee")
-def add_mentee(
+@mentee_app.command("add")
+def mentee_add(
     slug: str = typer.Argument(..., help="Mentee slug, e.g. 'claude-cowork-sandra'."),
     operator: str = typer.Option(..., help="Operator, e.g. 'human:sandra'."),
     runtime: str = typer.Option(..., help="Runtime, e.g. 'claude-cowork', 'claude-ai', 'claude-code'."),
@@ -156,7 +181,7 @@ def add_mentee(
     s = get_settings()
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
     if slug in mentees:
-        console.print(f"[red]Mentee {slug!r} already exists. Use rotate-mentee-key to issue a new key.[/red]")
+        console.print(f"[red]Mentee {slug!r} already exists. Use `ammp mentee rotate-key` to issue a new key.[/red]")
         raise typer.Exit(code=2)
     api_key = "ammp-" + secrets.token_urlsafe(32)
     mentees[slug] = Mentee(
@@ -175,8 +200,8 @@ def add_mentee(
     console.print(f"[dim]Stored hash: {hash_api_key(api_key)[:12]}… in {s.mentees_file}[/dim]")
 
 
-@app.command("remove-mentee")
-def remove_mentee(slug: str = typer.Argument(..., help="Mentee slug to remove.")) -> None:
+@mentee_app.command("remove")
+def mentee_remove(slug: str = typer.Argument(..., help="Mentee slug to remove.")) -> None:
     """Remove a mentee from the allowlist."""
     s = get_settings()
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
@@ -188,8 +213,8 @@ def remove_mentee(slug: str = typer.Argument(..., help="Mentee slug to remove.")
     console.print(f"[green]Removed mentee {slug!r}.[/green]")
 
 
-@app.command("rotate-mentee-key")
-def rotate_mentee_key(slug: str = typer.Argument(..., help="Mentee slug.")) -> None:
+@mentee_app.command("rotate-key")
+def mentee_rotate_key(slug: str = typer.Argument(..., help="Mentee slug.")) -> None:
     """Issue a fresh API key, replace the stored hash. Prints the new key once."""
     s = get_settings()
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
@@ -206,8 +231,8 @@ def rotate_mentee_key(slug: str = typer.Argument(..., help="Mentee slug.")) -> N
     console.print(f"  {api_key}")
 
 
-@app.command("check-key")
-def check_key(api_key: str = typer.Argument(..., help="Plaintext key to test.")) -> None:
+@mentee_app.command("check-key")
+def mentee_check_key(api_key: str = typer.Argument(..., help="Plaintext key to test.")) -> None:
     """Resolve a plaintext API key to a mentee — useful for debugging auth."""
     s = get_settings()
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
@@ -218,7 +243,7 @@ def check_key(api_key: str = typer.Argument(..., help="Plaintext key to test."))
     console.print(f"[green]Match: {found.slug} (operator={found.operator}, runtime={found.runtime})[/green]")
 
 
-# ─── Inspection / serve ───────────────────────────────────────────────────
+# ─── Top-level verbs (act on the install as a whole) ──────────────────────
 
 
 @app.command("capability")
@@ -276,7 +301,7 @@ def serve(
     server.run(transport="http", host=host or s.host, port=port or s.port)
 
 
-# ─── Setup wizard ─────────────────────────────────────────────────────────
+# ─── ammp setup ───────────────────────────────────────────────────────────
 
 
 @app.command("setup")
@@ -325,7 +350,6 @@ def setup(
         )
     )
 
-    # Step 1 — verify the mentor exists and patch its backend block.
     mentors = load_mentors(s.mentors_root)
     if mentor_slug not in mentors:
         console.print(
@@ -339,15 +363,9 @@ def setup(
         raise typer.Exit(code=2)
 
     if backend == "openclaw" and not yes:
-        openclaw_url = Prompt.ask(
-            "OpenClaw webhook URL",
-            default=openclaw_url,
-            console=console,
-        )
+        openclaw_url = Prompt.ask("OpenClaw webhook URL", default=openclaw_url, console=console)
         auth_bearer_env = Prompt.ask(
-            "Env var holding the OpenClaw Bearer token",
-            default=auth_bearer_env,
-            console=console,
+            "Env var holding the OpenClaw Bearer token", default=auth_bearer_env, console=console
         )
 
     backend_block: dict[str, object] = {"kind": backend}
@@ -363,14 +381,11 @@ def setup(
 
     mentor_json_path = s.mentors_root / mentor_slug / "mentor.json"
     raw = json.loads(mentor_json_path.read_text(encoding="utf-8"))
-    # Strip helper underscore keys we leave in for documentation; the new
-    # block becomes authoritative.
     raw = {k: v for k, v in raw.items() if not k.startswith("_")}
     raw["backend"] = backend_block
     mentor_json_path.write_text(json.dumps(raw, indent=2) + "\n", encoding="utf-8")
     console.print(f"[green]✓[/green] Updated [bold]{mentor_slug}/mentor.json[/bold] → backend = [cyan]{backend}[/cyan]")
 
-    # Step 2 — mint a first mentee (idempotent on slug).
     api_key: str | None = None
     if mint_first_mentee:
         mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
@@ -389,7 +404,6 @@ def setup(
         else:
             console.print(f"[yellow]·[/yellow] Mentee [bold]{first_slug}[/bold] already exists — skipped.")
 
-    # Step 3 — write a .env scaffold (preserves existing values).
     env_path = repo_root / ".env"
     existing_env: dict[str, str] = {}
     if env_path.exists():
@@ -409,9 +423,9 @@ def setup(
     if backend == "openclaw":
         desired.setdefault(auth_bearer_env, existing_env.get(auth_bearer_env, ""))
 
-    merged = {**desired, **existing_env}  # existing wins, but desired keys are guaranteed present
+    merged = {**desired, **existing_env}
     lines = [
-        "# ammp-mcp environment — written by `ammp setup`. Edit freely.",
+        "# ammp-mcp environment - written by `ammp setup`. Edit freely.",
         f"# Generated {dt.datetime.now(dt.UTC).isoformat()}.",
         "",
     ]
@@ -426,12 +440,12 @@ def setup(
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     console.print(f"[green]✓[/green] Wrote [bold].env[/bold] scaffold ({len(merged)} keys).")
 
-    # Step 4 — print next-steps.
+    next_secret = auth_bearer_env if backend == "openclaw" else "AMMP_ANTHROPIC_API_KEY"
     console.print()
     console.print(
         Panel.fit(
             "[bold]Next steps[/bold]\n\n"
-            f"  1. Edit [cyan].env[/cyan] and fill in the {auth_bearer_env if backend == 'openclaw' else 'AMMP_ANTHROPIC_API_KEY'} value.\n"
+            f"  1. Edit [cyan].env[/cyan] and fill in the [cyan]{next_secret}[/cyan] value.\n"
             "  2. [cyan]uv run ammp status[/cyan] — verify the install is healthy.\n"
             "  3. [cyan]uv run ammp serve[/cyan] — boot the MCP server.\n"
             "  4. [cyan]curl http://127.0.0.1:8765/.well-known/agent.json[/cyan] — confirm the capability advertisement.",
@@ -446,7 +460,7 @@ def setup(
         console.print(f"  {api_key}")
 
 
-# ─── Status / health-check ────────────────────────────────────────────────
+# ─── ammp status ──────────────────────────────────────────────────────────
 
 
 @app.command("status")
@@ -478,10 +492,9 @@ def status() -> None:
         table.add_row(name, "[red]✗[/red]", detail)
         problems.append(f"{name}: {detail}")
 
-    # Settings
     ok("Settings loaded", f"public_url={s.public_url}, host={s.host}, port={s.port}, require_auth={s.require_auth}")
 
-    # Mentors
+    mentors: dict[str, Mentor] = {}
     if not s.mentors_root.is_dir():
         fail("Mentors root", f"directory does not exist: {s.mentors_root}")
     else:
@@ -489,18 +502,15 @@ def status() -> None:
             mentors = load_mentors(s.mentors_root)
         except Exception as e:
             fail("Mentor registry", f"failed to load: {e}")
-            mentors = {}
         if not mentors:
             warn("Mentor registry", f"no mentors under {s.mentors_root}")
         for slug, m in mentors.items():
             corpus = load_corpus(m.playbook_dir)
+            backend_label = m.backend.kind if m.backend else "fallback"
             if not corpus:
                 warn(f"  mentor {slug}", f"playbook_dir has no *.md: {m.playbook_dir}")
             else:
-                ok(
-                    f"  mentor {slug}",
-                    f"{len(corpus)} playbook(s), backend={m.backend.kind if m.backend else 'fallback'}",
-                )
+                ok(f"  mentor {slug}", f"{len(corpus)} playbook(s), backend={backend_label}")
             if m.backend and m.backend.kind == "openclaw":
                 env_name = m.backend.auth_bearer_env
                 if env_name and not os.environ.get(env_name):
@@ -508,9 +518,8 @@ def status() -> None:
                 if not re.match(r"^https?://", m.backend.url):
                     fail(f"    {slug}.backend url", f"not http(s): {m.backend.url}")
 
-    # Mentees
     if not s.mentees_file.exists():
-        warn("Mentees file", f"does not exist yet: {s.mentees_file} (run `ammp add-mentee` to mint one)")
+        warn("Mentees file", f"does not exist yet: {s.mentees_file} (run `ammp mentee add` to mint one)")
     else:
         try:
             mentees = load_mentees(s.mentees_file)
@@ -518,7 +527,6 @@ def status() -> None:
         except Exception as e:
             fail("Mentees allowlist", f"failed to load: {e}")
 
-    # Audit log path is writable
     try:
         s.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
         probe = s.audit_log_path.parent / ".ammp-status-probe"
@@ -528,10 +536,7 @@ def status() -> None:
     except Exception as e:
         fail("Audit log writable", f"{s.audit_log_path}: {e}")
 
-    # Anthropic key (only relevant if any mentor uses anthropic backend)
-    has_anthropic_mentor = s.mentors_root.is_dir() and any(
-        m.backend is None or m.backend.kind == "anthropic" for m in load_mentors(s.mentors_root).values()
-    )
+    has_anthropic_mentor = any(m.backend is None or m.backend.kind == "anthropic" for m in mentors.values())
     if has_anthropic_mentor:
         if not s.anthropic_api_key:
             warn(
@@ -561,7 +566,7 @@ def status() -> None:
         console.print("[bold green]Status: OK.[/bold green]")
 
 
-# ─── Usage statistics ─────────────────────────────────────────────────────
+# ─── ammp usage ───────────────────────────────────────────────────────────
 
 
 _AUDIT_LINE_RE = re.compile(
@@ -593,15 +598,14 @@ def usage(
     op_counts: Counter[str] = Counter()
     mentor_counts: Counter[str] = Counter()
     mentee_counts: Counter[str] = Counter()
-    op_x_mentor: Counter[tuple[str, str]] = Counter()
     parsed_lines = 0
     skipped_lines = 0
     earliest: dt.datetime | None = None
     latest: dt.datetime | None = None
 
     with s.audit_log_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
             if not line:
                 continue
             m = _AUDIT_LINE_RE.match(line)
@@ -616,13 +620,9 @@ def usage(
             if cutoff and ts < cutoff:
                 continue
             parsed_lines += 1
-            op = m.group("op")
-            mentor = m.group("mentor")
-            mentee = m.group("mentee")
-            op_counts[op] += 1
-            mentor_counts[mentor] += 1
-            mentee_counts[mentee] += 1
-            op_x_mentor[(op, mentor)] += 1
+            op_counts[m.group("op")] += 1
+            mentor_counts[m.group("mentor")] += 1
+            mentee_counts[m.group("mentee")] += 1
             earliest = ts if earliest is None or ts < earliest else earliest
             latest = ts if latest is None or ts > latest else latest
 
@@ -631,22 +631,21 @@ def usage(
         console.print(f"[yellow]No audit entries in window ({window}).[/yellow]")
         raise typer.Exit(code=0)
 
+    range_line = ""
+    if earliest:
+        range_line = (
+            f"\nrange: {earliest.isoformat(timespec='seconds')} → "
+            f"{latest.isoformat(timespec='seconds') if latest else '—'}"
+        )
+    skipped_note = f" (skipped {skipped_lines} unparsable)" if skipped_lines else ""
     console.print(
         Panel.fit(
             f"[bold]ammp-mcp usage[/bold] · window: [cyan]{window}[/cyan]\n"
-            f"entries: [bold]{parsed_lines}[/bold]"
-            + (f" (skipped {skipped_lines} unparsable)" if skipped_lines else "")
-            + (
-                f"\nrange: {earliest.isoformat(timespec='seconds') if earliest else '—'} → "
-                f"{latest.isoformat(timespec='seconds') if latest else '—'}"
-                if earliest
-                else ""
-            ),
+            f"entries: [bold]{parsed_lines}[/bold]{skipped_note}{range_line}",
             border_style="cyan",
         )
     )
 
-    # Per-operation
     op_table = Table(title="By operation")
     op_table.add_column("operation", style="white")
     op_table.add_column("count", justify="right", style="cyan")

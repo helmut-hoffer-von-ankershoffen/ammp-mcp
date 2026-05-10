@@ -35,37 +35,37 @@ def runner(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
 
 
 def test_list_mentors(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["list-mentors"])
+    r = runner.invoke(app, ["mentor", "list"])
     assert r.exit_code == 0, r.output
     assert "pepe" in r.output
     assert "strict" in r.output
 
 
 def test_list_playbooks_default(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["list-playbooks"])
+    r = runner.invoke(app, ["playbook", "list"])
     assert r.exit_code == 0, r.output
     assert "intro" in r.output
     assert "auth" in r.output
 
 
 def test_list_playbooks_unknown_mentor(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["list-playbooks", "--mentor", "ghost"])
+    r = runner.invoke(app, ["playbook", "list", "--mentor", "ghost"])
     assert r.exit_code == 2
 
 
 def test_show_playbook(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["show-playbook", "intro"])
+    r = runner.invoke(app, ["playbook", "show", "intro"])
     assert r.exit_code == 0
     assert "Welcome" in r.output
 
 
 def test_show_playbook_traversal_rejected(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["show-playbook", "../etc/passwd"])
+    r = runner.invoke(app, ["playbook", "show", "../etc/passwd"])
     assert r.exit_code == 2
 
 
 def test_list_mentees(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["list-mentees"])
+    r = runner.invoke(app, ["mentee", "list"])
     assert r.exit_code == 0
     assert "claude-cowork-sandra" in r.output
 
@@ -74,7 +74,8 @@ def test_add_mentee_round_trip(runner: CliRunner, isolated_tree: Path) -> None:
     r = runner.invoke(
         app,
         [
-            "add-mentee",
+            "mentee",
+            "add",
             "claude-ai-sandra",
             "--operator",
             "human:sandra",
@@ -99,7 +100,8 @@ def test_add_mentee_duplicate_rejected(runner: CliRunner) -> None:
     r = runner.invoke(
         app,
         [
-            "add-mentee",
+            "mentee",
+            "add",
             "claude-cowork-sandra",
             "--operator",
             "human:sandra",
@@ -112,7 +114,7 @@ def test_add_mentee_duplicate_rejected(runner: CliRunner) -> None:
 
 
 def test_remove_mentee(runner: CliRunner, isolated_tree: Path) -> None:
-    r = runner.invoke(app, ["remove-mentee", "claude-cowork-sandra"])
+    r = runner.invoke(app, ["mentee", "remove", "claude-cowork-sandra"])
     assert r.exit_code == 0
     mentees = load_mentees(isolated_tree / "mentees.json")
     assert "claude-cowork-sandra" not in mentees
@@ -122,7 +124,7 @@ def test_rotate_mentee_key(runner: CliRunner, isolated_tree: Path) -> None:
     before = load_mentees(isolated_tree / "mentees.json")
     old_hash = before["claude-cowork-sandra"].api_key_hash
 
-    r = runner.invoke(app, ["rotate-mentee-key", "claude-cowork-sandra"])
+    r = runner.invoke(app, ["mentee", "rotate-key", "claude-cowork-sandra"])
     assert r.exit_code == 0
     m = re.search(r"(ammp-[A-Za-z0-9_\-]+)", r.output)
     assert m, r.output
@@ -133,13 +135,13 @@ def test_rotate_mentee_key(runner: CliRunner, isolated_tree: Path) -> None:
 
 
 def test_check_key_match(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["check-key", "ammp-test-key-1"])
+    r = runner.invoke(app, ["mentee", "check-key", "ammp-test-key-1"])
     assert r.exit_code == 0
     assert "claude-cowork-sandra" in r.output
 
 
 def test_check_key_no_match(runner: CliRunner) -> None:
-    r = runner.invoke(app, ["check-key", "definitely-wrong"])
+    r = runner.invoke(app, ["mentee", "check-key", "definitely-wrong"])
     assert r.exit_code == 1
 
 
