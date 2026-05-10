@@ -73,16 +73,44 @@ def capability() -> None:
 
 @system_app.command("serve")
 def serve(
-    host: str = typer.Option("", help="Override bind host (default from settings)."),
-    port: int = typer.Option(0, help="Override bind port (default from settings)."),
+    stdio: bool = typer.Option(
+        False,
+        "--stdio",
+        help=(
+            "Speak MCP JSON-RPC over stdin/stdout (subprocess transport). "
+            "Wins over --host/--port and AMMP_TRANSPORT=http when set. "
+            "Use this for Claude Desktop / Claude Code subprocess MCP integration."
+        ),
+    ),
+    host: str = typer.Option("", help="Override bind host (HTTP transport only)."),
+    port: int = typer.Option(0, help="Override bind port (HTTP transport only)."),
 ) -> None:
-    """Start the MCP server. Same as `ammp-server` console script."""
+    """Start the MCP server.
+
+    Default transport is HTTP (Streamable-HTTP at `/mcp/`). Use ``--stdio`` for
+    subprocess transport (Claude Desktop, Claude Code stdio integrations). The
+    transport can also be set via ``AMMP_TRANSPORT={http,stdio}``; the
+    ``--stdio`` flag wins when both are present.
+    """
     import logging
 
     from ..server import create_server
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     s = get_settings()
+    transport = "stdio" if stdio else s.transport
+    if transport == "stdio":
+        # Stdio MCP frames go on stdin/stdout; log to stderr so the wire stays clean.
+        import sys
+
+        logging.basicConfig(
+            level=logging.WARNING,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+            stream=sys.stderr,
+        )
+        server = create_server(s)
+        server.run(transport="stdio")
+        return
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     server = create_server(s)
     server.run(transport="http", host=host or s.host, port=port or s.port)
 

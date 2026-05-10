@@ -423,9 +423,25 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
 
 def run() -> None:
-    """Console entrypoint — `ammp-server`. Reads settings from env."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    """Console entrypoint — `ammp-server`. Reads settings from env.
+
+    Honours ``AMMP_TRANSPORT={http,stdio}``. Stdio mode quiets the root logger
+    and writes log records to stderr so the wire on stdin/stdout stays clean
+    MCP JSON-RPC.
+    """
     s = get_settings()
+    if s.transport == "stdio":
+        import sys
+
+        logging.basicConfig(
+            level=logging.WARNING,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+            stream=sys.stderr,
+        )
+        server = create_server(s)
+        server.run(transport="stdio")
+        return
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     server = create_server(s)
     server.run(transport="http", host=s.host, port=s.port)
 

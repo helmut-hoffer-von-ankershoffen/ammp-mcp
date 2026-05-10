@@ -7,9 +7,12 @@ applications running on the same host. Example: `AMMP_HOST=0.0.0.0`.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+TransportKind = Literal["http", "stdio"]
 
 
 class Settings(BaseSettings):
@@ -23,6 +26,16 @@ class Settings(BaseSettings):
     )
 
     # ─── Network ──────────────────────────────────────────────────
+    transport: TransportKind = Field(
+        default="http",
+        description=(
+            "Wire transport for the MCP server. `http` (default) — Streamable-HTTP "
+            "with `/mcp/` endpoint, suitable for shared deployments behind a tunnel. "
+            "`stdio` — speak MCP JSON-RPC over stdin/stdout, for subprocess "
+            "integration with Claude Desktop / Claude Code, where the parent "
+            "process is the trust boundary. Stdio mode ignores `host` / `port`."
+        ),
+    )
     host: str = Field(default="127.0.0.1", description="Bind address")
     port: int = Field(default=8765, description="Bind port")
     public_url: str = Field(
