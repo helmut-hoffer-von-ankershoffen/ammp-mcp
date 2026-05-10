@@ -419,9 +419,9 @@ def setup(
         v = merged[k]
         comment = ""
         if k == auth_bearer_env and not v:
-            comment = "  # ← fill in the Bearer token before booting"
+            comment = "  # <-- fill in the Bearer token before booting"
         if k == "AMMP_ANTHROPIC_API_KEY" and not v:
-            comment = "  # ← fill in if you choose the anthropic backend"
+            comment = "  # <-- fill in if you choose the anthropic backend"
         lines.append(f"{k}={v}{comment}")
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     console.print(f"[green]✓[/green] Wrote [bold].env[/bold] scaffold ({len(merged)} keys).")
