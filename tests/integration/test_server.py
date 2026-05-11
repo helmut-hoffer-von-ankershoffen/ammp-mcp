@@ -59,6 +59,14 @@ async def test_list_mentors_returns_all_mentors(server) -> None:
     for pb in pepe_playbooks:
         assert pb["title"]
         assert pb["body"]  # full content, not just summary
+    # mentor-level description + avatar_url are surfaced over the wire
+    # so mentee clients can render a profile card without an extra HTTP
+    # fetch. Pepe's fixture has both; stubmentor has neither.
+    assert by_slug["pepe"]["description"] == "Calm, grounded mentor for resilient agent work."
+    assert by_slug["pepe"]["avatar_url"] is not None
+    assert by_slug["pepe"]["avatar_url"].endswith("/mentors/pepe/avatar")
+    assert by_slug["stubmentor"]["description"] is None
+    assert by_slug["stubmentor"]["avatar_url"] is None
 
 
 async def test_list_mentors_advertised_in_capability(server) -> None:
@@ -194,6 +202,14 @@ async def test_landing_page_route(server) -> None:
     # substrings so the test doesn't couple to the escape strategy.
     for title in ("Welcome to Pepe", "OAuth callback resilience", "Strict Mentor"):
         assert title in body, f"playbook title {title!r} missing from landing page"
+    # Mentor-level description renders alongside name + avatar.
+    assert "Calm, grounded mentor for resilient agent work." in body
+    assert "High-bar reviewer" in body
+    # Pepe has an avatar.png in the fixture, so an <img> tag with the
+    # mentor-avatar route must render. stubmentor has no avatar; it
+    # falls back to an initial-letter glyph (`<div class='avatar avatar-fallback'>`).
+    assert "src='/mentors/pepe/avatar'" in body or 'src="/mentors/pepe/avatar"' in body
+    assert "avatar-fallback" in body  # stubmentor + strict have no avatar file
     # Runtime names are mentioned in a single short paragraph rather than
     # five cards — but they all still need to be findable.
     for runtime in ("Claude.ai", "Claude Cowork", "Claude Code", "OpenClaw", "Hermes"):
@@ -214,6 +230,35 @@ async def test_landing_page_route(server) -> None:
     # Cache-Control: no-store prevents browsers (and Cloudflare) from
     # serving a stale landing across deploys.
     assert "no-store" in r.headers.get("cache-control", "")
+
+
+async def test_mentor_avatar_route_serves_file(server) -> None:
+    """`GET /mentors/<slug>/avatar` streams the on-disk PNG with a sane cache header."""
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/mentors/pepe/avatar")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("image/")
+    assert "max-age" in r.headers.get("cache-control", "")
+    # PNG magic number — confirms it's the actual binary, not an error body.
+    assert r.content[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+async def test_mentor_avatar_route_404_when_missing(server) -> None:
+    """A mentor with no `avatar.*` file returns 404, not a placeholder."""
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        # stubmentor has no avatar in the fixture.
+        r_missing = http.get("/mentors/stubmentor/avatar")
+        # Unknown mentor slug also returns 404 (not 403 — no information
+        # leak about whether the slug is known).
+        r_unknown = http.get("/mentors/does-not-exist/avatar")
+    assert r_missing.status_code == 404
+    assert r_unknown.status_code == 404
 
 
 async def test_capability_route(server) -> None:

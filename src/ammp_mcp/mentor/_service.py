@@ -49,6 +49,9 @@ def load_mentors(root: Path) -> dict[str, Mentor]:
         candidate_playbook_dirs = [mentor_dir / "playbooks", mentor_dir]
         chosen_playbook_dir = next((d for d in candidate_playbook_dirs if d.is_dir()), mentor_dir)
         meta.setdefault("playbook_dir", str(chosen_playbook_dir))
+        # mentor_dir is always derived from the on-disk layout — operators
+        # don't set it in mentor.json. It anchors avatar.* lookups.
+        meta["mentor_dir"] = str(mentor_dir)
         meta.setdefault("slug", mentor_dir.name)
         mentor = Mentor(**meta)
         mentors[mentor.slug] = mentor

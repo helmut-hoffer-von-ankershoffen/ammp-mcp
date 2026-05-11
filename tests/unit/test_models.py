@@ -12,12 +12,19 @@ pytestmark = pytest.mark.unit
 
 def test_mentor_slug_must_be_kebab_case(tmp_path) -> None:
     with pytest.raises(ValidationError):
-        Mentor(slug="Bad Slug", name="x", persona="x", playbook_dir=tmp_path)
+        Mentor(slug="Bad Slug", name="x", persona="x", playbook_dir=tmp_path, mentor_dir=tmp_path)
 
 
 def test_mentor_threshold_clamped(tmp_path) -> None:
     with pytest.raises(ValidationError):
-        Mentor(slug="ok", name="x", persona="x", playbook_dir=tmp_path, confidence_threshold=1.5)
+        Mentor(
+            slug="ok",
+            name="x",
+            persona="x",
+            playbook_dir=tmp_path,
+            mentor_dir=tmp_path,
+            confidence_threshold=1.5,
+        )
 
 
 def test_mentee_extra_fields_forbidden() -> None:

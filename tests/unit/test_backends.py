@@ -257,6 +257,7 @@ def test_mentor_model_accepts_backend_block(tmp_path) -> None:
         name="Pepe Arturo",
         persona="calm",
         playbook_dir=tmp_path,
+        mentor_dir=tmp_path,
         backend={
             "kind": "openclaw",
             "url": "https://x.invalid/ammp/ask",
@@ -278,5 +279,6 @@ def test_mentor_model_rejects_unknown_backend_kind(tmp_path) -> None:
             name="Pepe",
             persona="calm",
             playbook_dir=tmp_path,
+            mentor_dir=tmp_path,
             backend={"kind": "wat", "url": "x"},
         )

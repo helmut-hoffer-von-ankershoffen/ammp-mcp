@@ -111,11 +111,13 @@ def test_capability_missing_ammp_block_still_succeeds() -> None:
 
 
 def _mentor(backend: object | None, slug: str = "pepe", tmp_path=None) -> Mentor:
+    base = tmp_path or "/tmp"
     return Mentor(
         slug=slug,
         name="Pepe",
         persona="x",
-        playbook_dir=tmp_path or "/tmp",
+        playbook_dir=base,
+        mentor_dir=base,
         backend=backend,
     )
 

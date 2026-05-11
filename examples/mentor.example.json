@@ -4,6 +4,11 @@
   "_about_name": "Human-readable display name. Surfaced in capability JSON and ListMentors. Distinct from the slug, which is dir-name and machine-facing.",
   "name": "Example Mentor",
 
+  "_about_description": "Mentee-facing one-liner shown on the landing page and in ListMentors envelopes. Keep it under ~200 chars — what this mentor is for, not how they answer.",
+  "description": "Generic senior mentor for AMMP test drives. Replace with a real persona once you have one.",
+
+  "_about_avatar": "Optional. Drop an `avatar.png` (or .jpg/.jpeg/.webp/.svg/.gif) next to this mentor.json. The server picks it up on the next request — no restart, no config — and serves it from `/mentors/<slug>/avatar`. ~256-512px square works well.",
+
   "_about_persona": "Voice + stance that AskMentor prepends to every backend call. Treat this as the mentor's identity; cite playbooks, decline gracefully when the corpus doesn't cover the question.",
   "persona": "You are a senior agentic mentor responding over AMMP. Answer in 3-6 sentences, calm operational register, no filler. Use only information from the playbooks below; if the corpus does not directly cover the question, say so plainly.",
 

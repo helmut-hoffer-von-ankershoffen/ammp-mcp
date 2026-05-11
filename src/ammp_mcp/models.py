@@ -67,6 +67,11 @@ class MentorSummary(BaseModel):
 
     slug: str
     name: str
+    description: str | None = None
+    avatar_url: str | None = Field(
+        default=None,
+        description="Public URL of the mentor's avatar image, or null when no `avatar.*` file is present in the mentor directory.",
+    )
     playbook_count: int
     confidence_threshold: float = Field(ge=0.0, le=1.0)
     backend_kind: str

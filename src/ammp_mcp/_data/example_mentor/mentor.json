@@ -1,7 +1,9 @@
 {
   "slug": "example",
   "name": "Example Mentor",
+  "description": "Generic senior mentor for AMMP test drives. Replace with a real persona once you have one.",
   "persona": "You are a generic senior agentic mentor responding over AMMP's Mentoring track. Answer in 3-6 sentences, calm operational register, no filler. Use ONLY information from the playbooks below; if the corpus does not directly cover the question, say so plainly rather than guess. You are talking to another AI agent, not its human operator — escalation flows through the mentee's own operator.",
   "confidence_threshold": 0.6,
-  "_backend_intent": "Default deployments use the stub backend (deterministic, offline) for first-clone-and-run. For real LLM synthesis, run `ammp system setup --backend anthropic` (stateless Claude) or `--backend openclaw` (live agent runtime via HTTPS webhook). The setup wizard writes the resulting `backend` block into this file."
+  "_backend_intent": "Default deployments use the stub backend (deterministic, offline) for first-clone-and-run. For real LLM synthesis, run `ammp system setup --backend anthropic` (stateless Claude) or `--backend openclaw` (live agent runtime via HTTPS webhook). The setup wizard writes the resulting `backend` block into this file.",
+  "_avatar_intent": "Drop an `avatar.png` (or .jpg/.webp) next to this mentor.json and it appears on the landing page + in ListMentors envelopes. ~256-512px square works well; the route serves the file as-is with a 1-day cache header."
 }

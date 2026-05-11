@@ -47,12 +47,20 @@ def isolated_tree(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "name": "Pepe Arturo",
+                "description": "Calm, grounded mentor for resilient agent work.",
                 "persona": "calm operator",
                 "confidence_threshold": 0.6,
             }
         ),
         encoding="utf-8",
     )
+    # Drop a tiny avatar so the /mentors/<slug>/avatar route has something
+    # to serve in tests. 1x1 transparent PNG (smallest valid PNG).
+    _avatar_png = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+        "0000000d49444154789c6300010000000500010d0a2db40000000049454e44ae426082"
+    )
+    (mentors_root / "pepe" / "avatar.png").write_bytes(_avatar_png)
 
     strict = mentors_root / "strict" / "playbooks"
     strict.mkdir(parents=True)
@@ -64,6 +72,7 @@ def isolated_tree(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "name": "Strict Mentor",
+                "description": "High-bar reviewer who escalates whenever the evidence is thin.",
                 "persona": "high-bar operator",
                 "confidence_threshold": 0.9,
             }

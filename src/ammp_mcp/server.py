@@ -18,7 +18,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from . import __ammp_draft__, __version__
 from .audit import log_event, short_hash
@@ -166,10 +166,18 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
         # mentor has no `backend` block it falls through to the global
         # Anthropic backend; report that as `anthropic` here.
         backend_kind = m.backend.kind if m.backend else "anthropic"
+        # Public URL is None when no avatar.* lives in the mentor dir.
+        # The landing-side renderer also calls `m.avatar_path()` directly
+        # for its <img> tag so it can fall back to an initial glyph; the
+        # MCP envelope just exposes the URL so wire-level mentees can use
+        # it however they like (display, profile card, none at all).
+        avatar_url = f"{ctx.settings.public_url.rstrip('/')}/mentors/{slug}/avatar" if m.avatar_path() else None
         summaries.append(
             MentorSummary(
                 slug=slug,
                 name=m.name,
+                description=m.description,
+                avatar_url=avatar_url,
                 playbook_count=len(corpus),
                 confidence_threshold=m.confidence_threshold,
                 backend_kind=backend_kind,
@@ -559,11 +567,14 @@ def _render_landing(ctx: ServerContext) -> str:
     """Render the mentee-facing landing page served at ``GET /``.
 
     Self-contained HTML (inline CSS + JS, no external assets). For each
-    mentor loaded in ``ctx``, lists the mentor's name and playbook
-    titles — both pulled fresh per request, so the page stays in sync
-    when mentors or playbooks are added / removed without a restart.
-    A single "Request access" button opens a pre-filled ``mailto:`` to
-    the operator. The Copy button uses ``navigator.clipboard.writeText``.
+    mentor loaded in ``ctx`` renders avatar, name, description, and the
+    full playbook list (title + one-line summary per playbook). All four
+    pieces are pulled fresh per request — avatar via
+    :meth:`Mentor.avatar_path`, playbooks via
+    :func:`ammp_mcp.playbook.load_corpus` — so the page reflects on-disk
+    changes to mentors and playbooks without a server restart. A single
+    "Request access" button opens a pre-filled ``mailto:`` to the
+    operator. The Copy button uses ``navigator.clipboard.writeText``.
     Operator-side minting / rotation / revocation lives in
     ``OPERATING.md``, not on this page.
 
@@ -594,16 +605,34 @@ def _render_landing(ctx: ServerContext) -> str:
     mentor_blocks_parts: list[str] = []
     for slug, m in ctx.mentors.items():
         playbooks = load_corpus(m.playbook_dir)
-        items = (
-            "".join(f"<li>{_h(p.title)}</li>" for p in playbooks)
-            if playbooks
-            else "<li class='empty'>No playbooks yet.</li>"
-        )
+        # Avatar: real image if a file exists on disk; otherwise render
+        # an initial-letter glyph so every mentor still has a visual.
+        if m.avatar_path() is not None:
+            avatar_html = f"<img class='avatar' src='/mentors/{_h(slug)}/avatar' alt='{_h(m.name)}' width='96' height='96' loading='lazy'>"
+        else:
+            initial = _h(m.name[:1].upper()) if m.name else "?"
+            avatar_html = f"<div class='avatar avatar-fallback' aria-hidden='true'>{initial}</div>"
+        description_html = f"<p class='mentor-desc'>{_h(m.description)}</p>" if m.description else ""
+        if playbooks:
+            playbook_items = "".join(
+                f"<li><span class='pb-title'>{_h(p.title)}</span>"
+                + (f"<span class='pb-desc'>{_h(p.summary)}</span>" if p.summary else "")
+                + "</li>"
+                for p in playbooks
+            )
+        else:
+            playbook_items = "<li class='empty'>No playbooks yet.</li>"
         mentor_blocks_parts.append(
-            f"<section class='mentor'>"
+            "<section class='mentor'>"
+            "<div class='mentor-head'>"
+            f"{avatar_html}"
+            "<div class='mentor-id'>"
             f"<h3>{_h(m.name)} <span class='slug'>{_h(slug)}</span></h3>"
-            f"<ul class='playbooks'>{items}</ul>"
-            f"</section>"
+            f"{description_html}"
+            "</div>"
+            "</div>"
+            f"<ul class='playbooks'>{playbook_items}</ul>"
+            "</section>"
         )
     mentor_blocks = (
         "".join(mentor_blocks_parts)
@@ -643,12 +672,20 @@ a{{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in
 a:hover{{color:var(--accent-hover);border-bottom-color:var(--accent-hover)}}
 code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:4px;padding:.1rem .4rem}}
 @media (prefers-color-scheme: dark) {{ code{{background:rgba(255,255,255,.04)}} }}
-.mentor{{border-top:1px solid var(--rule);padding:1.1rem 0}}
+.mentor{{border-top:1px solid var(--rule);padding:1.3rem 0}}
 .mentor:last-of-type{{border-bottom:1px solid var(--rule)}}
+.mentor-head{{display:flex;gap:1rem;align-items:center;margin-bottom:.5rem}}
+.mentor-id{{flex:1;min-width:0}}
 .mentor .slug{{font-family:var(--mono);font-size:.78rem;color:var(--ink-soft);font-weight:400;letter-spacing:.02em}}
-.playbooks{{margin:.25rem 0 0;padding:0 0 0 1.1rem;color:var(--ink-soft)}}
-.playbooks li{{margin:.15rem 0;color:var(--ink)}}
-.playbooks li.empty{{color:var(--ink-soft);font-style:italic;list-style:none;margin-left:-1.1rem}}
+.mentor-desc{{margin:.15rem 0 0;color:var(--ink-soft);font-size:.95rem;line-height:1.5}}
+.avatar{{width:64px;height:64px;border-radius:50%;flex-shrink:0;object-fit:cover;border:1px solid var(--rule);background:var(--bg-lo)}}
+.avatar-fallback{{display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.6rem;font-weight:600;color:var(--ink-soft)}}
+.playbooks{{margin:.6rem 0 0;padding:0;list-style:none}}
+.playbooks li{{padding:.45rem 0;border-top:1px dashed var(--rule)}}
+.playbooks li:first-child{{border-top:none}}
+.playbooks .pb-title{{display:block;color:var(--ink);font-weight:500;font-size:.96rem}}
+.playbooks .pb-desc{{display:block;color:var(--ink-soft);font-size:.88rem;line-height:1.45;margin-top:.1rem}}
+.playbooks li.empty{{color:var(--ink-soft);font-style:italic;border:none}}
 .empty{{color:var(--ink-soft);font-style:italic}}
 .runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
 .cta{{margin:1rem 0 .5rem}}
@@ -847,6 +884,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     async def agent_card(_request: Request) -> JSONResponse:
         """AMMP capability advertisement. AMMP §10."""
         return JSONResponse(_build_capability_payload(ctx))
+
+    @mcp.custom_route("/mentors/{slug}/avatar", methods=["GET"])
+    async def mentor_avatar(request: Request) -> Response:
+        """Serve a mentor's avatar image, if one is present on disk.
+
+        Slug is validated by the mentor registry — no user-controlled
+        path concatenation. Returns 404 when the mentor exists but has
+        no `avatar.*` file, and 404 (not 403) when the slug is unknown.
+        """
+        slug = request.path_params["slug"]
+        mentor = ctx.mentors.get(slug)
+        if mentor is None:
+            return Response(status_code=404)
+        path = mentor.avatar_path()
+        if path is None:
+            return Response(status_code=404)
+        return FileResponse(
+            path,
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
 
     @mcp.custom_route("/", methods=["GET"])
     async def landing(_request: Request) -> HTMLResponse:

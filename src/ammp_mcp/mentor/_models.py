@@ -79,8 +79,16 @@ class Mentor(BaseModel):
 
     slug: str = Field(min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9-]*$")
     name: str
+    description: str | None = Field(
+        default=None,
+        max_length=400,
+        description="One-line mentee-facing introduction. Surfaced on the landing page and in ListMentors responses. Distinct from `persona`, which is the LLM system prompt.",
+    )
     persona: str = Field(
         description="System prompt used when this mentor answers AskMentor calls. Voice and stance only — never operational secrets."
+    )
+    mentor_dir: Path = Field(
+        description="Directory containing this mentor's `mentor.json`, playbook corpus, and optional `avatar.*`."
     )
     playbook_dir: Path
     confidence_threshold: float = Field(default=0.6, ge=0.0, le=1.0)
@@ -92,13 +100,13 @@ class Mentor(BaseModel):
         ),
     )
 
-    @field_validator("playbook_dir")
+    @field_validator("playbook_dir", "mentor_dir")
     @classmethod
     def _resolve_path(cls, v: Path) -> Path:
-        """Expand ``~`` and resolve ``playbook_dir`` to an absolute path.
+        """Expand ``~`` and resolve a directory field to an absolute path.
 
         Args:
-            v: The raw ``playbook_dir`` value as supplied to the model.
+            v: The raw path value as supplied to the model.
 
         Returns:
             The same path with user-home expansion and symlink resolution
@@ -106,3 +114,21 @@ class Mentor(BaseModel):
             ``Path`` regardless of how the caller wrote it.
         """
         return v.expanduser().resolve()
+
+    def avatar_path(self) -> Path | None:
+        """Locate this mentor's avatar image, if one exists.
+
+        Looks for ``avatar.{png,jpg,jpeg,webp,svg,gif}`` directly under
+        ``mentor_dir``. Convention over configuration — operators drop a
+        file next to ``mentor.json`` and the server picks it up on the
+        next request without restart.
+
+        Returns:
+            Path to the first matching avatar file, or ``None`` when the
+            mentor has not provided one.
+        """
+        for ext in ("png", "jpg", "jpeg", "webp", "svg", "gif"):
+            candidate = self.mentor_dir / f"avatar.{ext}"
+            if candidate.is_file():
+                return candidate
+        return None
