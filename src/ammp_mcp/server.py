@@ -1088,21 +1088,20 @@ def _render_landing(ctx: ServerContext) -> str:
     mcp_url = f"{base}/mcp/"
     host = base.replace("https://", "").replace("http://", "")
 
-    mailto_subject = "ammp-mcp — please connect me"
+    mailto_subject = "helmguild — Access request"
     # The five fields below map to what `ammp mentee add` needs at the
-    # other end (slug + operator derived from the name + runtime; rate
-    # limit defaults to 60). Anything else? gives the requester room to
-    # add context that helps the operator calibrate without forcing it.
+    # other end (slug + operator derived from the name + agent runtime;
+    # rate limit defaults to 60). The success-criterion question at the
+    # bottom helps the operator calibrate without forcing it.
     mailto_body = (
-        "Hi Helmut,\n\n"
-        f"I'd like to connect to {base} as a mentee.\n\n"
-        "  Your name                : <e.g. Sandra>\n"
-        "  Where I'll connect from  : <Claude Desktop / Claude Code / Claude.ai / Claude Cowork / Copilot / OpenClaw / Hermes>\n"
-        "  Secure delivery channel  : <Signal / iMessage / Telegram + handle — "
-        "so the token doesn't travel by plain email>\n"
-        "  Mentor of interest       : <Pepe Arturo (default), or all of them>\n"
-        "  Anything else?           : <free-form, 1-2 sentences — what you "
-        "hope to get out of it>\n\n"
+        "Hi helmguild,\n\n"
+        "I'd like to connect to helmguild to have my agent mentored.\n\n"
+        "  My name                    : <e.g. Sandra>\n"
+        "  My agent                   : <Claude Desktop, Claude Code, Claude Cowork, Copilot, OpenClaw, Hermes>\n"
+        "  My secure delivery channel : <iMessage, Telegram, WhatsApp, Signal — "
+        "so the access token doesn't travel by unencrypted email>\n"
+        "  Mentor of interest         : Pepe Arturo\n"
+        "  Anything else              : <What would you call success post mentoring your agent?>\n\n"
         "Thanks!\n"
     )
     mailto = f"mailto:helmuthva@gmail.com?subject={_q(mailto_subject)}&body={_q(mailto_body)}"

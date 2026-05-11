@@ -312,9 +312,9 @@ async def test_landing_page_route(server) -> None:
     mailto_end = body.index("'", mailto_start) if "'" in body[mailto_start:] else body.index('"', mailto_start)
     mailto_url = body[mailto_start:mailto_end]
     decoded = _up.unquote(mailto_url)
-    assert "Your name" in decoded, "mailto body must ask for the requester's name"
-    assert "Where I'll connect from" in decoded, "mailto body must ask for the runtime"
-    assert "Secure delivery channel" in decoded, "mailto body must ask for the delivery channel"
+    assert "My name" in decoded, "mailto body must ask for the requester's name"
+    assert "My agent" in decoded, "mailto body must ask for the agent runtime"
+    assert "My secure delivery channel" in decoded, "mailto body must ask for the delivery channel"
     # Three-step structure, in order: request token → configure connection → pick mentor.
     step1 = body.index("Step 1")
     step2 = body.index("Step 2")
