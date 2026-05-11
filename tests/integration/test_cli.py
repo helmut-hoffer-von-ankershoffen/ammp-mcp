@@ -377,3 +377,67 @@ def test_playbook_search_json_output(runner: CliRunner) -> None:
     assert payload["mentor"] == "pepe"
     assert payload["query"] == "callback"
     assert payload["count"] >= 1
+
+
+# ─── Help / discoverability invariants ──────────────────────────────────────
+
+
+# Every leaf command in the public CLI surface. Update this list when a new
+# command is added — the loop tests below assert both `<cmd> --help` works
+# AND that the bare subgroup prints help cleanly (exit 0, not exit 2).
+_LEAF_COMMANDS: list[list[str]] = [
+    ["mentor", "list"],
+    ["mentor", "ask", "what is grounding?"],
+    ["mentor", "escalate", "I'm stuck"],
+    ["mentee", "list"],
+    ["mentee", "add", "x", "--operator", "human:x", "--runtime", "claude-cowork"],
+    ["mentee", "remove", "x"],
+    ["mentee", "rotate-key", "x"],
+    ["mentee", "check-key", "ammp-x"],
+    ["playbook", "list"],
+    ["playbook", "show", "intro"],
+    ["playbook", "search", "x"],
+    ["system", "capability"],
+    ["system", "setup"],
+    ["system", "status"],
+    ["system", "health"],
+    ["system", "usage"],
+    # serve is destructive (boots a server) — `serve --help` only.
+    ["system", "serve"],
+]
+
+
+@pytest.mark.parametrize("cmd", _LEAF_COMMANDS, ids=lambda c: " ".join(c))
+def test_every_leaf_command_supports_help_flag(runner: CliRunner, cmd: list[str]) -> None:
+    """`<cmd> --help` exits 0 with a Usage: banner — for every leaf."""
+    r = runner.invoke(app, [*cmd[:2], "--help"])  # subject + verb + --help
+    assert r.exit_code == 0, (cmd, r.output)
+    assert "Usage:" in r.output
+
+
+@pytest.mark.parametrize(
+    "subgroup",
+    [[], ["mentor"], ["mentee"], ["playbook"], ["system"]],
+    ids=lambda s: "ammp" if not s else f"ammp {s[0]}",
+)
+def test_bare_invocation_shows_help_and_exits_zero(runner: CliRunner, subgroup: list[str]) -> None:
+    """`ammp` and every subgroup print help on no-args and exit 0.
+
+    Typer's default `no_args_is_help=True` exits 2 (Click's usage-error
+    convention). Modern CLIs (kubectl, gh, helm, AWS CLI) treat help as
+    a first-class feature — bare invocation succeeds. Pinned via the
+    `wire_help_on_no_args` shim; regression-tested here.
+    """
+    r = runner.invoke(app, subgroup)
+    assert r.exit_code == 0, (subgroup, r.exit_code, r.output)
+    assert "Usage:" in r.output
+
+
+def test_root_help_lists_every_subject(runner: CliRunner) -> None:
+    """`ammp --help` lists every subject and top-level alias."""
+    r = runner.invoke(app, ["--help"])
+    assert r.exit_code == 0
+    for subject in ("mentor", "mentee", "playbook", "system"):
+        assert subject in r.output, f"subject {subject!r} missing from root help"
+    for alias in ("serve", "setup", "status", "health", "usage", "capability"):
+        assert alias in r.output, f"alias {alias!r} missing from root help"

@@ -6,6 +6,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .._cli_utils import wire_help_on_no_args
 from ..mentor import get_mentor, load_mentors
 from ..settings import get_settings
 from ._service import load_corpus, safe_id
@@ -15,9 +16,9 @@ console = Console()
 playbook_app = typer.Typer(
     name="playbook",
     help="Inspect and read the playbook corpus of a mentor.",
-    no_args_is_help=True,
     add_completion=False,
 )
+wire_help_on_no_args(playbook_app)
 
 
 @playbook_app.command("list")

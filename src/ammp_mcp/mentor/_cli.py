@@ -23,6 +23,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from .._cli_utils import wire_help_on_no_args
 from ..playbook import load_corpus
 from ..server import ServerContext
 from ..settings import get_settings
@@ -33,9 +34,9 @@ console = Console()
 mentor_app = typer.Typer(
     name="mentor",
     help="Inspect registered mentors; ask one a question; escalate to your operator.",
-    no_args_is_help=True,
     add_completion=False,
 )
+wire_help_on_no_args(mentor_app)
 
 
 def _local_context() -> ServerContext:

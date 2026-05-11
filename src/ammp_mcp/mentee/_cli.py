@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .._cli_utils import wire_help_on_no_args
 from ..settings import get_settings
 from ._models import Mentee
 from ._service import (
@@ -22,9 +23,9 @@ console = Console()
 mentee_app = typer.Typer(
     name="mentee",
     help="Manage the mentee allowlist (add / remove / rotate-key / list / check-key).",
-    no_args_is_help=True,
     add_completion=False,
 )
+wire_help_on_no_args(mentee_app)
 
 
 @mentee_app.command("list")

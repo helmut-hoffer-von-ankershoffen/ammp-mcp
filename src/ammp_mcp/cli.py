@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import typer
 
+from ._cli_utils import wire_help_on_no_args
 from .mentee._cli import mentee_app
 from .mentor._cli import mentor_app
 from .playbook._cli import playbook_app
@@ -37,9 +38,9 @@ from .system._cli import (
 app = typer.Typer(
     name="ammp",
     help="Housekeeping CLI for the AMMP Mentoring-track reference server.",
-    no_args_is_help=True,
     add_completion=False,
 )
+wire_help_on_no_args(app)
 app.add_typer(mentor_app)
 app.add_typer(mentee_app)
 app.add_typer(playbook_app)

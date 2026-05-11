@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from .._cli_utils import wire_help_on_no_args
 from ..mentor import load_mentors
 from ..settings import get_settings
 from ._capability_service import build_offline_capability
@@ -49,9 +50,9 @@ _ICON_OK = "[green]✓[/green]"
 system_app = typer.Typer(
     name="system",
     help="Operate the install as a whole (setup, status, health, usage, capability, serve).",
-    no_args_is_help=True,
     add_completion=False,
 )
+wire_help_on_no_args(system_app)
 
 
 # ─── ammp system capability ──────────────────────────────────────────────
