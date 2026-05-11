@@ -61,7 +61,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff>=0.8,<1",
-    "mypy>=1.13,<2",
+    "mypy>=1.13,<3",
     "pytest>=9,<10",       # >=9 fixes CVE-2025-71176
     "pytest-asyncio>=1,<2",
     "pytest-cov>=6,<8",
