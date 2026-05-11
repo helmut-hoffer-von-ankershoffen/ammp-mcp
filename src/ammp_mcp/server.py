@@ -1652,7 +1652,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         """
         s = ctx.settings
         base = s.public_url.rstrip("/")
-        mcp_url = f"{base}/mcp"  # mcp-remote wants no trailing slash
+        # Trailing slash required — the FastMCP transport is mounted at
+        # `/mcp/` and Starlette 307s a no-slash request, which mcp-remote
+        # does not follow on POST. (Confirmed empirically 2026-05-11
+        # when the .mcpb showed "server disconnected" in Claude Desktop.)
+        mcp_url = f"{base}/mcp/"
         bundle = _build_desktop_bundle(public_url=base, mcp_url=mcp_url)
         return Response(
             content=bundle,
