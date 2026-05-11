@@ -69,7 +69,9 @@ def _render_response(payload: dict[str, object], *, as_json: bool, fallback_labe
         if isinstance(detail, str):
             console.print(f"[dim]{detail}[/dim]")
         raise typer.Exit(code=1)
-    console.print(Panel.fit(json.dumps(payload, indent=2, ensure_ascii=False), title=fallback_label, border_style="cyan"))
+    console.print(
+        Panel.fit(json.dumps(payload, indent=2, ensure_ascii=False), title=fallback_label, border_style="cyan")
+    )
 
 
 @mentor_app.command("list")
