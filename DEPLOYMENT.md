@@ -30,13 +30,17 @@ In both paths, the mentor backend (live Pepe-on-OpenClaw) reaches across **Tails
    # Caddy (auto Let's Encrypt for ammp.helmguild.com)
    sudo apt install -y caddy
 
-   # Docker, then run ammp-mcp
+   # Docker, then run ammp-mcp. The image expects all persistent
+   # state (mentors, mentee allowlist, audit log, config.env) under
+   # one mount at AMMP_DIR = /home/ammp/.ammp. The first boot
+   # auto-bootstraps the tree (copies the packaged example mentor,
+   # writes a minimal config.env) — wipe the host directory to
+   # reset.
    sudo apt install -y docker.io
+   sudo mkdir -p /etc/ammp-mcp && sudo chown 1000:1000 /etc/ammp-mcp
    docker run -d --name ammp-mcp \
      -p 127.0.0.1:8765:8765 \
-     -v /etc/ammp-mcp/mentees.json:/srv/ammp-mcp/mentees.json:ro \
-     -v /etc/ammp-mcp/audit.log:/srv/ammp-mcp/audit.log \
-     -v /etc/ammp-mcp/mentors:/srv/ammp-mcp/mentors:ro \
+     -v /etc/ammp-mcp:/home/ammp/.ammp \
      -e AMMP_REQUIRE_AUTH=true \
      -e AMMP_PUBLIC_URL=https://ammp.helmguild.com \
      -e OPENCLAW_BEARER=$(cat /etc/ammp-mcp/openclaw-bearer) \
