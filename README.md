@@ -170,7 +170,7 @@ Per AMMP §6.2:
 
 ## AskMentor queue posture
 
-`AskMentor` runs each call through the Anthropic Messages API. Concurrency is bounded by an `asyncio.Semaphore` (default 10, configurable via `AMMP_LLM_MAX_CONCURRENT`). Excess requests queue at the asyncio level — FIFO, fast drain — so worst-case wait under burst is `LLM-latency × ceil(burst / cap)`. No external queue (Redis etc.) for v0.2; if/when sustained load justifies it, a future v0.3 can add one.
+`AskMentor` runs each call through the Anthropic Messages API. Concurrency is bounded by an `asyncio.Semaphore` (default 10, configurable via `AMMP_LLM_MAX_CONCURRENT`). Excess requests queue at the asyncio level — FIFO, fast drain — so worst-case wait under burst is `LLM-latency × ceil(burst / cap)`. No external queue (Redis etc.); if/when sustained load justifies it, one can be added later.
 
 When the model's self-reported confidence falls below the mentor's threshold (default 0.6), the response carries `escalation_recommended=true` plus a `suggested_message_to_your_operator` — turning low confidence into a *mentor-triggered* `EscalateToHuman` recommendation.
 
@@ -248,6 +248,7 @@ All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
 
 | Var | Default | Notes |
 |---|---|---|
+| `AMMP_TRANSPORT` | `http` | `http` (Streamable-HTTP on `/mcp/`) or `stdio` (subprocess transport for Claude Desktop / Claude Code). Stdio mode ignores `host` / `port`. |
 | `AMMP_HOST` | `127.0.0.1` | Bind address. Set `0.0.0.0` for container deploys. |
 | `AMMP_PORT` | `8765` | |
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://ammp.helmguild.com` in production. |
@@ -297,11 +298,11 @@ For the public deployment at `https://ammp.helmguild.com`, see [`docs/deployment
 
 ## Status
 
-**v0.2** — multi-mentor + multi-mentee + LLM-synthesised AskMentor + Typer CLI + tagged test suite. Ships open-source under MIT.
+**v0.3** — multi-mentor + multi-mentee + LLM-synthesised AskMentor + Typer CLI + tagged test suite. Ships open-source under MIT.
 
 Out of scope (for now):
 - The AMMP **Review track**'s 4 ops — needs a federated guild of human staff-plus engineers behind a Reviewer Service. Larger build.
-- Embedding-based search ranking — v0.2 is substring + token-rank.
+- Embedding-based search ranking — currently substring + token-rank.
 
 ## License & Attributions
 

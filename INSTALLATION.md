@@ -116,15 +116,17 @@ All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
 | `AMMP_TRANSPORT` | `http` | `http` or `stdio`. Stdio wins over `--host` / `--port`. |
 | `AMMP_HOST` | `127.0.0.1` | HTTP bind host. Use `0.0.0.0` only behind a reverse proxy. |
 | `AMMP_PORT` | `8765` | HTTP bind port. |
-| `AMMP_PUBLIC_URL` | (empty) | Public URL advertised in the capability JSON. Set when behind a tunnel. |
+| `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Public URL advertised in the capability JSON. Set to `https://ammp.helmguild.com` (or your own) when behind a tunnel. |
 | `AMMP_MENTORS_ROOT` | `./mentors` | Directory with one subfolder per mentor. |
 | `AMMP_DEFAULT_MENTOR` | `pepe` | Mentor slug used when a request omits `mentor=`. |
 | `AMMP_MENTEES_FILE` | `./mentees.json` | Allowlist (SHA-256 hashes only). |
 | `AMMP_AUDIT_LOG_PATH` | `./audit.log` | Hash-only audit log. |
-| `AMMP_REQUIRE_AUTH` | `true` | Bearer-key auth on incoming MCP calls. |
+| `AMMP_REQUIRE_AUTH` | `false` | Bearer-key auth on incoming MCP calls. Default is off for localhost dev; flip on for production. |
 | `AMMP_ANTHROPIC_API_KEY` | (empty) | Needed when any mentor uses `backend.kind = anthropic`. |
 | `AMMP_LLM_MODEL` | `claude-opus-4-7` | Override per-mentor via `backend.model`. |
 | `AMMP_LLM_MAX_CONCURRENT` | `10` | Server-wide cap on in-flight backend calls. |
+| `AMMP_LLM_TIMEOUT_SECONDS` | `30.0` | Per-call HTTP timeout for the Anthropic backend. |
+| `AMMP_LLM_CONFIDENCE_THRESHOLD` | `0.6` | Below this self-reported confidence, `AskMentor` adds a mentor-triggered `EscalateToHuman` recommendation. |
 
 `.env` files must be **ASCII-only** — pydantic-settings via python-dotenv crashes on unicode in `.env` under ASCII locales.
 
