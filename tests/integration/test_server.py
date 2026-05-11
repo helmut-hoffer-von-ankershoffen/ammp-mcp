@@ -299,6 +299,20 @@ async def test_landing_page_route(server) -> None:
     # The "Request access" CTA is a mailto: with pre-filled subject + body.
     assert "mailto:helmuthva@gmail.com" in body
     assert "subject=" in body and "body=" in body
+    # Mailto body must elicit the inputs that map to `ammp mentee add`
+    # at the operator's end: name (→ slug + operator), runtime, and a
+    # secure delivery channel for the plaintext token. Field names are
+    # URL-encoded by `urllib.parse.quote`, so check for the
+    # percent-encoded forms or readable substrings that survive encoding.
+    import urllib.parse as _up
+
+    mailto_start = body.index("mailto:helmuthva")
+    mailto_end = body.index("'", mailto_start) if "'" in body[mailto_start:] else body.index('"', mailto_start)
+    mailto_url = body[mailto_start:mailto_end]
+    decoded = _up.unquote(mailto_url)
+    assert "Your name" in decoded, "mailto body must ask for the requester's name"
+    assert "Where I'll connect from" in decoded, "mailto body must ask for the runtime"
+    assert "Secure delivery channel" in decoded, "mailto body must ask for the delivery channel"
     # Three-step structure, in order: request token → configure connection → pick mentor.
     step1 = body.index("Step 1")
     step2 = body.index("Step 2")

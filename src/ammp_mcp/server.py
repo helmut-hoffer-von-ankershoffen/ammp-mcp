@@ -1009,11 +1009,20 @@ def _render_landing(ctx: ServerContext) -> str:
     host = base.replace("https://", "").replace("http://", "")
 
     mailto_subject = "ammp-mcp — please connect me"
+    # The five fields below map to what `ammp mentee add` needs at the
+    # other end (slug + operator derived from the name + runtime; rate
+    # limit defaults to 60). Anything else? gives the requester room to
+    # add context that helps the operator calibrate without forcing it.
     mailto_body = (
         "Hi Helmut,\n\n"
         f"I'd like to connect to {base} as a mentee.\n\n"
-        "  Where I'll connect from : <Claude.ai / Claude Cowork / Claude Code / OpenClaw / Hermes>\n"
-        "  Best secure channel     : <Signal / iMessage / Telegram + number>\n\n"
+        "  Your name                : <e.g. Sandra>\n"
+        "  Where I'll connect from  : <Claude.ai / Claude Cowork / Claude Code / OpenClaw / Hermes>\n"
+        "  Secure delivery channel  : <Signal / iMessage / Telegram + handle — "
+        "so the token doesn't travel by plain email>\n"
+        "  Mentor of interest       : <Pepe Arturo (default), or all of them>\n"
+        "  Anything else?           : <free-form, 1-2 sentences — what you "
+        "hope to get out of it>\n\n"
         "Thanks!\n"
     )
     mailto = f"mailto:helmuthva@gmail.com?subject={_q(mailto_subject)}&body={_q(mailto_body)}"

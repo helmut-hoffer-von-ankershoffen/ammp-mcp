@@ -28,7 +28,17 @@ The cheat sheet at the top of every section is `make` targets where available, r
 
 ## Mint a token for a new mentee
 
-Triggered by a token request landing in your inbox (the landing page's "📧 Request a token" CTA pre-fills the three things you need: requested slug, runtime, secure-channel-for-delivery).
+Triggered by a token request landing in your inbox (the landing page's **Request access** CTA pre-fills a mailto with five fields). Map the email's fields to CLI args as follows:
+
+| Email field | CLI arg | Notes |
+|---|---|---|
+| Your name | derive slug + operator | `name=Sandra` + `runtime=claude-cowork` → `slug=claude-cowork-sandra`, `--operator human:sandra` |
+| Where I'll connect from | `--runtime` | Pick the canonical kebab — `claude-ai`, `claude-cowork`, `claude-code`, `openclaw`, `hermes` |
+| Secure delivery channel | (out-of-band) | Use this to deliver the token. **Never** plain email / Slack / SMS |
+| Mentor of interest | n/a | Mentee gets access to every mentor on the server; field is just context |
+| Anything else? | n/a | Operator calibration only — no field flows into the CLI |
+
+Then:
 
 ```bash
 uv run ammp mentee add <slug> \
