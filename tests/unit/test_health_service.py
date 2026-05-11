@@ -153,9 +153,7 @@ def test_one_backend_head_rejected_is_still_reachable(code: int, tmp_path) -> No
     m = _mentor(backend=OpenClawBackendConfig(url="http://method.example/ammp/ask"), tmp_path=tmp_path)
     table = _mk_table()
     problems: list[str] = []
-    err = urllib.error.HTTPError(
-        url=m.backend.url, code=code, msg="x", hdrs=None, fp=io.BytesIO(b"")
-    )
+    err = urllib.error.HTTPError(url=m.backend.url, code=code, msg="x", hdrs=None, fp=io.BytesIO(b""))
     with patch("urllib.request.urlopen", side_effect=err):
         _health_probe_one_backend("pepe", m, 1.0, table, problems)
     # 405/501 = server is up but rejects HEAD; treated as OK, no problem appended
@@ -167,9 +165,7 @@ def test_one_backend_other_http_error_is_warning(tmp_path) -> None:
     m = _mentor(backend=OpenClawBackendConfig(url="http://error.example/ammp/ask"), tmp_path=tmp_path)
     table = _mk_table()
     problems: list[str] = []
-    err = urllib.error.HTTPError(
-        url=m.backend.url, code=500, msg="boom", hdrs=None, fp=io.BytesIO(b"")
-    )
+    err = urllib.error.HTTPError(url=m.backend.url, code=500, msg="boom", hdrs=None, fp=io.BytesIO(b""))
     with patch("urllib.request.urlopen", side_effect=err):
         _health_probe_one_backend("pepe", m, 1.0, table, problems)
     # Non-405/501 HTTP errors are warnings (server *responded* but unhappy) — no problem appended
