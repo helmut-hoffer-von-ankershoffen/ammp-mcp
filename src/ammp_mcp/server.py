@@ -1193,6 +1193,21 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .empty{{color:var(--ink-soft);font-style:italic}}
 .runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
 .cta{{margin:1rem 0 .5rem}}
+.agent-tabs{{margin:1.25rem 0 0}}
+.agent-tab-input{{position:absolute;opacity:0;pointer-events:none}}
+.agent-tab-row{{display:flex;gap:.1rem;border-bottom:1px solid var(--rule);margin-bottom:.85rem;flex-wrap:wrap}}
+.agent-tab-label{{padding:.5rem .9rem;font-size:.88rem;font-family:var(--sans);cursor:pointer;color:var(--ink-soft);border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .18s ease,border-color .18s ease;user-select:none}}
+.agent-tab-label:hover{{color:var(--accent)}}
+.agent-tab-panel{{display:none}}
+.agent-tab-panel .tab-intro{{margin:0 0 .55rem;color:var(--ink-soft);font-size:.92rem}}
+.agent-tab-panel .tab-steps{{margin:.25rem 0 .6rem;padding:0 0 0 1.2rem;list-style:disc;color:var(--ink-soft)}}
+.agent-tab-panel .tab-steps li{{margin:.35rem 0;color:var(--ink);font-size:.92rem;line-height:1.55}}
+.agent-tab-panel .tab-steps li::marker{{color:var(--ink-soft)}}
+.agent-tab-panel .tab-steps code{{font-family:var(--mono);font-size:.84em;background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:3px;padding:.05rem .35rem;word-break:break-all}}
+@media (prefers-color-scheme: dark) {{ .agent-tab-panel .tab-steps code{{background:rgba(255,255,255,.04)}} }}
+.agent-tab-panel .tab-manual{{margin:.45rem 0 0;font-size:.85rem;color:var(--ink-soft)}}
+#agent-tab-claude:checked ~ .agent-tab-row label[for="agent-tab-claude"],#agent-tab-copilot:checked ~ .agent-tab-row label[for="agent-tab-copilot"],#agent-tab-openclaw:checked ~ .agent-tab-row label[for="agent-tab-openclaw"],#agent-tab-hermes:checked ~ .agent-tab-row label[for="agent-tab-hermes"]{{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}}
+#agent-tab-claude:checked ~ .agent-tab-panel-claude,#agent-tab-copilot:checked ~ .agent-tab-panel-copilot,#agent-tab-openclaw:checked ~ .agent-tab-panel-openclaw,#agent-tab-hermes:checked ~ .agent-tab-panel-hermes{{display:block}}
 button{{font:inherit}}
 .btn{{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;margin:.25rem .4rem .25rem 0;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);font-family:var(--sans);font-size:.92rem;cursor:pointer;text-decoration:none}}
 .btn:hover{{background:var(--accent);color:var(--bg)}}
@@ -1217,8 +1232,53 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <p class="cta"><a class="btn primary" href="{mailto}">Request access</a></p>
 
 <h2>Step 2 — Configure your agent's MCP connection</h2>
-<p>Once you have your token, open your agent's connector settings (works with <strong>Claude.ai</strong>, <strong>Claude Cowork</strong>, <strong>Claude Code</strong>, <strong>OpenClaw</strong>, and <strong>Hermes</strong>) and add a custom MCP server with the URL below plus an <code>Authorization: Bearer &lt;your-token&gt;</code> header.</p>
+<p>Open your agent's connector settings and add a custom MCP server with the URL and Bearer header below. The per-agent paste paths follow.</p>
 <div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy URL</button></div>
+<div class="url-row"><code>Authorization: Bearer &lt;your-token&gt;</code></div>
+
+<div class="agent-tabs" role="tablist" aria-label="Per-agent connector instructions">
+  <input type="radio" name="agent-tab" id="agent-tab-claude" class="agent-tab-input" checked>
+  <input type="radio" name="agent-tab" id="agent-tab-copilot" class="agent-tab-input">
+  <input type="radio" name="agent-tab" id="agent-tab-openclaw" class="agent-tab-input">
+  <input type="radio" name="agent-tab" id="agent-tab-hermes" class="agent-tab-input">
+  <div class="agent-tab-row" role="tablist">
+    <label for="agent-tab-claude" class="agent-tab-label" role="tab">Claude</label>
+    <label for="agent-tab-copilot" class="agent-tab-label" role="tab">Copilot</label>
+    <label for="agent-tab-openclaw" class="agent-tab-label" role="tab">OpenClaw</label>
+    <label for="agent-tab-hermes" class="agent-tab-label" role="tab">Hermes</label>
+  </div>
+  <section class="agent-tab-panel agent-tab-panel-claude" role="tabpanel" aria-labelledby="agent-tab-claude">
+    <p class="tab-intro">Anthropic ships MCP support across the Claude family.</p>
+    <ul class="tab-steps">
+      <li><strong>Claude.ai / Claude Cowork:</strong> Settings → Connectors → <em>Add custom connector</em> → paste the URL above + the Bearer header.</li>
+      <li><strong>Claude Code (CLI):</strong> <code>claude mcp add --scope user ammp {mcp_url} --header "Authorization: Bearer &lt;your-token&gt;"</code></li>
+      <li><strong>Claude Desktop:</strong> edit <code>claude_desktop_config.json</code> — add an entry under <code>mcpServers</code> with the URL and an <code>Authorization</code> header.</li>
+    </ul>
+    <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">Anthropic MCP docs →</a></p>
+  </section>
+  <section class="agent-tab-panel agent-tab-panel-copilot" role="tabpanel" aria-labelledby="agent-tab-copilot">
+    <p class="tab-intro">GitHub Copilot Chat supports MCP servers in VS Code and JetBrains IDEs.</p>
+    <ul class="tab-steps">
+      <li><strong>VS Code:</strong> Command Palette → <em>MCP: Add Server</em> → fill in the URL and the Bearer header.</li>
+      <li><strong>JetBrains:</strong> Settings → Tools → GitHub Copilot → MCP servers → add a new server.</li>
+    </ul>
+    <p class="tab-manual"><a href="https://docs.github.com/en/copilot/customizing-copilot/extending-copilot-chat-with-mcp">GitHub Copilot MCP docs →</a></p>
+  </section>
+  <section class="agent-tab-panel agent-tab-panel-openclaw" role="tabpanel" aria-labelledby="agent-tab-openclaw">
+    <p class="tab-intro">OpenClaw is helmguild's own agent runtime and speaks MCP natively.</p>
+    <ul class="tab-steps">
+      <li>Add the server through the runtime's connector UI or config file using the same URL + Bearer header.</li>
+    </ul>
+    <p class="tab-manual">(OpenClaw is currently private to the helmguild network.)</p>
+  </section>
+  <section class="agent-tab-panel agent-tab-panel-hermes" role="tabpanel" aria-labelledby="agent-tab-hermes">
+    <p class="tab-intro">Hermes is an alternative agent runtime; it connects to MCP servers via its tool-server registry.</p>
+    <ul class="tab-steps">
+      <li>Point Hermes at the URL with the Bearer header — no Hermes-specific handshake.</li>
+    </ul>
+    <p class="tab-manual">(Hermes docs vary by deployment — see the manual that ships with your install.)</p>
+  </section>
+</div>
 
 <h2>Step 3 — Pick a mentor and start the session</h2>
 <p>Browse the mentors below, expand the playbook you want to be mentored on, and copy its prompt into your now-connected agent. The prompt walks the agent through the canonical first calls so the mentoring starts right away.</p>
