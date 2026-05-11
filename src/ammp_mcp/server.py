@@ -797,11 +797,13 @@ async def _handle_escalate_to_human_mentor(
     loop = asyncio.get_event_loop()
     started_at = loop.time()
     deadline = started_at + timeout
+    timed_out = False
     try:
         while not waiter.event.is_set():
             remaining = deadline - loop.time()
             if remaining <= 0:
-                raise TimeoutError
+                timed_out = True
+                break
             chunk = min(heartbeat, remaining)
             try:
                 await asyncio.wait_for(waiter.event.wait(), timeout=chunk)
@@ -816,14 +818,15 @@ async def _handle_escalate_to_human_mentor(
                     elapsed = int(loop.time() - started_at)
                     p = 0.5 + min(0.4, elapsed / max(timeout, 1.0) * 0.4)
                     await progress(p, f"still awaiting {m.human_mentor.name}'s reply ({elapsed}s elapsed)")
-    except TimeoutError:
-        ctx.escalation_store.update(esc.id, status="expired", cancel_reason="timeout")
-        ctx.escalation_broker.cancel(esc.id, "timeout")
-        return {"error": "timeout", "detail": f"no reply within {timeout:.0f}s", "escalation_id": esc.id}
     except asyncio.CancelledError:
         ctx.escalation_store.update(esc.id, status="cancelled", cancel_reason="mcp_cancelled")
         ctx.escalation_broker.cancel(esc.id, "mcp_cancelled")
         raise
+
+    if timed_out:
+        ctx.escalation_store.update(esc.id, status="expired", cancel_reason="timeout")
+        ctx.escalation_broker.cancel(esc.id, "timeout")
+        return {"error": "timeout", "detail": f"no reply within {timeout:.0f}s", "escalation_id": esc.id}
 
     if waiter.answer is None:
         # Cancelled or expired between deliver and wake — surface as error.
