@@ -5,7 +5,7 @@ Responsibility: load a mentor's curated markdown corpus, validate caller-supplie
 ## Files
 
 - `_service.py` — the `Playbook` dataclass plus `load_corpus`, `safe_id`, `search`, `keyword_rank`. Also contains `_load_one` (package-private, imported lazily by `server._handle_get_playbook` to avoid widening the public surface).
-- `_cli.py` — `playbook_app` Typer subgroup with `ammp playbook list / show`.
+- `_cli.py` — `playbook_app` Typer subgroup. `ammp playbook list / show` browse the corpus; `ammp playbook search` invokes the same `_handle_search_playbooks` handler the MCP server exposes as `SearchPlaybooks`, so the shell stays in lockstep with the AMMP wire surface. Auth is bypassed locally.
 
 ## Public API (`from ammp_mcp.playbook import …`)
 
