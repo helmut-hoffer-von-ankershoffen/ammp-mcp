@@ -44,14 +44,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          # `docstring_parser_fork` (a transitive dep of pydoclint) ships
-          # files under the official `docstring_parser/` namespace and
-          # overwrites the upstream package's `common.py` — drop-in
-          # replacement, older API, no `DocstringYields`. Force-reinstall
-          # the official last so its `common.py` wins on disk. Locally
-          # `uv sync` happens to resolve in the right order; CI's pip
-          # does not. See pydoclint issue #?? for the upstream history.
-          pip install --no-deps --force-reinstall 'docstring-parser>=0.18'
+          # `docstring-parser` and `docstring_parser_fork` both ship
+          # files under the official `docstring_parser/` namespace. The
+          # fork adds `DocstringYields` (used by pydoclint); the official
+          # 0.18 does not. Whichever package installs last wins on disk.
+          # Locally `uv sync` lands the fork last; CI's plain pip lands
+          # the official last, so pydoclint imports an older `common.py`
+          # and crashes on the missing symbol. Force-reinstall the fork
+          # last so pydoclint sees the right API.
+          pip install --no-deps --force-reinstall 'docstring_parser_fork>=0.0.14'
 
       - name: Ruff
         run: ruff check .

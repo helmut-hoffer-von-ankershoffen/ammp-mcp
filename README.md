@@ -1,10 +1,10 @@
 # ammp-mcp
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![CI](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/ci.yml)
-[![Audit](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml)
-[![CodeQL](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/codeql.yml/badge.svg)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/codeql.yml)
-[![Coverage](https://codecov.io/gh/helmut-hoffer-von-ankershoffen/ammp-mcp/graph/badge.svg)](https://codecov.io/gh/helmut-hoffer-von-ankershoffen/ammp-mcp)
+[![CI](https://img.shields.io/github/actions/workflow/status/helmut-hoffer-von-ankershoffen/ammp-mcp/ci.yml?branch=main&label=CI)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/ci.yml)
+[![Audit](https://img.shields.io/github/actions/workflow/status/helmut-hoffer-von-ankershoffen/ammp-mcp/audit.yml?branch=main&label=Audit)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/helmut-hoffer-von-ankershoffen/ammp-mcp/codeql.yml?branch=main&label=CodeQL)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/codeql.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/helmut-hoffer-von-ankershoffen/ammp-mcp?label=coverage)](https://codecov.io/gh/helmut-hoffer-von-ankershoffen/ammp-mcp)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=helmut-hoffer-von-ankershoffen_ammp-mcp&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=helmut-hoffer-von-ankershoffen_ammp-mcp)
 [![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=helmut-hoffer-von-ankershoffen_ammp-mcp&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=helmut-hoffer-von-ankershoffen_ammp-mcp)
 [![Linter: ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
