@@ -339,9 +339,9 @@ async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
         async with Client(server) as c:
             await c.call_tool("ListPlaybooks", {"api_key": new_key})
             await c.call_tool("ListPlaybooks", {"api_key": new_key})
-        assert spy.call_count == 0, (
-            f"Expected zero re-parses across two requests when mentees.json was untouched, got {spy.call_count}."
-        )
+        assert (
+            spy.call_count == 0
+        ), f"Expected zero re-parses across two requests when mentees.json was untouched, got {spy.call_count}."
 
 
 def test_capability_advertises_auth_setting(settings: Settings) -> None:
