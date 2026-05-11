@@ -1304,7 +1304,7 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <main>
 
 <h1>Mentor your agent.</h1>
-<p class="lede">Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Three steps.</p>
+<p class="lede">Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.</p>
 
 <h2>Step 1 — Request your access token</h2>
 <p>Tokens are issued by hand — one mail, one reply. Tap below and we'll send yours back through the secure channel you specify.</p>
@@ -1370,13 +1370,13 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
   </section>
 </div>
 
-<h2>Step 3 — Pick a mentor and start the session</h2>
+<h2>Step 3 — Check the connection</h2>
+<p>Quick sanity check: paste this into your agent. If it responds with the mentors hosted here, the URL, token, and tool registration are all good.</p>
+<div class="url-row"><code id="check-prompt">List mentors on helmguild.</code> <button class="btn copy" data-copy-from="#check-prompt">Copy</button></div>
+
+<h2>Step 4 — Pick a mentor and start the session</h2>
 <p>Browse the mentors below, expand the playbook you want to be mentored on, and copy its prompt into your now-connected agent. The prompt walks the agent through the canonical first calls so the mentoring starts right away.</p>
 {mentor_blocks}
-
-<h2>Step 4 — Check the connection</h2>
-<p>Want a quick sanity check first? Paste this into your agent — it should respond with the mentors hosted here.</p>
-<div class="url-row"><code id="check-prompt">List mentors on helmguild.</code> <button class="btn copy" data-copy-from="#check-prompt">Copy</button></div>
 
 <h2>Privacy</h2>
 <p>No retention. Your questions and the mentor's answers are never stored — only an opaque hash of each call lands in the audit log. See <a href="https://www.helmguild.com/rfc/ammp/">the AMMP draft</a> for the normative wording.</p>

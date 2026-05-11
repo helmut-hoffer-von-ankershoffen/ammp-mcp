@@ -316,7 +316,7 @@ async def test_landing_page_route(server) -> None:
     assert "My agent" in decoded, "mailto body must ask for the agent runtime"
     assert "My secure delivery channel" in decoded, "mailto body must ask for the delivery channel"
     # Four-step structure, in order: request token → configure connection →
-    # pick mentor → sanity-check the connection with a list-mentors prompt.
+    # sanity-check with list-mentors prompt → pick a mentor.
     step1 = body.index("Step 1")
     step2 = body.index("Step 2")
     step3 = body.index("Step 3")
@@ -325,9 +325,12 @@ async def test_landing_page_route(server) -> None:
     # Each step has the right content anchor.
     assert "Request" in body[step1 : step1 + 200]
     assert "MCP connection" in body[step2 : step2 + 200] or "connector settings" in body[step2 : step2 + 200]
-    assert "mentor" in body[step3 : step3 + 200].lower()
-    # Step 4 surfaces the canonical sanity-check prompt for copy/paste.
-    assert "List mentors on helmguild." in body[step4 : step4 + 400]
+    # Step 3 surfaces the canonical sanity-check prompt for copy/paste —
+    # it must precede the mentor cards so the user verifies the connection
+    # before committing to a real session.
+    assert "List mentors on helmguild." in body[step3 : step3 + 400]
+    # Step 4 introduces the mentor list and the per-playbook prompts.
+    assert "mentor" in body[step4 : step4 + 200].lower()
     # Single Copy-URL button with the inline vanilla-JS handler.
     assert 'class="btn copy"' in body
     assert "navigator.clipboard.writeText" in body
