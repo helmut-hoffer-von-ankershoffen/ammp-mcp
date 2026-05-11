@@ -191,6 +191,10 @@ async def test_landing_page_route(server) -> None:
     # Common how-to wording for the mentee — verify the canonical
     # MCP-endpoint snippet is present so copy-paste users land on /mcp/.
     assert "/mcp/" in body
+    # The access-flow explanation has to be visible — without it, the
+    # "Authorization: Bearer ammp-…" placeholders are dead-ends.
+    assert "Requesting access" in body
+    assert "ammp mentee add" in body
 
 
 async def test_capability_route(server) -> None:

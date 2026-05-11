@@ -591,6 +591,17 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 {mentor_rows}
 </ul>
 
+<h2>Requesting access</h2>
+<p>Every mentee call carries a per-mentee Bearer token. There is no self-service mint endpoint — gatekept by design (AMMP's allowlist is what makes <em>multi-mentee</em> a privacy posture, not a wishful default).</p>
+<p><strong>If you want to connect:</strong> email the operator (<a href="mailto:helmuthva@gmail.com">helmuthva@gmail.com</a>) with three things — the mentee <code>slug</code> you want (kebab-case, e.g. <code>claude-cowork-sandra</code>), the runtime you'll connect from (one of <code>claude-ai</code>, <code>claude-cowork</code>, <code>claude-code</code>, <code>openclaw</code>, <code>hermes</code>), and a Signal / iMessage number to receive the token on. The operator mints + sends it; the token is shown to them <strong>once</strong> and never re-derivable.</p>
+<p><strong>If you are the operator:</strong> on the host where ammp-mcp runs, mint a mentee and copy the plaintext token straight into a secure channel (Signal, 1Password share, encrypted email — never plain email / Slack / SMS). The token format is <code>ammp-&lt;32 url-safe bytes&gt;</code>; only its SHA-256 lands on disk.</p>
+<pre>$ ammp mentee add claude-cowork-sandra \\
+    --operator human:sandra --runtime claude-cowork
+✓ Minted first mentee claude-cowork-sandra.
+API KEY for the first mentee — copy now, you will not see it again:
+  ammp-zxV3l8_Z_cXY1cRVr22cQY3RTOrWZ2E7EpOVldb_YrE</pre>
+<p>If a token leaks, rotate it: <code>ammp mentee rotate-key &lt;slug&gt;</code> prints a fresh one and invalidates the old hash on disk. To revoke entirely, <code>ammp mentee remove &lt;slug&gt;</code>.</p>
+
 <h2>Connect as a mentee</h2>
 
 <div class="integration">
