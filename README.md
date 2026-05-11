@@ -190,6 +190,8 @@ uv run ammp serve               # boot the HTTP MCP server
                                 # — auto-bootstraps `~/.ammp/` on first run
 ```
 
+For dev work there's also a `Makefile` wrapping the same uv calls CI uses — run `make help` for the list. Common ones: `make install` (deps + pre-push hooks), `make lint` (full CI lint gate), `make test` (unit + integration), `make all` (the lot).
+
 `ammp serve` is the one-command path: on first run it creates `~/.ammp/`, copies the shipped example mentor into `~/.ammp/mentors/example/`, writes a `~/.ammp/config.env` scaffold, and starts serving on `127.0.0.1:8765`. Re-runs find the tree already there and skip the bootstrap. `uv run ammp setup` is the interactive wizard if you want to pick a backend (`anthropic` / `openclaw` / `stub`) and mint a first mentee in the same step.
 
 In another shell:
