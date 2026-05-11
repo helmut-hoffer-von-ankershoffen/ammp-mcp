@@ -1248,11 +1248,20 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
     <label for="agent-tab-hermes" class="agent-tab-label" role="tab">Hermes</label>
   </div>
   <section class="agent-tab-panel agent-tab-panel-claude" role="tabpanel" aria-labelledby="agent-tab-claude">
-    <p class="tab-intro">Anthropic ships MCP support across the Claude family.</p>
+    <p class="tab-intro">Anthropic's UI <em>Add custom connector</em> dialog is OAuth-only — Bearer tokens go in via CLI or the config file instead.</p>
     <ul class="tab-steps">
-      <li><strong>Claude.ai / Claude Cowork:</strong> Settings → Connectors → <em>Add custom connector</em> → paste the URL above + the Bearer header.</li>
-      <li><strong>Claude Code (CLI):</strong> <code>claude mcp add --scope user ammp {mcp_url} --header "Authorization: Bearer &lt;your-token&gt;"</code></li>
-      <li><strong>Claude Desktop:</strong> edit <code>claude_desktop_config.json</code> — add an entry under <code>mcpServers</code> with the URL and an <code>Authorization</code> header.</li>
+      <li><strong>Claude Code (CLI) — recommended:</strong>
+        <pre class="prompt" style="margin:.35rem 0 0">claude mcp add --scope user ammp \
+  {mcp_url} \
+  --header "Authorization: Bearer ammp-&lt;your-token&gt;"</pre>
+      </li>
+      <li><strong>Claude Desktop:</strong> edit <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> — add this under <code>mcpServers</code>, then restart the app:
+        <pre class="prompt" style="margin:.35rem 0 0">"ammp": {{
+  "url": "{mcp_url}",
+  "headers": {{ "Authorization": "Bearer ammp-&lt;your-token&gt;" }}
+}}</pre>
+      </li>
+      <li><strong>Claude.ai / Claude Cowork:</strong> the in-app <em>Connectors → Add custom connector</em> dialog only supports OAuth — this server doesn't expose an OAuth flow yet, so use the CLI or Desktop config above.</li>
     </ul>
     <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">Anthropic MCP docs →</a></p>
   </section>
