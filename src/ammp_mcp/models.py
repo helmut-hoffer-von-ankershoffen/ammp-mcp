@@ -35,10 +35,12 @@ class ListPlaybooksResponse(BaseModel):
 class MentorSummary(BaseModel):
     """One mentor in a ``ListMentors`` result list.
 
-    Mirrors the per-mentor block in the capability JSON
-    (``/.well-known/agent.json``) so a mentee that has already discovered
-    the server through capability fetch sees an identical shape over the
-    MCP wire — and vice versa.
+    ``backend_kind`` is the user-facing kind name from ``mentor.json``
+    (``"anthropic" | "openclaw" | "stub"``) — what the operator wrote, and
+    what the docs reference. ``backend_live`` indicates whether the
+    runtime can actually reach the synthesis path (an Anthropic backend
+    without an API key still reports kind ``"anthropic"`` but is not
+    live).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -47,7 +49,7 @@ class MentorSummary(BaseModel):
     name: str
     playbook_count: int
     confidence_threshold: float = Field(ge=0.0, le=1.0)
-    backend: str
+    backend_kind: str
     backend_live: bool
     is_default: bool = False
 

@@ -39,9 +39,16 @@ async def test_list_mentors_returns_all_mentors(server) -> None:
     # Pepe's confidence threshold matches the fixture's mentor.json.
     assert by_slug["pepe"]["confidence_threshold"] == pytest.approx(0.6)
     assert by_slug["strict"]["confidence_threshold"] == pytest.approx(0.9)
-    # Every mentor has a backend label string.
+    # Every mentor advertises its config kind — the same value the operator
+    # wrote in mentor.json (`anthropic`/`openclaw`/`stub`). Mentors with no
+    # backend block fall through to the global Anthropic fallback.
     for m in result.data["mentors"]:
-        assert isinstance(m["backend"], str) and m["backend"]
+        assert m["backend_kind"] in {"anthropic", "openclaw", "stub"}, m
+    by_slug = {m["slug"]: m for m in result.data["mentors"]}
+    # `stubmentor` declares `backend.kind = stub`. `pepe` and `strict` have
+    # no backend block, so they report the global fallback (`anthropic`).
+    assert by_slug["stubmentor"]["backend_kind"] == "stub"
+    assert by_slug["pepe"]["backend_kind"] == "anthropic"
 
 
 async def test_list_mentors_advertised_in_capability(server) -> None:
@@ -167,6 +174,31 @@ async def test_capability_route(server) -> None:
     backends = {m["slug"]: m["backend"] for m in payload["ammp"]["mentors"]}
     assert backends["stubmentor"] == "stub"
     assert payload["ammp"]["privacyPosture"]["crossCompartmentEscalation"] == "prohibited"
+    # Operations array must include the six MCP tools — five §5 baseline plus
+    # the ListMentors server-side extension. Pinned explicitly: this assertion
+    # has caught the offline/live capability builders drifting apart before.
+    assert set(payload["operations"]) == {
+        "ListMentors",
+        "ListPlaybooks",
+        "GetPlaybook",
+        "SearchPlaybooks",
+        "AskMentor",
+        "EscalateToHuman",
+    }
+
+
+def test_offline_and_live_capability_operations_match(settings: Settings) -> None:
+    """`ammp capability` (offline) and `/.well-known/agent.json` (live) must
+    agree on the operations array, or mentees that probe one and act on the
+    other hit phantom tools.
+    """
+    from ammp_mcp import __ammp_draft__, __version__
+    from ammp_mcp.server import _build_capability_payload, build_context
+    from ammp_mcp.system._capability_service import build_offline_capability
+
+    live = _build_capability_payload(build_context(settings))
+    offline = build_offline_capability(settings, __version__, __ammp_draft__)
+    assert set(live["operations"]) == set(offline["operations"])
 
 
 # ─── Auth-on flow ─────────────────────────────────────────────────────────

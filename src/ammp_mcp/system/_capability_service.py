@@ -40,6 +40,7 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
             "invariants": ["compartmentalisation", "human-gated-escalation"],
         },
         "operations": [
+            "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
             "SearchPlaybooks",

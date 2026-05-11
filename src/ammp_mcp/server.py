@@ -101,13 +101,19 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
     for slug, m in ctx.mentors.items():
         corpus = load_corpus(m.playbook_dir)
         backend = ctx.backends.get(slug)
+        # Surface the config-level kind (`anthropic`/`openclaw`/`stub`) — what
+        # the docs say and what the operator wrote in mentor.json — rather
+        # than the runtime mode label (`anthropic-direct` etc.). When the
+        # mentor has no `backend` block it falls through to the global
+        # Anthropic backend; report that as `anthropic` here.
+        backend_kind = m.backend.kind if m.backend else "anthropic"
         summaries.append(
             MentorSummary(
                 slug=slug,
                 name=m.name,
                 playbook_count=len(corpus),
                 confidence_threshold=m.confidence_threshold,
-                backend=backend.mode_label if backend else "unknown",
+                backend_kind=backend_kind,
                 backend_live=backend.is_live if backend else False,
                 is_default=(slug == ctx.settings.default_mentor),
             )

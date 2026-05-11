@@ -118,7 +118,7 @@ Six MCP tools — the five Mentoring-track operations from AMMP §5 plus a serve
 
 | Operation | Purpose |
 |---|---|
-| `ListMentors()` | Enumerate the mentors this server hosts (slug, name, playbook count, threshold, backend, default flag). Server-side extension over AMMP-01 — same data as the capability JSON, exposed over the MCP wire so mentees do not need a separate HTTP fetch to discover slugs. |
+| `ListMentors()` | Enumerate the mentors this server hosts. Each entry includes `slug`, `name`, `playbook_count`, `confidence_threshold`, `backend_kind` (one of `anthropic` / `openclaw` / `stub`, matching `mentor.json`), `backend_live`, and `is_default`. Server-side extension over AMMP-01 — same data as the capability JSON, exposed over the MCP wire so mentees do not need a separate HTTP fetch to discover slugs. |
 | `ListPlaybooks(mentor?)` | Enumerate the playbook corpus (id, title, summary). |
 | `GetPlaybook(id, mentor?)` | Fetch a single playbook's full markdown body. |
 | `SearchPlaybooks(query, mentor?, limit?)` | Substring-rank the corpus; return matches with snippets. |
