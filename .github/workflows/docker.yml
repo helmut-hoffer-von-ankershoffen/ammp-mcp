@@ -1,0 +1,119 @@
+name: Docker
+
+# Build the production image on every push/PR; smoke-test it on PRs;
+# push multi-arch (amd64 + arm64) to GHCR on main + release tags.
+#
+# Pattern mirrors `aignostics/python-sdk`'s _docker-publish workflow.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  attestations: write      # build provenance attestation (releases)
+  contents: read
+  id-token: write          # OIDC for cosign / attestation
+  packages: write          # push to ghcr.io
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository }}
+
+jobs:
+  build:
+    name: Build (+ push on main / tags)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Set up QEMU
+        # Cross-architecture emulation so the buildx job can produce
+        # arm64 manifests from an amd64 runner. Only needed when we
+        # actually multi-arch — kept here so the same step structure
+        # is reused for PRs (amd64 only) and main/tags (amd64+arm64).
+        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Log in to GHCR
+        # Only when we intend to push (non-PR events). PR builds are
+        # local-only — never authenticated, never pushed.
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            # `latest` only on the default branch; never on PR builds.
+            type=raw,value=latest,enable={{is_default_branch}}
+            # SemVer fanout on release tags (v1.2.3 → 1.2.3, 1.2, 1).
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # Short-SHA fallback so every build has a unique pull-able tag.
+            type=sha,prefix=sha-,format=short
+
+      - name: Build (+ push on non-PR events)
+        id: build
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          file: ./Dockerfile
+          # PRs: amd64 only, loaded into the local daemon for smoke
+          # testing. main / tags: amd64 + arm64, pushed.
+          platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          load: ${{ github.event_name == 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # In-toto / SLSA provenance attestation baked into the
+          # manifest on pushed builds. PRs skip it (nothing to attest).
+          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
+          sbom: ${{ github.event_name != 'pull_request' }}
+
+      - name: Smoke-test the loaded image (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Pick any tag the metadata action produced. The image is in
+          # the local daemon thanks to `load: true` above.
+          tag=$(printf '%s\n' "${{ steps.meta.outputs.tags }}" | head -1)
+          echo "Booting $tag …"
+          docker run -d --name ammp-mcp-smoke \
+            -p 8765:8765 \
+            -e AMMP_REQUIRE_AUTH=false \
+            "$tag"
+          # Poll the capability endpoint up to ~20s.
+          for i in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:8765/.well-known/agent.json > /dev/null; then
+              echo "✓ healthy after ${i}s"
+              docker stop ammp-mcp-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "✗ unhealthy — dumping logs"
+          docker logs ammp-mcp-smoke
+          docker stop ammp-mcp-smoke
+          exit 1
+
+      - name: Attest build provenance (release tags only)
+        if: startsWith(github.ref, 'refs/tags/v') && steps.build.outputs.digest != ''
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

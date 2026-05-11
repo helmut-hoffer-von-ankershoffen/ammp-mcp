@@ -16,6 +16,7 @@ PYTHON_VERSION ?= 3.13
 .PHONY: help all install clean lint lint_fix pre_commit_run_all \
         test test_unit test_integration test_e2e test_coverage_reset \
         dist dist_smoke_test audit audit_vulnerabilities audit_licenses audit_sbom \
+        docker_build docker_smoke_test \
         docs_walk \
         serve status capability cli_reference attributions
 
@@ -123,6 +124,22 @@ audit_sbom: ## Generate a CycloneDX SBOM at reports/sbom.json.
 	uv run --with cyclonedx-bom -- cyclonedx-py environment \
 		--output-format json \
 		--output-file reports/sbom.json
+
+##@ Docker
+
+docker_build: ## Build the production image locally as `ammp-mcp:dev` (host arch only).
+	docker build -t ammp-mcp:dev .
+
+docker_smoke_test: docker_build ## Build + boot the image + curl the capability endpoint.
+	@docker rm -f ammp-mcp-smoke 2>/dev/null || true
+	docker run -d --name ammp-mcp-smoke -p 8765:8765 -e AMMP_REQUIRE_AUTH=false ammp-mcp:dev
+	@echo "Waiting for /.well-known/agent.json (up to 20s) …"
+	@for i in $$(seq 1 20); do \
+		if curl -sf http://127.0.0.1:8765/.well-known/agent.json > /dev/null; then \
+			echo "✓ healthy after $${i}s"; docker stop ammp-mcp-smoke > /dev/null; exit 0; \
+		fi; sleep 1; \
+	done; \
+	echo "✗ unhealthy — dumping logs"; docker logs ammp-mcp-smoke; docker stop ammp-mcp-smoke > /dev/null; exit 1
 
 ##@ Documentation
 
