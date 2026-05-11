@@ -1,0 +1,37 @@
+{
+  "dxt_version": "0.1",
+  "name": "helmguild-ammp",
+  "display_name": "helmguild AMMP",
+  "version": "0.1.0",
+  "description": "Mentor your agent — connect to the helmguild AMMP mentoring server.",
+  "long_description": "AMMP (Agentic Mentor-Mentee Protocol) is an open IETF Internet-Draft for grounded, cited agent mentoring. This connector exposes the AMMP Mentoring track operations — ListPlaybooks, GetPlaybook, AskMentor, EscalateToHuman — plus three server-side extensions (ListMentors, GetWorkInstruction, EscalateToHumanMentor) to your Claude agent. The default mentor is Pepe Arturo. Uses the npm package `mcp-remote` as a stdio shim to the live HTTPS endpoint with your per-mentee Bearer token.",
+  "author": {
+    "name": "helmguild",
+    "url": "https://www.helmguild.com"
+  },
+  "homepage": "{public_url}/",
+  "documentation": "https://www.helmguild.com/rfc/ammp/",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "mcp_config": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "{mcp_url}",
+        "--header",
+        "Authorization:Bearer ${user_config_token}"
+      ]
+    }
+  },
+  "user_config": {
+    "bearer_token": {
+      "type": "string",
+      "title": "AMMP Bearer token",
+      "description": "Paste the ammp-… token Helmut sent you when you requested access. No 'Bearer ' prefix — the connector adds it for you.",
+      "required": true,
+      "sensitive": true
+    }
+  }
+}

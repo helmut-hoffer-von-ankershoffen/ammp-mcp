@@ -19,3 +19,17 @@ def example_mentor_path() -> Path:
     ``~/.ammp/mentors/example/`` to bootstrap a fresh install.
     """
     return Path(str(resources.files(__package__).joinpath("example_mentor")))
+
+
+def desktop_bundle_path() -> Path:
+    """Path to the Claude Desktop bundle template directory.
+
+    Contains ``manifest.json.template`` and ``icon.png``. Used by
+    :func:`ammp_mcp.server._build_desktop_bundle` to assemble a
+    ``.mcpb`` archive on the fly when a visitor downloads the bundle
+    from ``GET <prefix>/desktop-bundle.mcpb``.
+
+    Returns:
+        Filesystem path to ``src/ammp_mcp/_data/desktop_bundle/``.
+    """
+    return Path(str(resources.files(__package__).joinpath("desktop_bundle")))

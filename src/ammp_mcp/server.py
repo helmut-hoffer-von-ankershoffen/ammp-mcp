@@ -889,6 +889,58 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
     }
 
 
+# ─── Claude Desktop bundle (.mcpb) generation ─────────────────────────────
+
+
+def _build_desktop_bundle(public_url: str, mcp_url: str) -> bytes:
+    """Generate a Claude Desktop .mcpb bundle pointing at this server.
+
+    The bundle is a zip containing a ``manifest.json`` (DXT/MCPB
+    schema 0.1) plus an ``icon.png``. The manifest declares a
+    ``user_config.bearer_token`` field so Claude Desktop prompts the
+    visitor for their per-mentee token at install time and substitutes
+    it into the ``mcp-remote`` invocation. No token ever lives inside
+    the bundle itself — bundles can be shared freely.
+
+    The bundle is generated per request because the URLs inside depend
+    on the live ``public_url`` setting; if an operator changes the
+    deployment URL, the next bundle download reflects that without a
+    rebuild step.
+
+    Args:
+        public_url: The server's advertised URL (with mount prefix),
+            used for the manifest's ``homepage`` field.
+        mcp_url: The MCP transport URL the bundled ``mcp-remote``
+            shim should call.
+
+    Returns:
+        The zipped ``.mcpb`` file as raw bytes, ready for an HTTP
+        response body.
+    """
+    import io
+    import zipfile
+
+    from ._data import desktop_bundle_path
+
+    bundle_root = desktop_bundle_path()
+    template = (bundle_root / "manifest.json.template").read_text(encoding="utf-8")
+    manifest = (
+        template.replace("{public_url}", public_url)
+        .replace("{mcp_url}", mcp_url)
+        # DXT install-time substitution token — the template's
+        # placeholder is `${user_config_token}` (with the dollar
+        # already present), so we replace just the inner braced part
+        # with the dotted DXT path.
+        .replace("{user_config_token}", "{user_config.bearer_token}")
+    )
+    icon_bytes = (bundle_root / "icon.png").read_bytes()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("manifest.json", manifest)
+        z.writestr("icon.png", icon_bytes)
+    return buf.getvalue()
+
+
 # ─── Human-facing landing page ────────────────────────────────────────────
 
 
@@ -1248,7 +1300,9 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
     <label for="agent-tab-hermes" class="agent-tab-label" role="tab">Hermes</label>
   </div>
   <section class="agent-tab-panel agent-tab-panel-claude" role="tabpanel" aria-labelledby="agent-tab-claude">
-    <p class="tab-intro">Anthropic's UI <em>Add custom connector</em> dialog is OAuth-only — Bearer tokens go in via CLI or the config file instead.</p>
+    <p class="tab-intro">Three working paths today. Anthropic's in-app <em>Add custom connector</em> dialog is OAuth-only — Bearer tokens go in via the bundle, the CLI, or the config file instead.</p>
+    <p class="cta"><a class="btn primary" href="{base}/desktop-bundle.mcpb" download>Download Claude Desktop bundle (.mcpb)</a></p>
+    <p class="tab-intro" style="margin-top:.5rem">One-click installer for Claude Desktop. Double-click the downloaded file → Claude prompts for your Bearer token → done. (Uses the <code>mcp-remote</code> stdio shim under the hood.)</p>
     <ul class="tab-steps">
       <li><strong>Claude Code (CLI) — recommended:</strong>
         <pre class="prompt" style="margin:.35rem 0 0">claude mcp add --scope user ammp \
@@ -1578,6 +1632,31 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return FileResponse(
             path,
             headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @mcp.custom_route(f"{prefix}/desktop-bundle.mcpb", methods=["GET"])
+    async def desktop_bundle(_request: Request) -> Response:
+        """Serve a Claude Desktop ``.mcpb`` bundle pointing at this server.
+
+        Visitor double-clicks the downloaded file; Claude Desktop reads
+        the bundled ``manifest.json``, prompts for the Bearer token via
+        the declared ``user_config.bearer_token`` field, and installs
+        the connector. No token is baked into the bundle, so it can
+        be shared freely.
+        """
+        s = ctx.settings
+        base = s.public_url.rstrip("/")
+        mcp_url = f"{base}/mcp"  # mcp-remote wants no trailing slash
+        bundle = _build_desktop_bundle(public_url=base, mcp_url=mcp_url)
+        return Response(
+            content=bundle,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": 'attachment; filename="helmguild-ammp.mcpb"',
+                # The bundle's URLs come from settings.public_url; cache a
+                # short window so a public_url change is visible quickly.
+                "Cache-Control": "public, max-age=300",
+            },
         )
 
     @mcp.custom_route(f"{prefix}/", methods=["GET"])
