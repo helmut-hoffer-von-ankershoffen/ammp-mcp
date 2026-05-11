@@ -149,3 +149,59 @@ async def test_stdio_transport_rejects_unknown_mentor(isolated_tree: Path) -> No
     async with Client(transport) as client:
         out = _payload(await client.call_tool("ListPlaybooks", {"mentor": "does-not-exist"}))
         assert out.get("error") == "unknown_mentor"
+
+
+async def test_stdio_transport_rejects_empty_query(isolated_tree: Path) -> None:
+    """`SearchPlaybooks` with an empty query → in-band ``empty_query`` error."""
+    transport = StdioTransport(
+        command=sys.executable,
+        args=["-m", "ammp_mcp", "system", "serve", "--stdio"],
+        env=_stdio_env(isolated_tree),
+        cwd=str(Path(__file__).resolve().parent.parent.parent),
+    )
+    async with Client(transport) as client:
+        out = _payload(await client.call_tool("SearchPlaybooks", {"query": "   ", "mentor": "pepe"}))
+        assert out.get("error") == "empty_query"
+
+
+async def test_stdio_transport_rejects_invalid_api_key(isolated_tree: Path) -> None:
+    """With auth on, calls without a valid Bearer key → ``auth_failed``.
+
+    Pins the auth contract over the stdio transport: the server enforces
+    the same Bearer requirement regardless of which transport speaks to it.
+    """
+    env = {
+        **_stdio_env(isolated_tree),
+        "AMMP_REQUIRE_AUTH": "true",
+    }
+    transport = StdioTransport(
+        command=sys.executable,
+        args=["-m", "ammp_mcp", "system", "serve", "--stdio"],
+        env=env,
+        cwd=str(Path(__file__).resolve().parent.parent.parent),
+    )
+    async with Client(transport) as client:
+        # Missing api_key.
+        out = _payload(await client.call_tool("ListPlaybooks", {"mentor": "pepe"}))
+        assert out.get("error") == "auth_failed"
+        assert "api_key_required" in str(out.get("detail", ""))
+
+        # Wrong api_key.
+        out = _payload(
+            await client.call_tool(
+                "ListPlaybooks",
+                {"mentor": "pepe", "api_key": "ammp-not-a-real-key"},
+            )
+        )
+        assert out.get("error") == "auth_failed"
+        assert "api_key_invalid" in str(out.get("detail", ""))
+
+        # Correct key seeded by the `isolated_tree` fixture → succeeds.
+        out = _payload(
+            await client.call_tool(
+                "ListPlaybooks",
+                {"mentor": "pepe", "api_key": "ammp-test-key-1"},
+            )
+        )
+        assert out.get("mentor") == "pepe"
+        assert out.get("count") == 2
