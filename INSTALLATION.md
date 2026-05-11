@@ -79,10 +79,10 @@ The mentor's answer will cite the relevant playbooks from its corpus. If confide
 
 ## Connect a mentee — Claude Code (remote / deployed instance)
 
-If `ammp-mcp` is deployed behind a public tunnel (e.g. `https://ammp.helmguild.com`):
+If `ammp-mcp` is deployed behind a public tunnel (e.g. `https://mcp.helmguild.com`):
 
 ```bash
-claude mcp add --scope user ammp-pepe https://ammp.helmguild.com/mcp/ \
+claude mcp add --scope user ammp-pepe https://mcp.helmguild.com/mcp/ \
   --header "Authorization: Bearer ammp-…"
 ```
 
@@ -123,7 +123,7 @@ All settings are env vars prefixed `AMMP_`. The server auto-loads `<AMMP_DIR>/co
 | `AMMP_TRANSPORT` | `http` | `http` or `stdio`. Stdio wins over `--host` / `--port`. |
 | `AMMP_HOST` | `127.0.0.1` | HTTP bind host. Use `0.0.0.0` only behind a reverse proxy. |
 | `AMMP_PORT` | `8765` | HTTP bind port. |
-| `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Public URL advertised in the capability JSON. Set to `https://ammp.helmguild.com` (or your own) when behind a tunnel. |
+| `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Public URL advertised in the capability JSON. Set to `https://mcp.helmguild.com` (or your own) when behind a tunnel. |
 | `AMMP_MENTORS_ROOT` | `<AMMP_DIR>/mentors` | Directory with one subfolder per mentor. Override to point at e.g. an Obsidian vault. |
 | `AMMP_DEFAULT_MENTOR` | `example` | Mentor slug used when a request omits `mentor=`. |
 | `AMMP_MENTEES_FILE` | `<AMMP_DIR>/mentees.json` | Allowlist (SHA-256 hashes only). |

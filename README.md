@@ -17,7 +17,7 @@ Reference implementation of the **Agentic Mentor-Mentee Protocol** (AMMP) — th
 
 Pepe Arturo, Helmut Hoffer von Ankershoffen's senior agentic AI assistant, exposes his curated operational playbook corpus to mentee agents (Claude Cowork, Claude.ai, Claude Code, …) over the MCP wire — with the privacy invariants the AMMP draft makes normative.
 
-Deployed to: **[ammp.helmguild.com](https://ammp.helmguild.com)**.
+Deployed to: **[mcp.helmguild.com](https://mcp.helmguild.com)**.
 
 ---
 
@@ -41,7 +41,7 @@ graph LR
     CCO -->|MCP / AMMP<br/>HTTPS| AMMP
     CAI -->|MCP / AMMP<br/>HTTPS| AMMP
 
-    subgraph SERVER [ammp-mcp · ammp.helmguild.com]
+    subgraph SERVER [ammp-mcp · mcp.helmguild.com]
       AMMP[Mentor router<br/>+ AskMentor / EscalateToHuman / …]
       AMMP -->|reads| PB[(Playbook corpus<br/>markdown)]
       AMMP -.->|hash-only| LOG[(audit.log)]
@@ -114,7 +114,7 @@ sequenceDiagram
 
 ## Operations
 
-Six MCP tools — the five Mentoring-track operations from AMMP §5 plus a server-side `ListMentors` extension. Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `ammp.helmguild.com`).
+Six MCP tools — the five Mentoring-track operations from AMMP §5 plus a server-side `ListMentors` extension. Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `mcp.helmguild.com`).
 
 | Operation | Purpose |
 |---|---|
@@ -272,7 +272,7 @@ All settings are env vars prefixed `AMMP_`. The server auto-loads `<AMMP_DIR>/co
 | `AMMP_TRANSPORT` | `http` | `http` (Streamable-HTTP on `/mcp/`) or `stdio` (subprocess transport for Claude Desktop / Claude Code). Stdio mode ignores `host` / `port`. |
 | `AMMP_HOST` | `127.0.0.1` | Bind address. Set `0.0.0.0` for container deploys. |
 | `AMMP_PORT` | `8765` | |
-| `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://ammp.helmguild.com` in production. |
+| `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://mcp.helmguild.com` in production. |
 | `AMMP_MENTORS_ROOT` | `<AMMP_DIR>/mentors` | One subdir per mentor. Override to point at an Obsidian vault or other curated location. |
 | `AMMP_DEFAULT_MENTOR` | `example` | Used when a mentee omits `mentor`. |
 | `AMMP_MENTEES_FILE` | `<AMMP_DIR>/mentees.json` | The allowlist. |
@@ -307,8 +307,8 @@ pytest                  # all of the above (e2e self-skips without key)
 
 ## Connect a mentee
 
-* **Claude Cowork:** add as a custom MCP connector pointing at `https://ammp.helmguild.com/mcp/` with the API key as Bearer.
-* **Claude Code:** `claude mcp add ammp https://ammp.helmguild.com/mcp/ --header "Authorization: Bearer ammp-…"`.
+* **Claude Cowork:** add as a custom MCP connector pointing at `https://mcp.helmguild.com/mcp/` with the API key as Bearer.
+* **Claude Code:** `claude mcp add ammp https://mcp.helmguild.com/mcp/ --header "Authorization: Bearer ammp-…"`.
 * **Claude.ai:** add via Settings → Connectors → Custom.
 
 The mentee selects the mentor *per call* via the `mentor` argument; omit it to fall through to the server default.
