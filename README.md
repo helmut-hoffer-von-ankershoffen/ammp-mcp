@@ -252,7 +252,7 @@ All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
 | `AMMP_HOST` | `127.0.0.1` | Bind address. Set `0.0.0.0` for container deploys. |
 | `AMMP_PORT` | `8765` | |
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://ammp.helmguild.com` in production. |
-| `AMMP_MENTORS_ROOT` | `./mentors/` | One subdir per mentor. |
+| `AMMP_MENTORS_ROOT` | `./mentors` | One subdir per mentor. |
 | `AMMP_DEFAULT_MENTOR` | `pepe` | Used when a mentee omits `mentor`. |
 | `AMMP_MENTEES_FILE` | `./mentees.json` | The allowlist. |
 | `AMMP_REQUIRE_AUTH` | `false` | Flip on for production. |
