@@ -54,6 +54,12 @@ jobs:
       - name: Mypy
         run: mypy src/ammp_mcp
 
+      - name: Docstring coverage (every function in src/ has one)
+        run: python scripts/check_docstrings.py
+
+      - name: Pydoclint (Args/Returns/Raises match the signature)
+        run: pydoclint src/ammp_mcp
+
       - name: Pytest (unit + integration)
         run: pytest -m "unit or integration" --cov=ammp_mcp --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
 

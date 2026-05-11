@@ -18,18 +18,17 @@ from .base import LLMAnswer, MentorBackend
 
 
 class StubBackend(MentorBackend):
-    """No-network backend that always returns a low-confidence answer."""
+    """No-network backend that always returns a low-confidence answer.
+
+    Args:
+        max_concurrent: Concurrency cap (unused in practice — the
+            stub never blocks — but kept for API parity with the
+            other backends).
+    """
 
     mode_label = "stub"
 
     def __init__(self, *, max_concurrent: int = 10) -> None:
-        """Initialise the stub backend.
-
-        Args:
-            max_concurrent: Concurrency cap (unused in practice — the
-                stub never blocks — but kept for API parity with the
-                other backends).
-        """
         super().__init__(max_concurrent=max_concurrent)
 
     @property

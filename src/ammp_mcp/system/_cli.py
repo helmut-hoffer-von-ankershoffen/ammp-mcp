@@ -195,6 +195,19 @@ def setup(
 
 
 def _status_emit_summary(r: _StatusReporter) -> None:
+    """Print the trailing summary for ``ammp status`` based on a reporter.
+
+    Args:
+        r: The accumulated :class:`_StatusReporter` from the check
+            helpers — its ``problems`` and ``notes`` lists drive the
+            exit code and the rendered colour.
+
+    Raises:
+        typer.Exit: Exit code 1 when one or more problems were
+            recorded (the installation is considered broken). Returns
+            normally otherwise; the caller-side process exits 0 with
+            warnings or with no findings at all.
+    """
     if r.problems:
         console.print()
         console.print(f"[bold red]{len(r.problems)} problem(s) — installation is broken:[/bold red]")

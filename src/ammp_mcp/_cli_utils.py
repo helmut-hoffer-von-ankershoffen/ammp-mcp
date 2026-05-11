@@ -24,6 +24,15 @@ def wire_help_on_no_args(app: typer.Typer) -> None:
 
     @app.callback(invoke_without_command=True)
     def _root(ctx: typer.Context) -> None:
+        """Root callback — prints help and exits 0 when no subcommand is given.
+
+        Args:
+            ctx: The Click/Typer context provided by the framework.
+
+        Raises:
+            typer.Exit: Always (code 0) when no subcommand was invoked; the
+                framework continues normally when one was.
+        """
         if ctx.invoked_subcommand is None:
             typer.echo(ctx.get_help())
             raise typer.Exit(0)

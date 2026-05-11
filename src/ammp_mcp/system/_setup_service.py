@@ -37,13 +37,11 @@ _VALID_BACKEND_KINDS = {"openclaw", "anthropic", "stub"}
 def bootstrap_ammp_dir(s: Settings, *, quiet: bool = False) -> bool:
     """Create `<AMMP_DIR>/` and copy the example mentor in, idempotently.
 
-    Returns ``True`` if anything was created. Safe to call on every
-    server boot — exits early when the tree already has at least one
-    mentor and a `config.env`.
-
-    Will NOT touch ``mentors_root`` if the operator has pointed it
-    somewhere other than ``<AMMP_DIR>/mentors`` (e.g. an Obsidian vault).
-    The example mentor only ships into the default location, never into
+    Safe to call on every server boot — exits early when the tree
+    already has at least one mentor and a `config.env`. Will NOT touch
+    ``mentors_root`` if the operator has pointed it somewhere other
+    than ``<AMMP_DIR>/mentors`` (e.g. an Obsidian vault); the example
+    mentor only ships into the default location, never into
     operator-curated paths.
 
     Args:
@@ -51,6 +49,11 @@ def bootstrap_ammp_dir(s: Settings, *, quiet: bool = False) -> bool:
         quiet: When True, suppress informational console output (used
             by `ammp serve`'s auto-bootstrap so the boot log stays
             clean).
+
+    Returns:
+        ``True`` when bootstrap created or wrote at least one thing;
+        ``False`` when the tree was already fully set up and nothing
+        changed.
     """
     ammp_dir = s.ammp_dir
     mentors_root = s.mentors_root
@@ -95,6 +98,12 @@ def bootstrap_ammp_dir(s: Settings, *, quiet: bool = False) -> bool:
 
 
 def _setup_print_header(s: Settings) -> None:
+    """Render the Step-0 environment panel for the ``ammp setup`` wizard.
+
+    Args:
+        s: The resolved Settings whose paths get echoed back so the
+            operator can confirm them before any disk writes happen.
+    """
     console.print(
         Panel.fit(
             f"[bold]ammp-mcp setup[/bold]\n"
@@ -109,6 +118,23 @@ def _setup_print_header(s: Settings) -> None:
 
 
 def _setup_validate(mentors_root: Path, mentor_slug: str, backend: str) -> dict[str, Mentor]:
+    """Pre-flight the wizard inputs before any disk write happens.
+
+    Args:
+        mentors_root: Directory expected to contain
+            ``<mentor_slug>/mentor.json``.
+        mentor_slug: The slug the operator chose to configure.
+        backend: The backend kind they want to write; must be one of
+            ``"anthropic"``, ``"openclaw"``, ``"stub"``.
+
+    Returns:
+        The full mentor registry loaded from disk, ready for downstream
+        use.
+
+    Raises:
+        typer.Exit: Exit code 2 when the mentor directory is missing
+            or when the backend kind is unknown.
+    """
     mentors = load_mentors(mentors_root)
     if mentor_slug not in mentors:
         console.print(
@@ -124,6 +150,18 @@ def _setup_validate(mentors_root: Path, mentor_slug: str, backend: str) -> dict[
 
 
 def _setup_resolve_openclaw_args(yes: bool, openclaw_url: str, auth_bearer_env: str) -> tuple[str, str]:
+    """Either echo the openclaw-backend defaults or prompt the operator for them.
+
+    Args:
+        yes: When ``True``, skip prompts and use the defaults as-is
+            (``ammp setup --yes``).
+        openclaw_url: Default OpenClaw webhook URL to suggest.
+        auth_bearer_env: Default env-var name for the Bearer token.
+
+    Returns:
+        A ``(url, bearer_env_name)`` tuple — either the input defaults
+        unchanged (``--yes`` mode) or whatever the operator typed.
+    """
     if yes:
         return openclaw_url, auth_bearer_env
     url = Prompt.ask("OpenClaw webhook URL", default=openclaw_url, console=console)
@@ -132,6 +170,20 @@ def _setup_resolve_openclaw_args(yes: bool, openclaw_url: str, auth_bearer_env: 
 
 
 def _setup_apply_backend(mentor_json_path: Path, backend: str, openclaw_url: str, auth_bearer_env: str) -> None:
+    """Rewrite a ``mentor.json`` file with the chosen backend block.
+
+    Idempotent — re-running with the same arguments produces an
+    identical file. Underscore-prefixed JSON keys (intent hints) are
+    stripped from the existing file before the merge.
+
+    Args:
+        mentor_json_path: Path to the existing ``mentor.json`` to update.
+        backend: Backend kind (``"anthropic"``, ``"openclaw"``, or
+            ``"stub"``).
+        openclaw_url: Webhook URL (only used when ``backend == "openclaw"``).
+        auth_bearer_env: Env var name for the Bearer token (only used
+            when ``backend == "openclaw"``).
+    """
     backend_block: dict[str, object] = {"kind": backend}
     if backend == "openclaw":
         backend_block.update(
@@ -144,7 +196,16 @@ def _setup_apply_backend(mentor_json_path: Path, backend: str, openclaw_url: str
 
 
 def _setup_mint_mentee_if_needed(mentees_file: Path) -> str | None:
-    """Mint `claude-cowork-helmut` if absent; return the plaintext key (or None when skipped)."""
+    """Mint a first mentee (``claude-cowork-helmut``) when one is not already present.
+
+    Args:
+        mentees_file: Path to the JSON allowlist. Created on demand.
+
+    Returns:
+        The freshly-minted plaintext API key (shown to the operator
+        once and then discarded), or ``None`` when the mentee already
+        existed and was therefore left untouched.
+    """
     mentees = load_mentees(mentees_file) if mentees_file.exists() else {}
     first_slug = "claude-cowork-helmut"
     if first_slug in mentees:
@@ -164,6 +225,21 @@ def _setup_mint_mentee_if_needed(mentees_file: Path) -> str | None:
 
 
 def _setup_load_existing_env(env_path: Path) -> dict[str, str]:
+    """Parse an existing ``.env``-style file into a ``key -> value`` dict.
+
+    Comments (``#`` lines) and blank lines are skipped. Values are
+    returned verbatim — no unquoting, no variable interpolation. Used
+    only to preserve operator-edited keys (typically secrets) across
+    wizard re-runs.
+
+    Args:
+        env_path: Path to the env file. A missing file yields an empty
+            dict, not an error.
+
+    Returns:
+        Mapping of env-var names to their string values, with whitespace
+        trimmed off both sides.
+    """
     if not env_path.exists():
         return {}
     out: dict[str, str] = {}
@@ -177,6 +253,26 @@ def _setup_load_existing_env(env_path: Path) -> dict[str, str]:
 def _setup_compose_env(
     s: Settings, backend: str, auth_bearer_env: str, require_auth: bool, existing: dict[str, str]
 ) -> dict[str, str]:
+    """Merge wizard choices on top of an existing env-file's keys.
+
+    The wizard's chosen values WIN over anything in ``existing`` — the
+    older file only carries forward keys the wizard does not set
+    (typically operator-edited secrets and custom env vars).
+
+    Args:
+        s: The resolved Settings whose paths get written into the file.
+        backend: Chosen backend kind (``"anthropic"`` / ``"openclaw"`` /
+            ``"stub"``).
+        auth_bearer_env: Env-var name holding the openclaw Bearer token
+            (only meaningful when ``backend == "openclaw"``).
+        require_auth: Whether to flip ``AMMP_REQUIRE_AUTH`` to ``"true"``
+            in the written file.
+        existing: Existing key/value pairs to merge under the wizard's
+            choices (typically from :func:`_setup_load_existing_env`).
+
+    Returns:
+        Merged mapping ready for :func:`_setup_write_env`.
+    """
     desired = {
         "AMMP_DIR": str(s.ammp_dir),
         "AMMP_REQUIRE_AUTH": "true" if require_auth else "false",
@@ -195,6 +291,20 @@ def _setup_compose_env(
 
 
 def _setup_write_env(env_path: Path, merged: dict[str, str], auth_bearer_env: str) -> None:
+    """Render a merged env dict to a ``.env``-style file on disk.
+
+    Adds a header comment with timestamp; appends inline ``# fill in
+    …`` hints for known-secret keys whose values are still empty.
+    Creates parent directories if needed.
+
+    Args:
+        env_path: Destination file path. Parent directories are
+            created on demand.
+        merged: The env-var mapping to write (typically the output of
+            :func:`_setup_compose_env`).
+        auth_bearer_env: The openclaw-bearer env-var name — used to
+            decide which empty value to flag with a "fill in" hint.
+    """
     lines = [
         "# ammp-mcp config — written by `ammp setup`. Edit freely.",
         f"# Generated {dt.datetime.now(dt.UTC).isoformat()}.",
@@ -214,6 +324,14 @@ def _setup_write_env(env_path: Path, merged: dict[str, str], auth_bearer_env: st
 
 
 def _setup_print_next_steps(backend: str, auth_bearer_env: str) -> None:
+    """Print the closing "Next steps" panel of the ``ammp setup`` wizard.
+
+    Args:
+        backend: Chosen backend kind — drives which secret env var the
+            operator is told to fill in.
+        auth_bearer_env: Env-var name holding the openclaw Bearer token
+            (used only when ``backend == "openclaw"``).
+    """
     next_secret = auth_bearer_env if backend == "openclaw" else "AMMP_ANTHROPIC_API_KEY"
     console.print()
     console.print(

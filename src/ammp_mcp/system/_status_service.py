@@ -31,18 +31,48 @@ class _StatusReporter:
     notes: list[str]
 
     def ok(self, name: str, detail: str = "") -> None:
+        """Record a green status row — no problem and no warning surfaced.
+
+        Args:
+            name: Left-column row label.
+            detail: Right-column free-form detail (may be empty).
+        """
         self.table.add_row(name, _ICON_OK, detail)
 
     def warn(self, name: str, detail: str) -> None:
+        """Record a yellow status row and append a non-fatal note.
+
+        Args:
+            name: Left-column row label.
+            detail: Right-column detail; also appended to ``self.notes``
+                so the summary line lists it.
+        """
         self.table.add_row(name, _ICON_WARN, detail)
         self.notes.append(f"{name}: {detail}")
 
     def fail(self, name: str, detail: str) -> None:
+        """Record a red status row and append a fatal problem.
+
+        Args:
+            name: Left-column row label.
+            detail: Right-column detail; also appended to ``self.problems``
+                so :func:`_status_emit_summary` exits non-zero.
+        """
         self.table.add_row(name, _ICON_FAIL, detail)
         self.problems.append(f"{name}: {detail}")
 
 
 def _status_check_one_mentor(slug: str, m: Mentor, r: _StatusReporter) -> None:
+    """Validate a single mentor's corpus + backend config statically.
+
+    Adds one or more rows to ``r.table`` and records problems / notes
+    via the reporter's ``warn`` / ``fail`` helpers. No network probes.
+
+    Args:
+        slug: The mentor's slug (used in row labels).
+        m: The :class:`Mentor` to validate.
+        r: The reporter to record findings into.
+    """
     corpus = load_corpus(m.playbook_dir)
     backend_label = m.backend.kind if m.backend else "fallback"
     if not corpus:
@@ -58,6 +88,18 @@ def _status_check_one_mentor(slug: str, m: Mentor, r: _StatusReporter) -> None:
 
 
 def _status_check_mentors(mentors_root: Path, r: _StatusReporter) -> dict[str, Mentor]:
+    """Validate the mentors registry directory and every mentor inside.
+
+    Args:
+        mentors_root: Directory expected to contain one ``<slug>/``
+            subdirectory per mentor.
+        r: The reporter to record findings into.
+
+    Returns:
+        The loaded mentor registry on success, or an empty dict when
+        the directory was missing or the registry failed to load (the
+        problem is also recorded on the reporter).
+    """
     if not mentors_root.is_dir():
         r.fail("Mentors root", f"directory does not exist: {mentors_root}")
         return {}
@@ -74,6 +116,14 @@ def _status_check_mentors(mentors_root: Path, r: _StatusReporter) -> dict[str, M
 
 
 def _status_check_mentees(mentees_file: Path, r: _StatusReporter) -> None:
+    """Validate that the mentee allowlist file is present and parseable.
+
+    Args:
+        mentees_file: Path to the JSON allowlist.
+        r: The reporter to record findings into. A missing file is
+            treated as a warning (the operator may not have minted any
+            mentees yet); a parse failure is a fatal problem.
+    """
     if not mentees_file.exists():
         r.warn("Mentees file", f"does not exist yet: {mentees_file} (run `ammp mentee add` to mint one)")
         return
@@ -85,6 +135,18 @@ def _status_check_mentees(mentees_file: Path, r: _StatusReporter) -> None:
 
 
 def _status_check_audit_log(audit_log_path: Path, r: _StatusReporter) -> None:
+    """Probe that the audit-log directory is writable from this process.
+
+    Writes and deletes a small probe file next to ``audit_log_path``
+    so the check is non-destructive. Any failure is recorded as fatal
+    on the reporter — the server cannot honour AMMP §6.2 without a
+    writable audit log.
+
+    Args:
+        audit_log_path: Where the audit log lives (parent dir is what
+            actually gets probed).
+        r: The reporter to record findings into.
+    """
     try:
         audit_log_path.parent.mkdir(parents=True, exist_ok=True)
         probe = audit_log_path.parent / ".ammp-status-probe"
@@ -96,6 +158,18 @@ def _status_check_audit_log(audit_log_path: Path, r: _StatusReporter) -> None:
 
 
 def _status_check_anthropic_key(s: Settings, mentors: dict[str, Mentor], r: _StatusReporter) -> None:
+    """Warn when an anthropic-backed mentor is configured without an API key.
+
+    No-op when no mentor uses the anthropic backend (explicit or
+    fallback). Without the key, the global Anthropic backend
+    degrades into the deterministic stub — operationally still
+    valid, but worth flagging.
+
+    Args:
+        s: Settings holding the ``anthropic_api_key`` (or ``None``).
+        mentors: The loaded mentor registry.
+        r: The reporter to record the warning / OK row into.
+    """
     has_anthropic_mentor = any(m.backend is None or m.backend.kind == "anthropic" for m in mentors.values())
     if not has_anthropic_mentor:
         return

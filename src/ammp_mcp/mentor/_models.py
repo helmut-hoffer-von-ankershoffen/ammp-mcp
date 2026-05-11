@@ -95,4 +95,14 @@ class Mentor(BaseModel):
     @field_validator("playbook_dir")
     @classmethod
     def _resolve_path(cls, v: Path) -> Path:
+        """Expand ``~`` and resolve ``playbook_dir`` to an absolute path.
+
+        Args:
+            v: The raw ``playbook_dir`` value as supplied to the model.
+
+        Returns:
+            The same path with user-home expansion and symlink resolution
+            applied so downstream code can rely on a normalised absolute
+            ``Path`` regardless of how the caller wrote it.
+        """
         return v.expanduser().resolve()

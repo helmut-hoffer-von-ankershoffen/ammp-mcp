@@ -27,6 +27,18 @@ class _AuditAggregate:
 
 
 def _usage_parse_one_line(line: str, cutoff: dt.datetime | None, agg: _AuditAggregate) -> None:
+    """Parse one audit-log line and fold it into ``agg``.
+
+    Lines that don't match :data:`_AUDIT_LINE_RE` or whose timestamp is
+    unparseable get counted in ``agg.skipped`` and otherwise ignored.
+    Lines older than ``cutoff`` are dropped silently.
+
+    Args:
+        line: One stripped audit-log line.
+        cutoff: Drop lines whose timestamp is strictly before this
+            instant. ``None`` means "no cutoff — count every line".
+        agg: The aggregate to update in place.
+    """
     m = _AUDIT_LINE_RE.match(line)
     if not m:
         agg.skipped += 1
@@ -49,6 +61,20 @@ def _usage_parse_one_line(line: str, cutoff: dt.datetime | None, agg: _AuditAggr
 
 
 def _usage_parse_audit(path: Path, cutoff: dt.datetime | None) -> _AuditAggregate:
+    """Stream-parse an audit log into a single aggregate counter object.
+
+    Reads line-by-line so even multi-megabyte logs fit in memory; the
+    parsing is otherwise a thin wrapper over :func:`_usage_parse_one_line`.
+
+    Args:
+        path: Path to the audit log to read.
+        cutoff: Drop lines whose timestamp is strictly before this
+            instant. ``None`` means "no cutoff — count every line".
+
+    Returns:
+        The aggregated counts (op / mentor / mentee), parsed / skipped
+        totals, and the earliest / latest timestamps seen.
+    """
     agg = _AuditAggregate()
     with path.open("r", encoding="utf-8") as f:
         for raw in f:
@@ -60,6 +86,17 @@ def _usage_parse_audit(path: Path, cutoff: dt.datetime | None) -> _AuditAggregat
 
 
 def _usage_render_breakdown(title: str, counts: Counter[str], col_label: str, style: str) -> Table:
+    """Render one breakdown Counter as a two-column Rich :class:`Table`.
+
+    Args:
+        title: Table title (e.g. ``"By mentor"``).
+        counts: The Counter to render, sorted by descending frequency.
+        col_label: Label for the first (name) column.
+        style: Rich style for the second (count) column.
+
+    Returns:
+        A configured Rich :class:`Table` ready to ``console.print()``.
+    """
     t = Table(title=title)
     t.add_column(col_label, style="white")
     t.add_column("count", justify="right", style=style)

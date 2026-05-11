@@ -42,18 +42,43 @@ def _resolve_ammp_dir() -> Path:
 
 
 def _default_config_env_path() -> Path:
+    """Return the default ``config.env`` location (``<AMMP_DIR>/config.env``).
+
+    Returns:
+        Absolute :class:`~pathlib.Path` to the auto-loaded settings
+        file. Read once at module-import time by
+        :class:`SettingsConfigDict`.
+    """
     return _resolve_ammp_dir() / "config.env"
 
 
 def _default_mentors_root() -> Path:
+    """Return the default mentors-registry root (``<AMMP_DIR>/mentors``).
+
+    Returns:
+        Absolute :class:`~pathlib.Path` to the directory under which
+        each mentor lives as ``<slug>/{mentor.json,playbooks/}``.
+    """
     return _resolve_ammp_dir() / "mentors"
 
 
 def _default_mentees_file() -> Path:
+    """Return the default mentee-allowlist path (``<AMMP_DIR>/mentees.json``).
+
+    Returns:
+        Absolute :class:`~pathlib.Path` to the JSON file holding the
+        Bearer-key allowlist (SHA-256 hashes only).
+    """
     return _resolve_ammp_dir() / "mentees.json"
 
 
 def _default_audit_log_path() -> Path:
+    """Return the default audit-log path (``<AMMP_DIR>/audit.log``).
+
+    Returns:
+        Absolute :class:`~pathlib.Path` to the append-only hash-only
+        audit log (AMMP §6.2).
+    """
     return _resolve_ammp_dir() / "audit.log"
 
 

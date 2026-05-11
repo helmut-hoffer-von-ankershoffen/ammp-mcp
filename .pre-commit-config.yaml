@@ -28,3 +28,18 @@ repos:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: docstring-coverage
+        name: Every function in src/ has a docstring
+        entry: uv run python scripts/check_docstrings.py
+        language: system
+        pass_filenames: false
+        files: ^src/ammp_mcp/.*\.py$
+      - id: pydoclint
+        name: Pydoclint — Args/Returns/Raises match the signature
+        entry: uv run pydoclint src/ammp_mcp
+        language: system
+        pass_filenames: false
+        files: ^src/ammp_mcp/.*\.py$

@@ -152,14 +152,31 @@ result. The iteration budget is small; thrashing exhausts it.
 """
 
 
-def _filter_env() -> dict[str, str]:
-    """Strip AMMP_* from the env so settings.py defaults take effect.
+def _filter_env(ammp_dir: Path | None = None) -> dict[str, str]:
+    """Strip AMMP_* from the env, optionally pinning ``AMMP_DIR``.
 
-    The doc walker tests *what the docs say the defaults are*, which
-    means the subprocess must see no overrides — no .env, no exported
+    The doc walker tests *what the docs say the defaults are*, so the
+    subprocess must see no leftover overrides — no .env, no exported
     AMMP_* vars. Everything else (PATH etc.) carries through.
+
+    When ``ammp_dir`` is supplied, ``AMMP_DIR`` is set to that path so
+    bootstrap writes / reads into the test's tmp tree rather than the
+    developer's real ``~/.ammp/``. This mirrors a fresh install on a
+    clean machine.
+
+    Args:
+        ammp_dir: Optional tmp directory to use as the bootstrapped
+            ``AMMP_DIR``. ``None`` leaves the env var unset so the
+            subprocess hits the packaged default (``~/.ammp/``).
+
+    Returns:
+        A copy of the current environment with all ``AMMP_*`` keys
+        stripped and ``AMMP_DIR`` optionally re-added.
     """
-    return {k: v for k, v in os.environ.items() if not k.startswith("AMMP_")}
+    out = {k: v for k, v in os.environ.items() if not k.startswith("AMMP_")}
+    if ammp_dir is not None:
+        out["AMMP_DIR"] = str(ammp_dir)
+    return out
 
 
 def _is_dangerous(args: list[str]) -> str | None:
@@ -178,9 +195,24 @@ def _is_dangerous(args: list[str]) -> str | None:
 def _run_command_tool(args: list[str], tmp_cwd: Path) -> dict[str, object]:
     """Execute one CLI probe in a clean env. Returns stdout/stderr/exit_code.
 
+    ``tmp_cwd`` doubles as the subprocess's ``AMMP_DIR`` so the model
+    sees a freshly-bootstrapped tree (example mentor copied, config.env
+    written) rather than the developer's real ``~/.ammp/``. The
+    bootstrap happens once on first invocation and is idempotent.
+
     Output is truncated to keep tool-result tokens bounded — the model
     only needs the first / last bytes to decide whether the doc claim
     holds. A truncation marker tells the model it's seeing a slice.
+
+    Args:
+        args: argv tokens passed verbatim after ``python -m ammp_mcp``.
+        tmp_cwd: Test-isolated tmp directory used as both the
+            subprocess cwd and the bootstrap target (``AMMP_DIR``).
+
+    Returns:
+        A JSON-serialisable dict — ``{exit_code, stdout, stderr}`` on
+        a real subprocess run, or ``{refused, exit_code: None}`` when
+        the args fail the safety allowlist.
     """
     refusal = _is_dangerous(args)
     if refusal:
@@ -189,7 +221,7 @@ def _run_command_tool(args: list[str], tmp_cwd: Path) -> dict[str, object]:
         proc = subprocess.run(
             [sys.executable, "-m", "ammp_mcp", *args],
             cwd=str(tmp_cwd),
-            env=_filter_env(),
+            env=_filter_env(ammp_dir=tmp_cwd),
             capture_output=True,
             text=True,
             timeout=COMMAND_TIMEOUT_SECONDS,
@@ -327,7 +359,26 @@ def test_docs_walk_matches_cli_behaviour(tmp_path: Path) -> None:
     Fails on any 'high' severity inconsistency. 'low' severity findings
     are surfaced to the test output but don't fail the build — they're
     the cosmetic kind (e.g. "narrative paragraph still says v0.2").
+
+    Pre-bootstraps ``tmp_path`` as the test's ``AMMP_DIR`` so the
+    walker sees the same starting state a fresh-install operator
+    would: example mentor present, config.env written. Without this,
+    `ammp playbook list` (default mentor = example) would fail and
+    Haiku would correctly report that as an inconsistency.
+
+    Args:
+        tmp_path: Pytest's per-test tmp directory; doubles as the
+            subprocess ``AMMP_DIR`` for the walker.
     """
+    # Pre-bootstrap so commands the walker invokes see a working tree.
+    # Done in-process for speed (no subprocess) and reset_settings_for_testing
+    # to make sure the bootstrap honours our explicit AMMP_DIR pin.
+    from ammp_mcp.settings import Settings, reset_settings_for_testing
+    from ammp_mcp.system._setup_service import bootstrap_ammp_dir
+
+    bootstrap_ammp_dir(Settings(_env_file=None, ammp_dir=tmp_path), quiet=True)
+    reset_settings_for_testing()
+
     client = Anthropic(api_key=os.environ["AMMP_ANTHROPIC_API_KEY"])
     tools = _tools_schema()
     findings: list[dict[str, object]] = []

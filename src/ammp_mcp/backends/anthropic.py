@@ -52,7 +52,15 @@ Playbooks available (each appended verbatim below):
 
 
 class AnthropicBackend(MentorBackend):
-    """Direct call to the Anthropic Messages API."""
+    """Direct call to the Anthropic Messages API.
+
+    Args:
+        api_key: Anthropic API key. ``None`` puts the backend in a
+            no-network fallback mode that mirrors StubBackend.
+        model: Anthropic model id (e.g. ``"claude-opus-4-7"``).
+        max_concurrent: Per-backend concurrency cap (asyncio Semaphore).
+        timeout_seconds: Per-call HTTP timeout passed to the SDK.
+    """
 
     mode_label = "anthropic-direct"
 
@@ -64,15 +72,6 @@ class AnthropicBackend(MentorBackend):
         max_concurrent: int,
         timeout_seconds: float,
     ) -> None:
-        """Wire an Anthropic-Messages-backed mentor.
-
-        Args:
-            api_key: Anthropic API key. ``None`` puts the backend in a
-                no-network fallback mode that mirrors StubBackend.
-            model: Anthropic model id (e.g. ``"claude-opus-4-7"``).
-            max_concurrent: Per-backend concurrency cap (asyncio Semaphore).
-            timeout_seconds: Per-call HTTP timeout passed to the SDK.
-        """
         super().__init__(max_concurrent=max_concurrent)
         self._api_key = api_key
         self._model = model

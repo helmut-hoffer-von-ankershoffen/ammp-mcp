@@ -58,7 +58,17 @@ logger = logging.getLogger(__name__)
 
 
 class OpenClawBackend(MentorBackend):
-    """HTTP-webhook backend routing AskMentor to a live agent session."""
+    """HTTP-webhook backend routing AskMentor to a live agent session.
+
+    Args:
+        url: HTTPS endpoint that implements the wire contract above.
+        auth_bearer_env: Name of the env var holding the Bearer token.
+            Read lazily on each call so token rotation doesn't
+            require restarting the server. Pass ``None`` to omit the
+            Authorization header.
+        timeout_seconds: Per-call HTTP timeout.
+        max_concurrent: Per-backend concurrency cap (Semaphore).
+    """
 
     mode_label = "openclaw-routed"
 
@@ -70,17 +80,6 @@ class OpenClawBackend(MentorBackend):
         timeout_seconds: float = 60.0,
         max_concurrent: int = 10,
     ) -> None:
-        """Wire an HTTP-webhook-backed mentor.
-
-        Args:
-            url: HTTPS endpoint that implements the wire contract above.
-            auth_bearer_env: Name of the env var holding the Bearer token.
-                Read lazily on each call so token rotation doesn't
-                require restarting the server. Pass ``None`` to omit the
-                Authorization header.
-            timeout_seconds: Per-call HTTP timeout.
-            max_concurrent: Per-backend concurrency cap (Semaphore).
-        """
         super().__init__(max_concurrent=max_concurrent)
         self._url = url
         # Read the bearer token from the environment lazily, so a redeploy

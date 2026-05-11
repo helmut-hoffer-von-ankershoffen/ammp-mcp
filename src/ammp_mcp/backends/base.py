@@ -40,6 +40,12 @@ class MentorBackend(abc.ABC):
     Backends are responsible for their own concurrency control —
     typically an ``asyncio.Semaphore`` — so the server can hand off
     burst load without thinking about per-backend rate limits.
+
+    Args:
+        max_concurrent: Maximum number of concurrent ``ask`` calls.
+            Excess callers queue at the asyncio level — FIFO, fast
+            drain. Tune up if your upstream rate-limit budget is
+            higher; down if you want a tighter cost ceiling.
     """
 
     #: Short, machine-friendly label used in capability advertisement
@@ -47,14 +53,6 @@ class MentorBackend(abc.ABC):
     mode_label: str = "abstract"
 
     def __init__(self, *, max_concurrent: int = 10) -> None:
-        """Initialise the backend's concurrency gate.
-
-        Args:
-            max_concurrent: Maximum number of concurrent ``ask`` calls.
-                Excess callers queue at the asyncio level — FIFO, fast
-                drain. Tune up if your upstream rate-limit budget is
-                higher; down if you want a tighter cost ceiling.
-        """
         self._sem = asyncio.Semaphore(max_concurrent)
 
     @abc.abstractmethod

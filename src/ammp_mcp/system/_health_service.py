@@ -15,6 +15,16 @@ _CAP_LABEL = "Capability advertisement"
 
 
 def _health_probe_capability(agent_url: str, timeout: float, table: Table, problems: list[str]) -> None:
+    """GET the capability advertisement and add a result row to ``table``.
+
+    Args:
+        agent_url: Full URL of the ``/.well-known/agent.json`` endpoint
+            to probe.
+        timeout: Per-request HTTP timeout, in seconds.
+        table: The Rich table the row gets appended to (mutated).
+        problems: Output list — appended to when the probe surfaces a
+            problem the caller should fail-out on (mutated).
+    """
     import urllib.error
     import urllib.request
 
@@ -41,6 +51,20 @@ def _health_probe_capability(agent_url: str, timeout: float, table: Table, probl
 
 
 def _health_probe_one_backend(slug: str, m: Mentor, timeout: float, table: Table, problems: list[str]) -> None:
+    """HEAD one mentor's openclaw webhook URL and add a result row.
+
+    No-op for mentors whose backend is not ``openclaw`` (the only
+    backend kind with an HTTP target to probe). HTTP 405 / 501 are
+    treated as success — the server is reachable, it just rejects HEAD.
+
+    Args:
+        slug: The mentor slug, used in row labels and problem messages.
+        m: The :class:`Mentor` whose backend is being probed.
+        timeout: Per-request HTTP timeout, in seconds.
+        table: The Rich table the row gets appended to (mutated).
+        problems: Output list — appended to when the probe surfaces a
+            fatal problem (mutated).
+    """
     import urllib.error
     import urllib.request
 

@@ -55,6 +55,20 @@ def _summarise(body: str) -> str:
 
 
 def _load_one(path: Path) -> Playbook:
+    """Read one markdown file into a :class:`Playbook`.
+
+    Strips an optional YAML frontmatter block, derives the title from
+    the first ``# `` heading (falling back to the filename stem), and
+    summarises the first non-heading line for the AMMP response
+    envelope.
+
+    Args:
+        path: Filesystem path to a single ``*.md`` playbook file.
+
+    Returns:
+        The fully-loaded :class:`Playbook` with ``id`` = filename stem
+        and ``body`` = the full original text (frontmatter included).
+    """
     text = path.read_text(encoding="utf-8")
     text_no_frontmatter = _FRONTMATTER_RE.sub("", text, count=1)
     title_match = _TITLE_RE.search(text_no_frontmatter)

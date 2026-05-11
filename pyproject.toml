@@ -62,6 +62,7 @@ dependencies = [
 dev = [
     "ruff>=0.8,<1",
     "mypy>=1.13,<3",
+    "pydoclint>=0.5,<1",   # verifies Args/Returns/Raises match the signature
     "pytest>=9,<10",       # >=9 fixes CVE-2025-71176
     "pytest-asyncio>=1,<2",
     "pytest-cov>=6,<8",
@@ -114,6 +115,9 @@ ignore = [
     "RUF002", # ambiguous unicode in docstrings — same
     "D203",   # incompatible with D211 — prefer D211 (no blank line before class docstring)
     "D212",   # incompatible with D213 — prefer D213 (multi-line summary on second line)
+    "D107",   # __init__ docstrings: we follow Google's "class docstring OR __init__ docstring,
+              # not both" convention; pydoclint + scripts/check_docstrings.py enforce that the
+              # class docstring covers __init__ args. D107 would force a redundant duplicate.
 ]
 
 [tool.ruff.lint.mccabe]
@@ -150,6 +154,27 @@ exclude = ["build", "dist", ".venv"]
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
+
+# ─── Pydoclint ───────────────────────────────────────────────────────────
+#
+# Verifies that every docstring's Args / Returns / Raises sections match
+# the function signature. Pydoclint does NOT check that a docstring
+# exists at all — that's `scripts/check_docstrings.py`. The two run
+# together in CI + pre-commit.
+
+[tool.pydoclint]
+style = "google"
+# We use the standard `name: description` Google form; types come from
+# the function signature, not the docstring.
+arg-type-hints-in-docstring = false
+# Type-mismatch checks would re-require types in docstrings — skip.
+check-return-types = false
+check-yield-types = false
+# Backend classes document `__init__` args in the class docstring per
+# Google convention; pydoclint's class-attribute check would then also
+# require an Attributes section listing every `ClassVar`, which is
+# noise for our small surface.
+check-class-attributes = false
 
 # ─── Pytest ──────────────────────────────────────────────────────────────
 

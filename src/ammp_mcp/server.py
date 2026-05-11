@@ -79,6 +79,17 @@ def _authenticate(ctx: ServerContext, api_key: str | None) -> str:
 
 
 def _resolve_mentor(ctx: ServerContext, slug: str) -> Mentor | None:
+    """Resolve a caller-supplied slug to a :class:`Mentor` registry entry.
+
+    Args:
+        ctx: The per-request server context.
+        slug: The mentor slug supplied by the caller. Empty string falls
+            through to ``ctx.settings.default_mentor``.
+
+    Returns:
+        The matching mentor, or ``None`` when neither the explicit slug
+        nor the configured default resolves to a registered mentor.
+    """
     return get_mentor(ctx.mentors, slug, ctx.settings.default_mentor)
 
 
@@ -128,6 +139,21 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
 
 
 def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None) -> dict[str, Any]:
+    """Handle the ``ListPlaybooks`` MCP tool call (AMMP §5.1).
+
+    Args:
+        ctx: The per-request server context.
+        mentor: Mentor slug. Empty string falls through to the
+            configured default mentor.
+        api_key: Caller-supplied Bearer key, or ``None``. Required when
+            ``ctx.settings.require_auth`` is set.
+
+    Returns:
+        A JSON-serialisable dict — either a
+        :class:`ListPlaybooksResponse` envelope on success, or an
+        in-band error envelope ``{"error": ..., "detail": ...}`` on
+        auth failure or unknown mentor.
+    """
     try:
         mentee_slug = _authenticate(ctx, api_key)
     except ValueError as e:
@@ -145,6 +171,24 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
 
 
 def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_key: str | None) -> dict[str, Any]:
+    """Handle the ``GetPlaybook`` MCP tool call (AMMP §5.2).
+
+    Args:
+        ctx: The per-request server context.
+        playbook_id: Filename-stem identifier of the requested playbook.
+            Sanitised via :func:`ammp_mcp.playbook.safe_id` before
+            filesystem access; path-traversal attempts return ``invalid_id``.
+        mentor: Mentor slug. Empty string falls through to the
+            configured default mentor.
+        api_key: Caller-supplied Bearer key, or ``None``. Required when
+            ``ctx.settings.require_auth`` is set.
+
+    Returns:
+        A JSON-serialisable dict — either a
+        :class:`GetPlaybookResponse` envelope on success, or an in-band
+        error envelope ``{"error": ..., "detail": ...}`` on auth
+        failure, unknown mentor, invalid id, or not-found.
+    """
     try:
         mentee_slug = _authenticate(ctx, api_key)
     except ValueError as e:
@@ -174,6 +218,23 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
 def _handle_search_playbooks(
     ctx: ServerContext, query: str, mentor: str, limit: int, api_key: str | None
 ) -> dict[str, Any]:
+    """Handle the ``SearchPlaybooks`` MCP tool call (AMMP §5.3).
+
+    Args:
+        ctx: The per-request server context.
+        query: Substring-search query. Whitespace-only queries return
+            an ``empty_query`` error.
+        mentor: Mentor slug. Empty string falls through to the
+            configured default mentor.
+        limit: Maximum number of matches to return.
+        api_key: Caller-supplied Bearer key, or ``None``. Required when
+            ``ctx.settings.require_auth`` is set.
+
+    Returns:
+        A JSON-serialisable dict — either a
+        :class:`SearchPlaybooksResponse` envelope on success, or an
+        in-band error envelope ``{"error": ..., "detail": ...}``.
+    """
     try:
         mentee_slug = _authenticate(ctx, api_key)
     except ValueError as e:
@@ -201,6 +262,22 @@ def _handle_search_playbooks(
 
 
 def _build_escalation_prompt(question: str, confidence: float, threshold: float) -> str:
+    """Format the ``suggested_message_to_your_operator`` for mentor-triggered escalation.
+
+    Built when AskMentor's self-reported confidence falls below the
+    mentor's threshold; the mentee uses the returned phrasing to
+    surface the situation to its own operator. Question is truncated
+    to 300 characters to bound the response payload.
+
+    Args:
+        question: The original mentee question (truncated to 300 chars).
+        confidence: The mentor's self-reported confidence in ``[0, 1]``.
+        threshold: The mentor's configured escalation threshold.
+
+    Returns:
+        A first-person string the mentee can quote verbatim to its
+        operator.
+    """
     return (
         f'To your operator: "My mentor returned an answer at confidence '
         f"{confidence:.2f}, below their threshold of "
@@ -212,6 +289,32 @@ def _build_escalation_prompt(question: str, confidence: float, threshold: float)
 async def _handle_ask_mentor(
     ctx: ServerContext, question: str, mentor: str, context: str, api_key: str | None
 ) -> dict[str, Any]:
+    """Handle the ``AskMentor`` MCP tool call (AMMP §5.4).
+
+    Routes the question through the mentor's configured backend,
+    appending the top-3 keyword-ranked playbooks as grounding context.
+    When the backend's self-reported confidence falls below the
+    mentor's threshold, the response also carries a mentor-triggered
+    escalation recommendation with suggested operator-facing phrasing.
+
+    Args:
+        ctx: The per-request server context.
+        question: The free-form question. Empty / whitespace-only
+            returns an ``empty_question`` error.
+        mentor: Mentor slug. Empty string falls through to the
+            configured default mentor.
+        context: Optional context the mentee chooses to share; appended
+            to the question for the backend.
+        api_key: Caller-supplied Bearer key, or ``None``. Required when
+            ``ctx.settings.require_auth`` is set.
+
+    Returns:
+        A JSON-serialisable dict — either an :class:`AskMentorResponse`
+        envelope on success (with optional escalation recommendation),
+        or an in-band error envelope. On backend failure, returns
+        ``{"error": "llm_failed", "relevant_playbooks": [...]}`` so the
+        mentee can fall back to ``GetPlaybook`` directly.
+    """
     try:
         mentee_slug = _authenticate(ctx, api_key)
     except ValueError as e:
@@ -272,6 +375,27 @@ async def _handle_ask_mentor(
 def _handle_escalate_to_human(
     ctx: ServerContext, situation: str, mentor: str, why_stuck: str, api_key: str | None
 ) -> dict[str, Any]:
+    """Handle the ``EscalateToHuman`` MCP tool call (AMMP §5.5).
+
+    Returns first-person guidance the mentee can hand to *its own*
+    operator. The server never reaches across compartments — that's
+    the Human-Gated Escalation Invariant (AMMP §3.4).
+
+    Args:
+        ctx: The per-request server context.
+        situation: One-paragraph description of why the mentee is
+            stuck. Empty / whitespace-only returns ``empty_situation``.
+        mentor: Mentor slug. Empty string falls through to the
+            configured default mentor.
+        why_stuck: Optional note on what is making the mentee uncertain.
+        api_key: Caller-supplied Bearer key, or ``None``. Required when
+            ``ctx.settings.require_auth`` is set.
+
+    Returns:
+        A JSON-serialisable dict — either an
+        :class:`EscalateToHumanResponse` envelope on success, or an
+        in-band error envelope.
+    """
     try:
         mentee_slug = _authenticate(ctx, api_key)
     except ValueError as e:
@@ -311,6 +435,23 @@ def _handle_escalate_to_human(
 
 
 def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
+    """Assemble the ``/.well-known/agent.json`` AMMP capability payload.
+
+    The live capability payload includes per-mentor backend liveness
+    (which depends on backend instances held in ``ctx.backends``), so
+    this function lives next to the FastMCP server. The offline
+    counterpart for the ``ammp capability`` CLI is
+    :func:`ammp_mcp.system._capability_service.build_offline_capability`;
+    both MUST agree on the ``operations`` list and the per-mentor
+    schema.
+
+    Args:
+        ctx: The boot-time server context.
+
+    Returns:
+        A JSON-serialisable dict — the full AMMP capability
+        advertisement (AMMP §10).
+    """
     mentor_summaries = []
     for slug, m in ctx.mentors.items():
         corpus = load_corpus(m.playbook_dir)
