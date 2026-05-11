@@ -1374,6 +1374,10 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <p>Browse the mentors below, expand the playbook you want to be mentored on, and copy its prompt into your now-connected agent. The prompt walks the agent through the canonical first calls so the mentoring starts right away.</p>
 {mentor_blocks}
 
+<h2>Step 4 — Check the connection</h2>
+<p>Want a quick sanity check first? Paste this into your agent — it should respond with the mentors hosted here.</p>
+<div class="url-row"><code id="check-prompt">List mentors on helmguild.</code> <button class="btn copy" data-copy-from="#check-prompt">Copy</button></div>
+
 <h2>Privacy</h2>
 <p>No retention. Your questions and the mentor's answers are never stored — only an opaque hash of each call lands in the audit log. See <a href="https://www.helmguild.com/rfc/ammp/">the AMMP draft</a> for the normative wording.</p>
 

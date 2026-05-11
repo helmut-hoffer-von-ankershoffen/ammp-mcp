@@ -315,15 +315,19 @@ async def test_landing_page_route(server) -> None:
     assert "My name" in decoded, "mailto body must ask for the requester's name"
     assert "My agent" in decoded, "mailto body must ask for the agent runtime"
     assert "My secure delivery channel" in decoded, "mailto body must ask for the delivery channel"
-    # Three-step structure, in order: request token → configure connection → pick mentor.
+    # Four-step structure, in order: request token → configure connection →
+    # pick mentor → sanity-check the connection with a list-mentors prompt.
     step1 = body.index("Step 1")
     step2 = body.index("Step 2")
     step3 = body.index("Step 3")
-    assert step1 < step2 < step3, "step headings out of order"
+    step4 = body.index("Step 4")
+    assert step1 < step2 < step3 < step4, "step headings out of order"
     # Each step has the right content anchor.
     assert "Request" in body[step1 : step1 + 200]
     assert "MCP connection" in body[step2 : step2 + 200] or "connector settings" in body[step2 : step2 + 200]
     assert "mentor" in body[step3 : step3 + 200].lower()
+    # Step 4 surfaces the canonical sanity-check prompt for copy/paste.
+    assert "List mentors on helmguild." in body[step4 : step4 + 400]
     # Single Copy-URL button with the inline vanilla-JS handler.
     assert 'class="btn copy"' in body
     assert "navigator.clipboard.writeText" in body
