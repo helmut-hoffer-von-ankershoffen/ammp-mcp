@@ -1097,7 +1097,7 @@ def _render_landing(ctx: ServerContext) -> str:
         "Hi Helmut,\n\n"
         f"I'd like to connect to {base} as a mentee.\n\n"
         "  Your name                : <e.g. Sandra>\n"
-        "  Where I'll connect from  : <Claude.ai / Claude Cowork / Claude Code / OpenClaw / Hermes>\n"
+        "  Where I'll connect from  : <Claude Desktop / Claude Code / Claude.ai / Claude Cowork / Copilot / OpenClaw / Hermes>\n"
         "  Secure delivery channel  : <Signal / iMessage / Telegram + handle — "
         "so the token doesn't travel by plain email>\n"
         "  Mentor of interest       : <Pepe Arturo (default), or all of them>\n"
@@ -1286,8 +1286,8 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .agent-tab-panel .tab-steps code{{font-family:var(--mono);font-size:.84em;background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:3px;padding:.05rem .35rem;word-break:break-all}}
 @media (prefers-color-scheme: dark) {{ .agent-tab-panel .tab-steps code{{background:rgba(255,255,255,.04)}} }}
 .agent-tab-panel .tab-manual{{margin:.45rem 0 0;font-size:.85rem;color:var(--ink-soft)}}
-#agent-tab-claude:checked ~ .agent-tab-row label[for="agent-tab-claude"],#agent-tab-copilot:checked ~ .agent-tab-row label[for="agent-tab-copilot"],#agent-tab-openclaw:checked ~ .agent-tab-row label[for="agent-tab-openclaw"],#agent-tab-hermes:checked ~ .agent-tab-row label[for="agent-tab-hermes"]{{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}}
-#agent-tab-claude:checked ~ .agent-tab-panel-claude,#agent-tab-copilot:checked ~ .agent-tab-panel-copilot,#agent-tab-openclaw:checked ~ .agent-tab-panel-openclaw,#agent-tab-hermes:checked ~ .agent-tab-panel-hermes{{display:block}}
+#agent-tab-desktop:checked ~ .agent-tab-row label[for="agent-tab-desktop"],#agent-tab-code:checked ~ .agent-tab-row label[for="agent-tab-code"],#agent-tab-copilot:checked ~ .agent-tab-row label[for="agent-tab-copilot"],#agent-tab-openclaw:checked ~ .agent-tab-row label[for="agent-tab-openclaw"],#agent-tab-hermes:checked ~ .agent-tab-row label[for="agent-tab-hermes"],#agent-tab-generic:checked ~ .agent-tab-row label[for="agent-tab-generic"]{{color:var(--ink);border-bottom-color:var(--accent);font-weight:500}}
+#agent-tab-desktop:checked ~ .agent-tab-panel-desktop,#agent-tab-code:checked ~ .agent-tab-panel-code,#agent-tab-copilot:checked ~ .agent-tab-panel-copilot,#agent-tab-openclaw:checked ~ .agent-tab-panel-openclaw,#agent-tab-hermes:checked ~ .agent-tab-panel-hermes,#agent-tab-generic:checked ~ .agent-tab-panel-generic{{display:block}}
 button{{font:inherit}}
 .btn{{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;margin:.25rem .4rem .25rem 0;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);font-family:var(--sans);font-size:.92rem;cursor:pointer;text-decoration:none}}
 .btn:hover{{background:var(--accent);color:var(--bg)}}
@@ -1312,40 +1312,35 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <p class="cta"><a class="btn primary" href="{mailto}">Request access</a></p>
 
 <h2>Step 2 — Configure your agent's MCP connection</h2>
-<p>Open your agent's connector settings and add a custom MCP server with the URL and Bearer header below. The per-agent paste paths follow.</p>
-<div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy URL</button></div>
-<div class="url-row"><code>Authorization: Bearer &lt;your-token&gt;</code></div>
+<p>Pick your agent below and follow the paste path. Don't see yours? The <em>Generic</em> tab has the raw URL and Bearer header.</p>
 
 <div class="agent-tabs" role="tablist" aria-label="Per-agent connector instructions">
-  <input type="radio" name="agent-tab" id="agent-tab-claude" class="agent-tab-input" checked>
+  <input type="radio" name="agent-tab" id="agent-tab-desktop" class="agent-tab-input" checked>
+  <input type="radio" name="agent-tab" id="agent-tab-code" class="agent-tab-input">
   <input type="radio" name="agent-tab" id="agent-tab-copilot" class="agent-tab-input">
   <input type="radio" name="agent-tab" id="agent-tab-openclaw" class="agent-tab-input">
   <input type="radio" name="agent-tab" id="agent-tab-hermes" class="agent-tab-input">
+  <input type="radio" name="agent-tab" id="agent-tab-generic" class="agent-tab-input">
   <div class="agent-tab-row" role="tablist">
-    <label for="agent-tab-claude" class="agent-tab-label" role="tab">Claude</label>
+    <label for="agent-tab-desktop" class="agent-tab-label" role="tab">Claude Desktop</label>
+    <label for="agent-tab-code" class="agent-tab-label" role="tab">Claude Code</label>
     <label for="agent-tab-copilot" class="agent-tab-label" role="tab">Copilot</label>
     <label for="agent-tab-openclaw" class="agent-tab-label" role="tab">OpenClaw</label>
     <label for="agent-tab-hermes" class="agent-tab-label" role="tab">Hermes</label>
+    <label for="agent-tab-generic" class="agent-tab-label" role="tab">Generic</label>
   </div>
-  <section class="agent-tab-panel agent-tab-panel-claude" role="tabpanel" aria-labelledby="agent-tab-claude">
-    <p class="tab-intro">Three working paths today. Anthropic's in-app <em>Add custom connector</em> dialog is OAuth-only — Bearer tokens go in via the bundle, the CLI, or the config file instead.</p>
-    <p class="cta"><a class="btn primary" href="{base}/desktop-bundle.mcpb" download>Download Claude Desktop bundle (.mcpb)</a></p>
-    <p class="tab-intro" style="margin-top:.5rem">One-click installer for Claude Desktop. Double-click the downloaded file → Claude prompts for your Bearer token → done. (Uses the <code>mcp-remote</code> stdio shim under the hood.)</p>
+  <section class="agent-tab-panel agent-tab-panel-desktop" role="tabpanel" aria-labelledby="agent-tab-desktop">
+    <p class="cta"><a class="btn primary" href="{base}/desktop-bundle.mcpb" download>Download extension</a></p>
     <ul class="tab-steps">
-      <li><strong>Claude Code (CLI) — recommended:</strong>
-        <pre class="prompt" style="margin:.35rem 0 0">claude mcp add --scope user ammp \
-  {mcp_url} \
-  --header "Authorization: Bearer ammp-&lt;your-token&gt;"</pre>
-      </li>
-      <li><strong>Claude Desktop:</strong> edit <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> — add this under <code>mcpServers</code>, then restart the app:
-        <pre class="prompt" style="margin:.35rem 0 0">"ammp": {{
-  "url": "{mcp_url}",
-  "headers": {{ "Authorization": "Bearer ammp-&lt;your-token&gt;" }}
-}}</pre>
-      </li>
-      <li><strong>Claude.ai / Claude Cowork:</strong> the in-app <em>Connectors → Add custom connector</em> dialog only supports OAuth — this server doesn't expose an OAuth flow yet, so use the CLI or Desktop config above.</li>
+      <li>Click the downloaded <code>.mcpb</code> file — Claude Desktop opens its extension installer.</li>
+      <li>Paste your Bearer token when prompted.</li>
+      <li>Enable the extension. Done.</li>
     </ul>
-    <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">Anthropic MCP docs →</a></p>
+  </section>
+  <section class="agent-tab-panel agent-tab-panel-code" role="tabpanel" aria-labelledby="agent-tab-code">
+    <p class="tab-intro">One command in your terminal. Replace <code>&lt;your-token&gt;</code> with the value mailed to you.</p>
+    <div class="url-row"><code id="claude-code-cmd">claude mcp add --scope user ammp {mcp_url} --header "Authorization: Bearer ammp-&lt;your-token&gt;"</code> <button class="btn copy" data-copy-from="#claude-code-cmd">Copy</button></div>
+    <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">Anthropic Claude Code MCP docs →</a></p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-copilot" role="tabpanel" aria-labelledby="agent-tab-copilot">
     <p class="tab-intro">GitHub Copilot Chat supports MCP servers in VS Code and JetBrains IDEs.</p>
@@ -1368,6 +1363,11 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
       <li>Point Hermes at the URL with the Bearer header — no Hermes-specific handshake.</li>
     </ul>
     <p class="tab-manual">(Hermes docs vary by deployment — see the manual that ships with your install.)</p>
+  </section>
+  <section class="agent-tab-panel agent-tab-panel-generic" role="tabpanel" aria-labelledby="agent-tab-generic">
+    <p class="tab-intro">For any MCP-aware client not listed above. Open its connector settings, add a custom MCP server, and paste these two values.</p>
+    <div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy URL</button></div>
+    <div class="url-row"><code>Authorization: Bearer &lt;your-token&gt;</code></div>
   </section>
 </div>
 

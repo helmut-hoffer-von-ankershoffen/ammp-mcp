@@ -287,9 +287,9 @@ async def test_landing_page_route(server) -> None:
     # falls back to an initial-letter glyph (`<div class='avatar avatar-fallback'>`).
     assert "src='mentors/pepe/avatar'" in body or 'src="mentors/pepe/avatar"' in body
     assert "avatar-fallback" in body  # stubmentor + strict have no avatar file
-    # Runtime names are mentioned in a single short paragraph rather than
-    # five cards — but they all still need to be findable.
-    for runtime in ("Claude.ai", "Claude Cowork", "Claude Code", "OpenClaw", "Hermes"):
+    # Each per-agent tab label must render — six tabs, one for every
+    # supported runtime plus a Generic catch-all.
+    for runtime in ("Claude Desktop", "Claude Code", "Copilot", "OpenClaw", "Hermes", "Generic"):
         assert runtime in body, f"runtime {runtime!r} missing from landing page"
     # The canonical MCP endpoint must be visible for copy/paste.
     assert "/mcp/" in body
