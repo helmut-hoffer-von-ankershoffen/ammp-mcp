@@ -116,8 +116,11 @@ def isolated_tree(tmp_path: Path) -> Path:
 @pytest.fixture
 def settings(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Settings]:
     """Build a Settings bound to the isolated tree and clear the singleton."""
+    from ammp_mcp.server import _mentees_cache_reset_for_testing
+
     settings_module.reset_settings_for_testing()
     audit.reset_salt_for_testing()
+    _mentees_cache_reset_for_testing()
     monkeypatch.delenv("AMMP_ANTHROPIC_API_KEY", raising=False)
     # `_env_file=None` disables loading from ~/.ammp/config.env or .env so
     # tests stay hermetic regardless of what's on the dev machine.

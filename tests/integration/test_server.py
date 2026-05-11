@@ -288,10 +288,13 @@ async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
     Pinned because `ammp mentee add` is supposed to be a one-shot
     operator action — having to also `launchctl kickstart -k` (or
     `docker restart`) the live server would be a perfectly avoidable
-    foot-gun. The hot-reload happens in `_authenticate`, which reads
-    `mentees.json` from disk on every authenticated call.
+    foot-gun. The hot-reload happens in `_authenticate`, which goes
+    through `_load_mentees_cached` — an mtime-keyed cache that only
+    re-parses `mentees.json` when its `st_mtime_ns` changes.
     """
     import json
+    import time
+    from unittest.mock import patch
 
     from ammp_mcp.mentee import Mentee, hash_api_key, load_mentees, save_mentees
 
@@ -306,6 +309,11 @@ async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
     assert r.data["detail"] == "api_key_invalid"
 
     # Mint the mentee straight to disk (same path `ammp mentee add` writes).
+    # Sleep a beat so the on-disk mtime is strictly newer than the cached
+    # snapshot — on coarse filesystems (HFS+, FAT), st_mtime can be
+    # second-resolution and tests run fast enough to land within the
+    # same tick.
+    time.sleep(0.02)
     mentees = load_mentees(settings.mentees_file)
     mentees["hot-reload-mentee"] = Mentee(
         slug="hot-reload-mentee",
@@ -323,6 +331,17 @@ async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
         r = await c.call_tool("ListPlaybooks", {"api_key": new_key})
     assert r.data.get("error") is None, r.data
     assert r.data["mentor"] == "pepe"
+
+    # Verify the cache actually caches: two more calls with the same key
+    # should result in exactly ONE parse of mentees.json (the first call
+    # warms the cache; the second hits it).
+    with patch("ammp_mcp.server.load_mentees", wraps=load_mentees) as spy:
+        async with Client(server) as c:
+            await c.call_tool("ListPlaybooks", {"api_key": new_key})
+            await c.call_tool("ListPlaybooks", {"api_key": new_key})
+        assert spy.call_count == 0, (
+            f"Expected zero re-parses across two requests when mentees.json was untouched, got {spy.call_count}."
+        )
 
 
 def test_capability_advertises_auth_setting(settings: Settings) -> None:

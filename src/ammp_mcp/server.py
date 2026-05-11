@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fastmcp import FastMCP
@@ -60,6 +61,41 @@ class ServerContext:
     backends: dict[str, MentorBackend]
 
 
+# Module-level mtime cache for the mentee allowlist. `_load_mentees_cached`
+# only re-parses `mentees.json` when its mtime changes — so the steady-state
+# auth path is one `stat()` per request, not a full JSON parse. The cache
+# is keyed by path, so multiple Settings (e.g. concurrent tests) don't
+# stomp on each other. `_mentees_cache_reset_for_testing` is the seam
+# tests use to start each run with no cached state.
+_mentees_cache: dict[Path, tuple[int, dict[str, Mentee]]] = {}
+
+
+def _load_mentees_cached(path: Path) -> dict[str, Mentee]:
+    """Load mentees with mtime-based invalidation.
+
+    Args:
+        path: Filesystem path to the JSON allowlist.
+
+    Returns:
+        The current mentees registry. A new parse fires only when
+        ``path`` is freshly written (different ``st_mtime_ns``);
+        unchanged files yield the cached value.
+    """
+    if not path.exists():
+        _mentees_cache.pop(path, None)
+        return {}
+    mtime = path.stat().st_mtime_ns
+    cached = _mentees_cache.get(path)
+    if cached is None or cached[0] != mtime:
+        _mentees_cache[path] = (mtime, load_mentees(path))
+    return _mentees_cache[path][1]
+
+
+def _mentees_cache_reset_for_testing() -> None:
+    """Drop every cached mentees-snapshot. Test-only seam."""
+    _mentees_cache.clear()
+
+
 def _authenticate(ctx: ServerContext, api_key: str | None) -> str:
     """Resolve a request to a mentee slug.
 
@@ -68,19 +104,21 @@ def _authenticate(ctx: ServerContext, api_key: str | None) -> str:
     the key is missing or unrecognised. Callers translate the error
     code into an in-band ``{"error": "auth_failed"}`` response.
 
-    Reads the mentee allowlist FROM DISK on every authenticated call
-    (cheap — a small JSON parse). This means `ammp mentee add` /
-    `rotate-key` / `remove` are visible to the running server
-    instantly, with no restart. Playbooks already hot-reload via
-    :func:`load_corpus`; mentor.json + backend instances stay cached
-    in ``ctx`` because their lifecycle is more involved (backends
-    hold sockets / semaphores).
+    The mentee allowlist is hot-reloaded via :func:`_load_mentees_cached`
+    — `ammp mentee add` / `rotate-key` / `remove` are visible to the
+    running server on their next request, with no restart. Steady-state
+    cost is one ``stat()`` per request; the JSON parse only re-fires
+    when the file actually changed.
+
+    Playbooks already hot-reload via :func:`load_corpus`. Mentor.json
+    + backend instances stay cached in ``ctx`` because their lifecycle
+    involves sockets / semaphores — that's a separate refactor.
     """
     if not ctx.settings.require_auth:
         return "anonymous"
     if not api_key:
         raise ValueError("api_key_required")
-    mentees = load_mentees(ctx.settings.mentees_file) if ctx.settings.mentees_file.exists() else {}
+    mentees = _load_mentees_cached(ctx.settings.mentees_file)
     m = find_mentee_by_api_key(mentees, api_key)
     if not m:
         raise ValueError("api_key_invalid")
