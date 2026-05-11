@@ -92,23 +92,21 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.13"
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+      - name: Install (locked)
+        run: uv sync --extra dev --frozen
 
       - name: Lint, type-check, test
         run: |
-          ruff check .
-          ruff format --check .
-          mypy src/ammp_mcp
-          pytest -m "unit or integration" -q
+          uv run ruff check .
+          uv run ruff format --check .
+          uv run mypy src/ammp_mcp
+          uv run pytest -m "unit or integration" -q
 
   # -----------------------------------------------------------------------
   build:
@@ -124,23 +122,24 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.13"
 
-      - name: Install build backend
-        run: |
-          python -m pip install --upgrade pip
-          pip install build
-
       - name: Build distributions
-        run: python -m build
+        # `uv build` does sdist + wheel in one shot, picks up the project's
+        # hatchling backend via pyproject.toml — no extra deps needed.
+        run: uv build
 
       - name: Smoke-test the wheel imports cleanly
+        # Install the just-built wheel into a throwaway uv-managed env so
+        # the smoke test exercises the real installed artefact, not the
+        # editable source tree.
         run: |
-          pip install dist/*.whl
-          python -c "import ammp_mcp; print('OK', ammp_mcp.__version__)"
-          ammp --help > /dev/null
+          uv venv /tmp/wheel-smoke
+          uv pip install --python /tmp/wheel-smoke/bin/python dist/*.whl
+          /tmp/wheel-smoke/bin/python -c "import ammp_mcp; print('OK', ammp_mcp.__version__)"
+          /tmp/wheel-smoke/bin/ammp --help > /dev/null
 
       - name: Generate SHA256SUMS for dist/*
         working-directory: dist

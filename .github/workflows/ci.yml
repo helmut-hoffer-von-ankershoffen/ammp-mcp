@@ -33,44 +33,36 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      # uv resolves and installs deterministically from uv.lock, matching
+      # what `uv sync` does locally. Crucially, that means the
+      # docstring-parser / docstring_parser_fork on-disk install order
+      # is identical to local — no install-order workarounds needed.
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: ${{ matrix.python }}
-          allow-prereleases: true
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-          # `docstring-parser` and `docstring_parser_fork` both ship
-          # files under the official `docstring_parser/` namespace. The
-          # fork adds `DocstringYields` (used by pydoclint); the official
-          # 0.18 does not. Whichever package installs last wins on disk.
-          # Locally `uv sync` lands the fork last; CI's plain pip lands
-          # the official last, so pydoclint imports an older `common.py`
-          # and crashes on the missing symbol. Force-reinstall the fork
-          # last so pydoclint sees the right API.
-          pip install --no-deps --force-reinstall 'docstring_parser_fork>=0.0.14'
+      - name: Install dependencies (locked)
+        run: uv sync --extra dev --frozen
 
       - name: Ruff
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Ruff format check
-        run: ruff format --check .
+        run: uv run ruff format --check .
 
       - name: Mypy
-        run: mypy src/ammp_mcp
+        run: uv run mypy src/ammp_mcp
 
       - name: Docstring coverage (every function in src/ has one)
-        run: python scripts/check_docstrings.py
+        run: uv run python scripts/check_docstrings.py
 
       - name: Pydoclint (Args/Returns/Raises match the signature)
-        run: pydoclint src/ammp_mcp
+        run: uv run pydoclint src/ammp_mcp
 
       - name: Pytest (unit + integration)
-        run: pytest -m "unit or integration" --cov=ammp_mcp --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
+        run: uv run pytest -m "unit or integration" --cov=ammp_mcp --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
 
       # Codecov upload — runs only on the canonical Python (3.13) so we don't
       # double-count coverage across the matrix. `slug` is required for the
@@ -139,21 +131,19 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           exit 1
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         if: steps.secret_check.outputs.skip != 'true'
         with:
           python-version: "3.13"
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install dependencies
+      - name: Install dependencies (locked)
         if: steps.secret_check.outputs.skip != 'true'
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+        run: uv sync --extra dev --frozen
 
       - name: Run the doc walker
         if: steps.secret_check.outputs.skip != 'true'
         env:
           AMMP_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: pytest -m e2e tests/e2e/test_docs_walk.py -v
+        run: uv run pytest -m e2e tests/e2e/test_docs_walk.py -v

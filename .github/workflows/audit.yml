@@ -48,18 +48,20 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: "3.13"
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install project + audit tools
+      - name: Install project + audit tools (locked)
         run: |
-          python -m pip install --upgrade pip
-          # Install the project so pip-audit and pip-licenses see real dep tree.
-          pip install -e ".[dev]"
-          pip install pip-audit pip-licenses cyclonedx-bom
+          # Install the project so pip-audit and pip-licenses see the real
+          # dep tree. `uv sync --frozen` honours uv.lock so the audit
+          # reflects exactly what would ship.
+          uv sync --extra dev --frozen
+          # Audit tooling itself doesn't need a lock — add to the active venv.
+          uv pip install pip-audit pip-licenses cyclonedx-bom
 
       - name: Make reports/ directory
         run: mkdir -p reports
@@ -73,18 +75,18 @@ jobs:
       # vulnerability was found.
       - name: Run pip-audit
         run: |
-          pip-audit \
+          uv run pip-audit \
             --skip-editable \
             --format json \
             --output reports/vulnerabilities.json
 
       - name: Human-readable vulnerability summary
         if: always()
-        run: pip-audit --skip-editable --format columns || true
+        run: uv run pip-audit --skip-editable --format columns || true
 
       - name: Fail on any vulnerability
         run: |
-          python <<'PY'
+          uv run python <<'PY'
           import json, sys
           data = json.load(open("reports/vulnerabilities.json"))
           with_vulns = [d for d in data.get("dependencies", []) if d.get("vulns")]
@@ -100,12 +102,12 @@ jobs:
       # -- License compliance ----------------------------------------------
       - name: Run pip-licenses
         run: |
-          pip-licenses \
+          uv run pip-licenses \
             --format=json \
             --with-urls \
             --with-license-file \
             --output-file=reports/licenses.json
-          pip-licenses \
+          uv run pip-licenses \
             --format=csv \
             --output-file=reports/licenses.csv
 
@@ -119,7 +121,7 @@ jobs:
         # those (but don't fail) since most are packaging gaps, not policy
         # violations. Tighten this if the project ever becomes regulated.
         run: |
-          python <<'PY'
+          uv run python <<'PY'
           import json, sys
           ALLOWED = {
               "MIT License", "MIT",
@@ -171,7 +173,7 @@ jobs:
       # -- SBOM ------------------------------------------------------------
       - name: Generate CycloneDX SBOM
         run: |
-          cyclonedx-py environment \
+          uv run cyclonedx-py environment \
             --output-format json \
             --output-file reports/sbom.json
 
