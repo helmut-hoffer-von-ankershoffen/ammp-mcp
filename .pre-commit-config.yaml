@@ -23,7 +23,11 @@ repos:
       - id: trailing-whitespace
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    # Keep this in lockstep with the `ruff>=0.8,<1` dev-dep in
+    # `pyproject.toml`. Drift here triggers a churn loop: dev's ruff
+    # format produces one style, the pre-push hook reformats to
+    # another, push fails, you commit the hook's version, repeat.
+    rev: v0.15.12
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
