@@ -6,6 +6,7 @@ look like?" without grepping the source.
 
 | File | What it is |
 |---|---|
+| [`config.env.example`](config.env.example) | Every `AMMP_*` env var with its default + a one-line comment. Drop into `<AMMP_DIR>/config.env` as a starting point. `ammp serve` auto-generates a minimal version on first run; this one shows the full surface. |
 | [`mentor.example.json`](mentor.example.json) | Schema for `<AMMP_DIR>/mentors/<slug>/mentor.json` — name, persona, confidence threshold, backend block. Inline `_doc` / `_about_*` keys annotate every field; the wizard strips them on save. |
 | [`playbook.example.md`](playbook.example.md) | The markdown shape `<mentor>/playbooks/*.md` files have to be in: title heading, summary line, body, optional YAML frontmatter. Includes the loader's filename → id mapping rule. |
 | [`mentees.example.json`](mentees.example.json) | Shape of the Bearer-key allowlist (one entry per mentee — slug, operator, runtime, SHA-256 of the API key, per-minute rate budget). |

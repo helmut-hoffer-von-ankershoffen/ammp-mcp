@@ -86,7 +86,7 @@ claude mcp add --scope user ammp-pepe https://ammp.helmguild.com/mcp/ \
   --header "Authorization: Bearer ammp-…"
 ```
 
-Tunnel setup is out of scope for this guide — see `DEPLOYMENT.md` for the Cloudflare Tunnel pattern Helmut uses.
+Tunnel / reverse-proxy setup is out of scope for this guide. Anything that fronts the local `127.0.0.1:8765` with HTTPS works (Cloudflare Tunnel, Caddy in front of a VPN, etc.).
 
 ---
 
@@ -199,12 +199,12 @@ CI runs the same three commands (`ruff`, `mypy`, `pytest`) on a 4-Python matrix 
 
 For a stay-alive local deployment (e.g. behind a Cloudflare Tunnel), write a **LaunchAgent** instead of relying on `nohup ... &` — backgrounded shells don't survive reboots or login cycles.
 
-Helmut's setup runs two LaunchAgents:
+A typical macOS setup runs two LaunchAgents:
 
-- `com.helmguild.ammp-mcp` — `ammp serve` on `127.0.0.1:8765`, `KeepAlive` on non-zero exit.
-- `com.helmguild.cloudflared-ammp` — Cloudflare Tunnel routing `ammp.helmguild.com` → `http://127.0.0.1:8765`.
+- `com.<your-org>.ammp-mcp` — `ammp serve` on `127.0.0.1:8765`, `KeepAlive` on non-zero exit.
+- `com.<your-org>.cloudflared-ammp` — Cloudflare Tunnel (or any HTTPS terminator) routing your public hostname → `http://127.0.0.1:8765`.
 
-Templates live in `DEPLOYMENT.md`.
+The Docker quickstart in `README.md` is the cross-platform alternative.
 
 ---
 

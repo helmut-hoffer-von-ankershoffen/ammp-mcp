@@ -200,6 +200,20 @@ In another shell:
 curl -s http://127.0.0.1:8765/.well-known/agent.json | python -m json.tool
 ```
 
+### Docker
+
+A multi-arch image (`linux/amd64`, `linux/arm64`) is published to GHCR on every push to `main` and every `v*.*.*` tag, with in-toto build provenance and an attached SBOM:
+
+```bash
+docker run -d --name ammp-mcp \
+  -p 8765:8765 \
+  -v $HOME/.ammp:/home/ammp/.ammp \
+  -e AMMP_PUBLIC_URL=https://your-host.example \
+  ghcr.io/helmut-hoffer-von-ankershoffen/ammp-mcp:latest
+```
+
+The container expects all persistent state (mentors, mentees, audit log, `config.env`) at `/home/ammp/.ammp` — mount a host directory there. First boot auto-bootstraps that tree with the packaged example mentor. Build locally with `make docker_build`; smoke-test (boot + curl) with `make docker_smoke_test`.
+
 ## Runtime directory layout
 
 Everything the server reads or writes at runtime lives under a single directory — `~/.ammp/` by default, overridable with `AMMP_DIR`:
@@ -298,10 +312,6 @@ pytest                  # all of the above (e2e self-skips without key)
 * **Claude.ai:** add via Settings → Connectors → Custom.
 
 The mentee selects the mentor *per call* via the `mentor` argument; omit it to fall through to the server default.
-
-## Deployment
-
-For the public deployment at `https://ammp.helmguild.com`, see [`DEPLOYMENT.md`](DEPLOYMENT.md). Two paths (small VPS + Caddy + Tailscale, or Cloudflare Tunnel), and a quick `cloudflared --url` spike for one-off testing.
 
 ## Status
 
