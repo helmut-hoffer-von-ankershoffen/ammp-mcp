@@ -214,22 +214,33 @@ curl -s http://127.0.0.1:8765/.well-known/agent.json | python -m json.tool
 The Typer-based CLI handles housekeeping. Subject-then-action layout (`ammp <subject> <action>`); `ammp --help` lists everything.
 
 ```bash
+# Inspect
 ammp mentor list                                # registered mentors + corpus sizes
 ammp playbook list --mentor pepe                # playbooks for a mentor
-ammp playbook show 07-compartmentalization
+ammp playbook show 07-compartmentalization      # AMMP GetPlaybook
+ammp playbook search "escalate" --mentor pepe   # AMMP SearchPlaybooks
 
-ammp mentee list                                # allowlist (hashes only)
+# Ask + escalate (CLI parity with AMMP AskMentor / EscalateToHuman)
+ammp mentor ask "how do you stay grounded?" --mentor pepe
+ammp mentor escalate "two playbooks contradict on retry policy" --mentor pepe --why-stuck "neither covers idempotency"
+
+# Mentee allowlist (hashes only)
+ammp mentee list
 ammp mentee add claude-cowork-sandra --operator human:sandra --runtime claude-cowork
 ammp mentee rotate-key claude-cowork-sandra
 ammp mentee remove claude-cowork-sandra
 ammp mentee check-key ammp-…                    # debug: which mentee owns this key?
 
+# Install-level operations
 ammp setup                                      # first-run install wizard
 ammp status                                     # validate the install
 ammp usage --days 7                             # aggregate the audit log
 ammp capability                                 # offline /.well-known/agent.json
-ammp serve                            # same as ammp-server
+ammp serve                                      # same as ammp-server
+ammp serve --stdio                              # subprocess transport for Claude Desktop / Claude Code
 ```
+
+Every operation a mentee can invoke over the MCP wire (`ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) has a matching CLI subcommand. An agent that prefers Bash-plus-CLI over MCP can exercise the full Mentoring track without speaking the protocol. The CLI invokes the same in-process handlers the MCP server uses, so behaviour stays in lockstep.
 
 ## Configuration
 

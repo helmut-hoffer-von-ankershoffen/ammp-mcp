@@ -319,6 +319,29 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
 # ─── Server factory ──────────────────────────────────────────────────────
 
 
+def build_context(settings: Settings | None = None) -> ServerContext:
+    """Build a :class:`ServerContext` from settings.
+
+    Loads mentors, the mentee allowlist, and per-mentor backends — the same
+    state ``create_server`` initialises. Exposed so the CLI surface (which
+    invokes handlers directly without spinning up the MCP server) can build
+    the same context the in-process handlers expect.
+
+    Args:
+        settings: Settings instance. ``None`` uses the env-derived
+            singleton from :func:`ammp_mcp.settings.get_settings`.
+
+    Returns:
+        A fully-populated :class:`ServerContext` ready to pass to any of the
+        ``_handle_*`` functions in this module.
+    """
+    s = settings or get_settings()
+    mentors = load_mentors(s.mentors_root)
+    mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
+    backends: dict[str, MentorBackend] = {slug: build_backend(m.backend, s) for slug, m in mentors.items()}
+    return ServerContext(settings=s, mentors=mentors, mentees=mentees, backends=backends)
+
+
 def create_server(settings: Settings | None = None) -> FastMCP:
     """Build a FastMCP server bound to ``settings``.
 
@@ -333,21 +356,16 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     Returns:
         A configured FastMCP server ready to ``.run()``.
     """
-    s = settings or get_settings()
-    mentors = load_mentors(s.mentors_root)
-    mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
-    backends: dict[str, MentorBackend] = {slug: build_backend(m.backend, s) for slug, m in mentors.items()}
+    ctx = build_context(settings)
 
     logger.info(
         "boot: %d mentors loaded (%s), %d mentees in allowlist, backends={%s}",
-        len(mentors),
-        ",".join(mentors) or "none",
-        len(mentees),
-        ", ".join(f"{slug}:{b.mode_label}({'live' if b.is_live else 'stub'})" for slug, b in backends.items())
+        len(ctx.mentors),
+        ",".join(ctx.mentors) or "none",
+        len(ctx.mentees),
+        ", ".join(f"{slug}:{b.mode_label}({'live' if b.is_live else 'stub'})" for slug, b in ctx.backends.items())
         or "none",
     )
-
-    ctx = ServerContext(settings=s, mentors=mentors, mentees=mentees, backends=backends)
     mcp: FastMCP[Any] = FastMCP(
         name="ammp-mcp",
         instructions=(

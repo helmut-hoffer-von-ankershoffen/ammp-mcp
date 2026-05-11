@@ -20,7 +20,7 @@ $ ammp [OPTIONS] COMMAND [ARGS]...
 * `health`: Alias for `ammp system health`.
 * `usage`: Alias for `ammp system usage`.
 * `capability`: Alias for `ammp system capability`.
-* `mentor`: Inspect registered mentors.
+* `mentor`: Inspect registered mentors; ask one a...
 * `mentee`: Manage the mentee allowlist (add / remove...
 * `playbook`: Inspect and read the playbook corpus of a...
 * `system`: Operate the install as a whole (setup,...
@@ -127,7 +127,7 @@ $ ammp capability [OPTIONS]
 
 ## `ammp mentor`
 
-Inspect registered mentors.
+Inspect registered mentors; ask one a question; escalate to your operator.
 
 **Usage**:
 
@@ -142,6 +142,8 @@ $ ammp mentor [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `list`: List registered mentors and their corpus...
+* `ask`: Ask a mentor a free-form question (CLI...
+* `escalate`: Request escalation phrasing to hand to...
 
 ### `ammp mentor list`
 
@@ -155,6 +157,57 @@ $ ammp mentor list [OPTIONS]
 
 **Options**:
 
+* `--help`: Show this message and exit.
+
+### `ammp mentor ask`
+
+Ask a mentor a free-form question (CLI parity with AMMP ``AskMentor``).
+
+Calls the same handler the MCP server uses. The mentor&#x27;s backend
+synthesises an answer + confidence; when confidence falls below the
+mentor&#x27;s threshold, the response also recommends ``EscalateToHuman``
+with suggested phrasing.
+
+**Usage**:
+
+```console
+$ ammp mentor ask [OPTIONS] QUESTION
+```
+
+**Arguments**:
+
+* `QUESTION`: The free-form question to put to the mentor.  [required]
+
+**Options**:
+
+* `-m, --mentor TEXT`: Mentor slug. Empty → server default.
+* `-c, --context TEXT`: Additional context to attach to the question.
+* `--json`: Emit raw JSON (machine-readable) instead of a Rich panel.
+* `--help`: Show this message and exit.
+
+### `ammp mentor escalate`
+
+Request escalation phrasing to hand to your operator (AMMP ``EscalateToHuman``).
+
+Returns suggested phrasing the mentee hands to its own operator. The
+mentor does not page or message anyone — that&#x27;s the Human-Gated
+Escalation Invariant (AMMP §3.4).
+
+**Usage**:
+
+```console
+$ ammp mentor escalate [OPTIONS] SITUATION
+```
+
+**Arguments**:
+
+* `SITUATION`: One-paragraph description of the situation that needs the operator.  [required]
+
+**Options**:
+
+* `-m, --mentor TEXT`: Mentor slug. Empty → server default.
+* `--why-stuck TEXT`: Optional note on what&#x27;s making you uncertain.
+* `--json`: Emit raw JSON (machine-readable) instead of a Rich panel.
 * `--help`: Show this message and exit.
 
 ## `ammp mentee`
@@ -285,7 +338,8 @@ $ ammp playbook [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `list`: List the playbook corpus for a mentor.
-* `show`: Print one playbook body to stdout.
+* `show`: Print one playbook body to stdout (CLI...
+* `search`: Substring-search a mentor&#x27;s playbook...
 
 ### `ammp playbook list`
 
@@ -304,7 +358,7 @@ $ ammp playbook list [OPTIONS]
 
 ### `ammp playbook show`
 
-Print one playbook body to stdout.
+Print one playbook body to stdout (CLI parity with AMMP ``GetPlaybook``).
 
 **Usage**:
 
@@ -319,6 +373,30 @@ $ ammp playbook show [OPTIONS] PLAYBOOK_ID
 **Options**:
 
 * `--mentor TEXT`: Mentor slug.
+* `--help`: Show this message and exit.
+
+### `ammp playbook search`
+
+Substring-search a mentor&#x27;s playbook corpus (CLI parity with AMMP ``SearchPlaybooks``).
+
+Calls the same handler the MCP server uses. Returns ranked matches with
+surrounding snippet context. The hash-only audit log records the call.
+
+**Usage**:
+
+```console
+$ ammp playbook search [OPTIONS] QUERY
+```
+
+**Arguments**:
+
+* `QUERY`: Substring to search for across the mentor&#x27;s playbook corpus.  [required]
+
+**Options**:
+
+* `-m, --mentor TEXT`: Mentor slug. Empty → server default.
+* `-n, --limit INTEGER RANGE`: Maximum number of matches to return.  [default: 5; 1&lt;=x&lt;=50]
+* `--json`: Emit raw JSON (machine-readable) instead of a Rich table.
 * `--help`: Show this message and exit.
 
 ## `ammp system`
