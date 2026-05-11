@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from ammp_mcp.mentee import Mentee
 from ammp_mcp.mentor import Mentor
-from ammp_mcp.models import AskMentorResponse, PlaybookSummary
+from ammp_mcp.models import AskMentorResponse, WorkInstructionSummary
 
 pytestmark = pytest.mark.unit
 
@@ -44,7 +44,7 @@ def test_ask_mentor_response_default_no_escalation() -> None:
         question="q",
         answer="a",
         confidence=0.8,
-        relevant_playbooks=[PlaybookSummary(id="i", title="t")],
+        relevant_instructions=[WorkInstructionSummary(id="i", title="t")],
     )
     assert r.escalation_recommended is False
     assert r.suggested_message_to_your_operator is None

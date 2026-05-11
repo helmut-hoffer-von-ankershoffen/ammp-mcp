@@ -49,16 +49,20 @@ async def test_list_mentors_returns_all_mentors(server) -> None:
     # no backend block, so they report the global fallback (`anthropic`).
     assert by_slug["stubmentor"]["backend_kind"] == "stub"
     assert by_slug["pepe"]["backend_kind"] == "anthropic"
-    # Each mentor entry embeds its full playbook corpus (id, title,
-    # summary, body) so a single ListMentors call surfaces everything a
-    # mentee needs to ground itself without follow-up GetPlaybook calls.
+    # Each mentor entry embeds its full playbook corpus — playbooks
+    # (areas of practice) with all their work instructions inside — so
+    # a single ListMentors call surfaces everything a mentee needs to
+    # ground itself without follow-up GetPlaybook calls.
     pepe_playbooks = by_slug["pepe"]["playbooks"]
     assert len(pepe_playbooks) == by_slug["pepe"]["playbook_count"] == 2
     pb_ids = {pb["id"] for pb in pepe_playbooks}
-    assert pb_ids == {"intro", "auth"}  # see conftest fixture
+    assert pb_ids == {"intro", "operator-craft"}  # see conftest fixture
     for pb in pepe_playbooks:
-        assert pb["title"]
-        assert pb["body"]  # full content, not just summary
+        assert pb["name"]
+        # Each playbook embeds its work instructions; bodies are full.
+        for wi in pb["instructions"]:
+            assert wi["title"]
+            assert wi["body"]
     # mentor-level description + avatar_url are surfaced over the wire
     # so mentee clients can render a profile card without an extra HTTP
     # fetch. Pepe's fixture has both; stubmentor has neither.
@@ -67,6 +71,17 @@ async def test_list_mentors_returns_all_mentors(server) -> None:
     assert by_slug["pepe"]["avatar_url"].endswith("/mentors/pepe/avatar")
     assert by_slug["stubmentor"]["description"] is None
     assert by_slug["stubmentor"]["avatar_url"] is None
+    # human_mentor surfaces over the wire — escalation destination is
+    # explicit. Pepe has Helmut; the other fixture mentors don't set it.
+    assert by_slug["pepe"]["human_mentor"] == {
+        "name": "Helmut Hoffer von Ankershoffen",
+        "url": "https://helmut.hoffer-von-ankershoffen.me/",
+        "contact": "helmuthva@gmail.com",
+    }
+    assert by_slug["strict"]["human_mentor"] is None
+    # Instruction count is the flattened total across all playbooks
+    # (pepe: intro has 2 instructions, operator-craft has 1 → 3 total).
+    assert by_slug["pepe"]["instruction_count"] == 3
 
 
 async def test_list_mentors_advertised_in_capability(server) -> None:
@@ -83,8 +98,13 @@ async def test_list_playbooks_default_mentor(server) -> None:
     assert result.data["mentor"] == "pepe"
     assert result.data["count"] == 2
     ids = {p["id"] for p in result.data["playbooks"]}
-    assert ids == {"intro", "auth"}
-    assert "readme" not in ids
+    assert ids == {"intro", "operator-craft"}
+    # Each playbook surfaces its work-instruction summaries (no bodies).
+    intro = next(p for p in result.data["playbooks"] if p["id"] == "intro")
+    wi_ids = {wi["id"] for wi in intro["instructions"]}
+    assert wi_ids == {"intro", "auth"}
+    assert intro["instruction_count"] == 2
+    assert "readme" not in wi_ids
 
 
 async def test_list_playbooks_explicit_mentor(server) -> None:
@@ -100,11 +120,17 @@ async def test_list_playbooks_unknown_mentor(server) -> None:
     assert result.data["error"] == "unknown_mentor"
 
 
-async def test_get_playbook_returns_body(server) -> None:
+async def test_get_playbook_returns_instructions(server) -> None:
+    """GetPlaybook returns the playbook + every work-instruction body."""
     async with Client(server) as c:
         result = await c.call_tool("GetPlaybook", {"id": "intro"})
     assert result.data["id"] == "intro"
-    assert "Welcome" in result.data["body"]
+    assert result.data["name"] == "Welcome to Pepe"
+    instr_ids = {wi["id"] for wi in result.data["instructions"]}
+    assert instr_ids == {"intro", "auth"}
+    # Bodies are full markdown.
+    intro_wi = next(wi for wi in result.data["instructions"] if wi["id"] == "intro")
+    assert "Welcome" in intro_wi["body"]
 
 
 async def test_get_playbook_path_traversal_rejected(server) -> None:
@@ -119,11 +145,46 @@ async def test_get_playbook_not_found(server) -> None:
     assert result.data["error"] == "not_found"
 
 
+async def test_get_work_instruction_returns_body(server) -> None:
+    """GetWorkInstruction fetches one specific instruction by (playbook_id, id)."""
+    async with Client(server) as c:
+        result = await c.call_tool(
+            "GetWorkInstruction",
+            {"playbook_id": "intro", "id": "auth"},
+        )
+    assert result.data["playbook_id"] == "intro"
+    assert result.data["id"] == "auth"
+    assert "OAuth callback resilience" in result.data["title"]
+    assert "Idempotent retries" in result.data["body"]
+
+
+async def test_get_work_instruction_unknown_playbook(server) -> None:
+    async with Client(server) as c:
+        result = await c.call_tool(
+            "GetWorkInstruction",
+            {"playbook_id": "no-such-playbook", "id": "auth"},
+        )
+    assert result.data["error"] == "not_found"
+
+
+async def test_get_work_instruction_unknown_id(server) -> None:
+    async with Client(server) as c:
+        result = await c.call_tool(
+            "GetWorkInstruction",
+            {"playbook_id": "intro", "id": "no-such-instruction"},
+        )
+    assert result.data["error"] == "not_found"
+
+
 async def test_search_returns_ranked_matches(server) -> None:
+    """Search runs at work-instruction granularity and names parent playbook."""
     async with Client(server) as c:
         result = await c.call_tool("SearchPlaybooks", {"query": "playbook"})
     assert result.data["count"] >= 1
-    assert all("rank" in m for m in result.data["matches"])
+    for match in result.data["matches"]:
+        assert "rank" in match
+        assert "playbook_id" in match
+        assert "id" in match
 
 
 async def test_search_empty_query_rejected(server) -> None:
@@ -198,13 +259,25 @@ async def test_landing_page_route(server) -> None:
     # Playbook titles from each mentor's corpus must appear — confirms
     # `load_corpus()` is called per request, so new playbooks show up
     # without a server restart. (Titles from the fixture playbooks.)
-    # Apostrophes get HTML-escaped (`&#x27;`); assert on apostrophe-free
-    # substrings so the test doesn't couple to the escape strategy.
-    for title in ("Welcome to Pepe", "OAuth callback resilience", "Strict Mentor"):
-        assert title in body, f"playbook title {title!r} missing from landing page"
+    # Playbook names + work-instruction titles render. Apostrophes get
+    # HTML-escaped (`&#x27;`); assert on apostrophe-free substrings.
+    for s in (
+        "Welcome to Pepe",  # playbook name
+        "Onboarding for new mentees.",  # playbook description
+        "OAuth callback resilience",  # work-instruction title
+        "Operator craft",  # playbook name
+        "Verify before claiming done",  # work-instruction title
+        "Strict rules",  # playbook name
+    ):
+        assert s in body, f"{s!r} missing from landing page"
     # Mentor-level description renders alongside name + avatar.
     assert "Calm, grounded mentor for resilient agent work." in body
     assert "High-bar reviewer" in body
+    # human_mentor attribution: Pepe shows Helmut as the human behind
+    # so escalation destinations are explicit.
+    assert "Helmut Hoffer von Ankershoffen" in body
+    assert "helmut.hoffer-von-ankershoffen.me" in body
+    assert "Behind Pepe Arturo" in body
     # Pepe has an avatar.png in the fixture, so an <img> tag with the
     # mentor-avatar route must render. stubmentor has no avatar; it
     # falls back to an initial-letter glyph (`<div class='avatar avatar-fallback'>`).
@@ -288,10 +361,16 @@ async def test_capability_route(server) -> None:
         "ListMentors",
         "ListPlaybooks",
         "GetPlaybook",
+        "GetWorkInstruction",
         "SearchPlaybooks",
         "AskMentor",
         "EscalateToHuman",
     }
+    # humanMentor surfaces in the capability JSON too — operators who
+    # discover via /.well-known/agent.json see who's behind each mentor.
+    by_slug = {m["slug"]: m for m in payload["ammp"]["mentors"]}
+    assert by_slug["pepe"]["humanMentor"]["name"] == "Helmut Hoffer von Ankershoffen"
+    assert by_slug["strict"]["humanMentor"] is None
 
 
 def test_offline_and_live_capability_operations_match(settings: Settings) -> None:
@@ -415,7 +494,15 @@ async def test_tools_listed_match_ammp_operations(server) -> None:
     async with Client(server) as c:
         tools = await c.list_tools()
     names = {t.name for t in tools}
-    assert names == {"ListMentors", "ListPlaybooks", "GetPlaybook", "SearchPlaybooks", "AskMentor", "EscalateToHuman"}
+    assert names == {
+        "ListMentors",
+        "ListPlaybooks",
+        "GetPlaybook",
+        "GetWorkInstruction",
+        "SearchPlaybooks",
+        "AskMentor",
+        "EscalateToHuman",
+    }
 
 
 async def test_response_envelopes_match_pydantic_schema(server) -> None:

@@ -1,0 +1,5 @@
+{
+  "_doc": "Reference playbook (area of practice). The mentor's `mentor.json` describes the mentor; this file describes one playbook inside that mentor. Underscore-prefixed keys are stripped before reading.",
+  "name": "Example mentoring",
+  "description": "A starter playbook with two demo work instructions. Replace with your own areas of practice."
+}

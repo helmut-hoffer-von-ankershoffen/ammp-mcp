@@ -4,6 +4,11 @@ The static config classes (``Mentor``, ``Mentee``, the ``BackendConfig``
 discriminated union) live in :mod:`ammp_mcp.mentor` and
 :mod:`ammp_mcp.mentee`. This module is intentionally narrow: only the
 envelopes each server tool returns.
+
+The corpus is a two-level hierarchy: a mentor has zero or more
+**playbooks** (areas of practice); each playbook contains zero or more
+**work instructions** (individual craft rules, one markdown file each).
+The envelopes here mirror that shape.
 """
 
 from __future__ import annotations
@@ -11,8 +16,31 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class PlaybookSummary(BaseModel):
-    """Summary of one playbook for the response envelopes."""
+class HumanMentorSummary(BaseModel):
+    """The human standing behind an agentic mentor, as published on the wire.
+
+    Mirrors :class:`ammp_mcp.mentor.HumanMentor` but lives in the
+    envelope layer so the wire surface stays decoupled from the storage
+    model. Published so mentees know where escalation ultimately
+    lands — the agentic mentor never pages the human directly (AMMP
+    §3.4), but downstream operators can use this to make manual
+    escalation paths concrete.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    url: str | None = None
+    contact: str | None = None
+
+
+class WorkInstructionSummary(BaseModel):
+    """Compact identity of one work instruction.
+
+    No body — used by ``ListPlaybooks`` (folded into each playbook) and
+    by ``SearchPlaybooks`` (snippet replaces body). Mentees fetch the
+    full body with ``GetWorkInstruction``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -21,8 +49,38 @@ class PlaybookSummary(BaseModel):
     summary: str = ""
 
 
+class WorkInstructionEntry(BaseModel):
+    """One work instruction with its full body — for ``GetPlaybook`` etc."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    title: str
+    summary: str = ""
+    body: str
+
+
+class PlaybookSummary(BaseModel):
+    """Summary of one playbook (area of practice). No instruction bodies."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    description: str = ""
+    instruction_count: int = 0
+    instructions: list[WorkInstructionSummary] = Field(default_factory=list)
+
+
 class ListPlaybooksResponse(BaseModel):
-    """Response envelope for the ``ListPlaybooks`` AMMP operation."""
+    """Response envelope for the ``ListPlaybooks`` AMMP operation.
+
+    Returns the mentor's playbooks (areas of practice) — each carries
+    its name + description + instruction summaries (title only, no
+    bodies). Fetch a full instruction body with ``GetWorkInstruction``;
+    fetch a whole playbook (descriptions + every instruction body)
+    with ``GetPlaybook``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -35,19 +93,19 @@ class ListPlaybooksResponse(BaseModel):
 class PlaybookEntry(BaseModel):
     """One playbook entry embedded in a ``ListMentors`` mentor summary.
 
-    Includes the full body so a mentee can take a single ``ListMentors``
-    call and have everything it needs to ground itself — no follow-up
-    ``GetPlaybook`` round-trip required. Mentees that only need a brief
-    overview should still prefer ``ListPlaybooks(mentor)``, which omits
-    bodies.
+    Includes the full body of every work instruction so a mentee can
+    take a single ``ListMentors`` call and have everything it needs to
+    ground itself — no follow-up ``GetPlaybook`` round-trip required.
+    Mentees that only need a brief overview should still prefer
+    ``ListPlaybooks(mentor)``, which omits bodies.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    title: str
-    summary: str = ""
-    body: str
+    name: str
+    description: str = ""
+    instructions: list[WorkInstructionEntry] = Field(default_factory=list)
 
 
 class MentorSummary(BaseModel):
@@ -58,9 +116,12 @@ class MentorSummary(BaseModel):
     what the docs reference. ``backend_live`` indicates whether the
     runtime can actually reach the synthesis path (an Anthropic backend
     without an API key still reports kind ``"anthropic"`` but is not
-    live). ``playbooks`` embeds each playbook's id, title, summary, and
-    full body so a single ``ListMentors`` call gives the mentee a
-    complete picture of what every mentor on this server offers.
+    live). ``playbooks`` embeds each playbook and every work
+    instruction inside (id + title + summary + full body) so one call
+    gives the mentee everything this mentor knows.
+
+    ``human_mentor`` names the human who stands behind the agentic
+    mentor — surfaced so escalation paths are explicit (AMMP §3.4).
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -72,7 +133,9 @@ class MentorSummary(BaseModel):
         default=None,
         description="Public URL of the mentor's avatar image, or null when no `avatar.*` file is present in the mentor directory.",
     )
+    human_mentor: HumanMentorSummary | None = None
     playbook_count: int
+    instruction_count: int = 0
     confidence_threshold: float = Field(ge=0.0, le=1.0)
     backend_kind: str
     backend_live: bool
@@ -98,21 +161,52 @@ class ListMentorsResponse(BaseModel):
 
 
 class GetPlaybookResponse(BaseModel):
-    """Response envelope for the ``GetPlaybook`` AMMP operation."""
+    """Response envelope for the ``GetPlaybook`` AMMP operation.
+
+    Returns a playbook's identity plus the full body of every work
+    instruction in it — one round-trip to load everything the mentee
+    needs about an area of practice.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     mentor: str
     id: str
+    name: str
+    description: str = ""
+    instructions: list[WorkInstructionEntry]
+
+
+class GetWorkInstructionResponse(BaseModel):
+    """Response envelope for the ``GetWorkInstruction`` AMMP-extension operation.
+
+    Server-side extension over AMMP-01's five operations — lets a
+    mentee fetch one specific work instruction by ``(playbook_id, id)``
+    when it already knows which one it wants, without round-tripping
+    the entire playbook.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mentor: str
+    playbook_id: str
+    id: str
     title: str
+    summary: str = ""
     body: str
 
 
 class SearchMatch(BaseModel):
-    """One match in a ``SearchPlaybooks`` result list."""
+    """One match in a ``SearchPlaybooks`` result list.
+
+    Searches always run at work-instruction granularity, so each match
+    carries both its ``playbook_id`` (area of practice) and its own
+    ``id`` (the instruction's filename stem).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
+    playbook_id: str
     id: str
     title: str
     rank: int
@@ -120,7 +214,12 @@ class SearchMatch(BaseModel):
 
 
 class SearchPlaybooksResponse(BaseModel):
-    """Response envelope for the ``SearchPlaybooks`` AMMP operation."""
+    """Response envelope for the ``SearchPlaybooks`` AMMP operation.
+
+    Despite the name (kept stable with AMMP §5.3), the search runs at
+    work-instruction granularity — matches name the instruction that
+    contained the hit plus its parent playbook id.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -138,6 +237,10 @@ class AskMentorResponse(BaseModel):
     ``suggested_message_to_your_operator`` is populated — the mentor
     proactively offers an escalation path even without an explicit
     ``EscalateToHuman`` call.
+
+    ``relevant_instructions`` cites the work instructions the mentor's
+    keyword ranker considered most relevant to the question — both for
+    auditability and so the mentee can fetch the full bodies if needed.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -146,7 +249,7 @@ class AskMentorResponse(BaseModel):
     question: str
     answer: str
     confidence: float = Field(ge=0.0, le=1.0)
-    relevant_playbooks: list[PlaybookSummary] = Field(default_factory=list)
+    relevant_instructions: list[WorkInstructionSummary] = Field(default_factory=list)
     escalation_recommended: bool = False
     suggested_message_to_your_operator: str | None = None
 

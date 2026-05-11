@@ -64,8 +64,9 @@ def test_list_mentors_json_matches_wire_envelope(runner: CliRunner) -> None:
 def test_list_playbooks_default(runner: CliRunner) -> None:
     r = runner.invoke(app, ["playbook", "list"])
     assert r.exit_code == 0, r.output
+    # New hierarchy: playbooks are areas of practice (subdir names).
     assert "intro" in r.output
-    assert "auth" in r.output
+    assert "operator-craft" in r.output
 
 
 def test_list_playbooks_unknown_mentor(runner: CliRunner) -> None:
@@ -74,7 +75,17 @@ def test_list_playbooks_unknown_mentor(runner: CliRunner) -> None:
 
 
 def test_show_playbook(runner: CliRunner) -> None:
+    """`ammp playbook show <id>` lists the work instructions inside the playbook."""
     r = runner.invoke(app, ["playbook", "show", "intro"])
+    assert r.exit_code == 0
+    # Playbook header + at least one work-instruction title from intro/.
+    assert "Welcome to Pepe" in r.output
+    assert "OAuth callback resilience" in r.output
+
+
+def test_show_instruction(runner: CliRunner) -> None:
+    """`ammp instruction show <id> --playbook <pb>` prints one instruction body."""
+    r = runner.invoke(app, ["instruction", "show", "intro", "--playbook", "intro"])
     assert r.exit_code == 0
     assert "Welcome" in r.output
 

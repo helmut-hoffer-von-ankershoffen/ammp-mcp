@@ -26,21 +26,41 @@ def isolated_tree(tmp_path: Path) -> Path:
     against; one with a confidence threshold of 0.6, one at 0.9 so we can
     exercise mentor-triggered escalation."""
     mentors_root = tmp_path / "mentors"
-    pepe = mentors_root / "pepe" / "playbooks"
-    pepe.mkdir(parents=True)
-    (pepe / "intro.md").write_text(
+    # Pepe: two playbooks (areas of practice). The first has two work
+    # instructions, the second one — exercises multi-playbook + multi-
+    # instruction routing.
+    pepe_intro = mentors_root / "pepe" / "playbooks" / "intro"
+    pepe_intro.mkdir(parents=True)
+    (pepe_intro / "playbook.json").write_text(
+        json.dumps({"name": "Welcome to Pepe", "description": "Onboarding for new mentees."}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (pepe_intro / "intro.md").write_text(
         "# Welcome to Pepe's Playbooks\n\n"
         "Calm, operational tone — no emojis, no filler.\n\n"
         "## When to escalate\n"
         "If you cannot reach grounded coverage, escalate to your operator.\n",
         encoding="utf-8",
     )
-    (pepe / "auth.md").write_text(
+    (pepe_intro / "auth.md").write_text(
         "# OAuth callback resilience\n\nTreat the callback as an unreliable handoff. Idempotent retries.\n",
         encoding="utf-8",
     )
-    (pepe / "README.md").write_text(
-        "# Index — not a playbook\n\nThis file is excluded from the corpus.\n",
+    (pepe_intro / "README.md").write_text(
+        "# Index — not an instruction\n\nThis file is excluded from the corpus.\n",
+        encoding="utf-8",
+    )
+    pepe_craft = mentors_root / "pepe" / "playbooks" / "operator-craft"
+    pepe_craft.mkdir(parents=True)
+    (pepe_craft / "playbook.json").write_text(
+        json.dumps(
+            {"name": "Operator craft", "description": "Cross-cutting craft principles."},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (pepe_craft / "verify.md").write_text(
+        "# Verify before claiming done\n\nDone means verified done.\n",
         encoding="utf-8",
     )
     (mentors_root / "pepe" / "mentor.json").write_text(
@@ -48,9 +68,15 @@ def isolated_tree(tmp_path: Path) -> Path:
             {
                 "name": "Pepe Arturo",
                 "description": "Calm, grounded mentor for resilient agent work.",
+                "human_mentor": {
+                    "name": "Helmut Hoffer von Ankershoffen",
+                    "url": "https://helmut.hoffer-von-ankershoffen.me/",
+                    "contact": "helmuthva@gmail.com",
+                },
                 "persona": "calm operator",
                 "confidence_threshold": 0.6,
-            }
+            },
+            ensure_ascii=False,
         ),
         encoding="utf-8",
     )
@@ -62,9 +88,14 @@ def isolated_tree(tmp_path: Path) -> Path:
     )
     (mentors_root / "pepe" / "avatar.png").write_bytes(_avatar_png)
 
-    strict = mentors_root / "strict" / "playbooks"
-    strict.mkdir(parents=True)
-    (strict / "rule.md").write_text(
+    # Strict mentor: one playbook with one instruction.
+    strict_pb = mentors_root / "strict" / "playbooks" / "rules"
+    strict_pb.mkdir(parents=True)
+    (strict_pb / "playbook.json").write_text(
+        json.dumps({"name": "Strict rules", "description": "High-bar review rules."}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (strict_pb / "rule.md").write_text(
         "# Strict Mentor\n\nHigh confidence threshold. Escalates often.\n",
         encoding="utf-8",
     )
@@ -75,7 +106,8 @@ def isolated_tree(tmp_path: Path) -> Path:
                 "description": "High-bar reviewer who escalates whenever the evidence is thin.",
                 "persona": "high-bar operator",
                 "confidence_threshold": 0.9,
-            }
+            },
+            ensure_ascii=False,
         ),
         encoding="utf-8",
     )
@@ -83,16 +115,21 @@ def isolated_tree(tmp_path: Path) -> Path:
     # Third mentor — exercises the explicit stub-backend config path so
     # integration tests can confirm multi-mentor routing with mixed
     # backend kinds.
-    stubmentor = mentors_root / "stubmentor" / "playbooks"
-    stubmentor.mkdir(parents=True)
-    (stubmentor / "any.md").write_text("# Any\n\nstub-backed mentor for tests.\n", encoding="utf-8")
+    stub_pb = mentors_root / "stubmentor" / "playbooks" / "anything"
+    stub_pb.mkdir(parents=True)
+    (stub_pb / "playbook.json").write_text(
+        json.dumps({"name": "Anything", "description": "Stub-backed playbook."}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (stub_pb / "any.md").write_text("# Any\n\nstub-backed mentor for tests.\n", encoding="utf-8")
     (mentors_root / "stubmentor" / "mentor.json").write_text(
         json.dumps(
             {
                 "name": "Stub Mentor",
                 "persona": "deterministic",
                 "backend": {"kind": "stub"},
-            }
+            },
+            ensure_ascii=False,
         ),
         encoding="utf-8",
     )

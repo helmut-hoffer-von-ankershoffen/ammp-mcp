@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..mentor import load_mentors
-from ..playbook import load_corpus
+from ..playbook import load_playbooks
 from ..settings import Settings
 
 
@@ -20,8 +20,26 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
     mentors = load_mentors(s.mentors_root)
     summaries = []
     for slug, m in mentors.items():
-        corpus = load_corpus(m.playbook_dir)
-        summaries.append({"slug": slug, "name": m.name, "playbookCount": len(corpus)})
+        corpus = load_playbooks(m.playbook_dir)
+        human_mentor = (
+            {
+                "name": m.human_mentor.name,
+                "url": m.human_mentor.url,
+                "contact": m.human_mentor.contact,
+            }
+            if m.human_mentor
+            else None
+        )
+        summaries.append(
+            {
+                "slug": slug,
+                "name": m.name,
+                "description": m.description,
+                "humanMentor": human_mentor,
+                "playbookCount": len(corpus),
+                "instructionCount": sum(len(pb.instructions) for pb in corpus),
+            }
+        )
     return {
         "name": "ammp-mcp",
         "version": version,
@@ -43,6 +61,7 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
             "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
+            "GetWorkInstruction",
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",

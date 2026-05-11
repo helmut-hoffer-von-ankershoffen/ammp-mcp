@@ -104,19 +104,22 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
                 "ListMentors",
                 "ListPlaybooks",
                 "GetPlaybook",
+                "GetWorkInstruction",
                 "SearchPlaybooks",
                 "AskMentor",
                 "EscalateToHuman",
             }, tools
 
-            # Step 2: consume a playbook.
+            # Step 2: consume a playbook (area of practice) — verify it
+            # returns work-instruction bodies in the new envelope shape.
             listed = payload(await mentee.call_tool("ListPlaybooks", {"mentor": "pepe"}))
             assert listed["mentor"] == "pepe"
             assert listed["count"] == 2
             first_id = listed["playbooks"][0]["id"]
             got = payload(await mentee.call_tool("GetPlaybook", {"id": first_id, "mentor": "pepe"}))
             assert got["id"] == first_id
-            assert isinstance(got["body"], str) and got["body"]
+            assert isinstance(got["instructions"], list) and got["instructions"]
+            assert isinstance(got["instructions"][0]["body"], str) and got["instructions"][0]["body"]
 
             # Step 3: search.
             searched = payload(
@@ -292,13 +295,13 @@ async def test_scenario_multi_mentor_multi_mentee(isolated_tree: Path) -> None:
     )
 
     # Both mentees see consistent per-mentor data. ListPlaybooks for pepe
-    # must show the same two playbooks for both.
+    # must show the same two playbooks (areas of practice) for both.
     pepe_alpha_ids = {pb["id"] for pb in results_alpha["list:pepe"]["playbooks"]}
     pepe_beta_ids = {pb["id"] for pb in results_beta["list:pepe"]["playbooks"]}
-    assert pepe_alpha_ids == pepe_beta_ids == {"intro", "auth"}
+    assert pepe_alpha_ids == pepe_beta_ids == {"intro", "operator-craft"}
 
     strict_alpha_ids = {pb["id"] for pb in results_alpha["list:strict"]["playbooks"]}
-    assert strict_alpha_ids == {"rule"}
+    assert strict_alpha_ids == {"rules"}
 
     # Mentor identity must be preserved on every response.
     for mentor in ("pepe", "strict", "stubmentor"):

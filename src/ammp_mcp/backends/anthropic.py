@@ -47,7 +47,7 @@ Confidence calibration:
 - 0.3 = you don't have grounded coverage; this likely needs the operator
 - 0.0 = the question is outside this mentor's domain entirely
 
-Playbooks available (each appended verbatim below):
+Work instructions available (each appended verbatim below; titled as `<playbook> · <instruction>`):
 """
 
 

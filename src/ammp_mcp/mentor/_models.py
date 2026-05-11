@@ -69,6 +69,36 @@ BackendConfig = Annotated[
 ]
 
 
+# ─── Human mentor (who's behind the agentic mentor) ───────────────────────
+
+
+class HumanMentor(BaseModel):
+    """The human standing behind an agentic mentor.
+
+    Surfaced so mentees (and the people running them) know where an
+    escalation ultimately lands when the agentic mentor itself can't
+    answer with confidence, or when the mentee explicitly wants to
+    reach a human. The agentic mentor never pages the human directly
+    — escalation flows through the mentee's own operator per AMMP §3.4
+    — but published attribution closes the loop on *who* is upstream.
+
+    Attributes:
+        name: Display name, e.g. ``"Helmut Hoffer von Ankershoffen"``.
+        url: Optional public bio / personal site, e.g.
+            ``"https://helmut.hoffer-von-ankershoffen.me/"``.
+        contact: Optional free-form contact channel description,
+            e.g. ``"helmuthva@gmail.com"`` or
+            ``"Telegram: @helmuthva"``. The mentor never publishes
+            keys or credentials here — just how to reach the human.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    url: str | None = Field(default=None, max_length=400)
+    contact: str | None = Field(default=None, max_length=200)
+
+
 # ─── Mentor ───────────────────────────────────────────────────────────────
 
 
@@ -83,6 +113,10 @@ class Mentor(BaseModel):
         default=None,
         max_length=400,
         description="One-line mentee-facing introduction. Surfaced on the landing page and in ListMentors responses. Distinct from `persona`, which is the LLM system prompt.",
+    )
+    human_mentor: HumanMentor | None = Field(
+        default=None,
+        description="The human behind the agentic mentor. Published so mentees know where escalation ultimately lands.",
     )
     persona: str = Field(
         description="System prompt used when this mentor answers AskMentor calls. Voice and stance only — never operational secrets."

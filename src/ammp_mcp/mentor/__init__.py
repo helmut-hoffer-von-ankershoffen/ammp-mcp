@@ -5,6 +5,7 @@ from __future__ import annotations
 from ._models import (
     AnthropicBackendConfig,
     BackendConfig,
+    HumanMentor,
     Mentor,
     OpenClawBackendConfig,
     StubBackendConfig,
@@ -14,6 +15,7 @@ from ._service import get_mentor, load_mentors
 __all__ = [
     "AnthropicBackendConfig",
     "BackendConfig",
+    "HumanMentor",
     "Mentor",
     "OpenClawBackendConfig",
     "StubBackendConfig",

@@ -76,29 +76,34 @@ async def test_stdio_transport_round_trip(isolated_tree: Path) -> None:
     async with Client(transport) as client:
         # Handshake completes inside __aenter__. The list of tools advertised
         # over stdio must match the HTTP wire surface — five Mentoring §5
-        # operations plus the ListMentors server-side extension.
+        # operations plus the ListMentors + GetWorkInstruction server-side
+        # extensions.
         tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {
             "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
+            "GetWorkInstruction",
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
         }, names
 
-        # ListPlaybooks — pepe has two playbooks under the fixture corpus.
+        # ListPlaybooks — pepe has two playbooks (areas of practice).
         listed = _payload(await client.call_tool("ListPlaybooks", {"mentor": "pepe"}))
         assert listed["mentor"] == "pepe"
         assert listed["count"] == 2
         ids = {pb["id"] for pb in listed["playbooks"]}
-        assert ids == {"auth", "intro"}, ids
+        assert ids == {"intro", "operator-craft"}, ids
 
-        # GetPlaybook — single doc body.
+        # GetPlaybook — returns the playbook with every work-instruction body.
         got = _payload(await client.call_tool("GetPlaybook", {"id": "intro", "mentor": "pepe"}))
         assert got["id"] == "intro"
-        assert "Welcome to Pepe" in got["body"]
+        wi_ids = {wi["id"] for wi in got["instructions"]}
+        assert wi_ids == {"intro", "auth"}
+        intro_wi = next(wi for wi in got["instructions"] if wi["id"] == "intro")
+        assert "Welcome to Pepe" in intro_wi["body"]
 
         # SearchPlaybooks — substring match.
         searched = _payload(

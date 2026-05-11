@@ -29,6 +29,8 @@ from .models import (
     AskMentorResponse,
     EscalateToHumanResponse,
     GetPlaybookResponse,
+    GetWorkInstructionResponse,
+    HumanMentorSummary,
     ListMentorsResponse,
     ListPlaybooksResponse,
     MentorSummary,
@@ -36,8 +38,15 @@ from .models import (
     PlaybookSummary,
     SearchMatch,
     SearchPlaybooksResponse,
+    WorkInstructionEntry,
+    WorkInstructionSummary,
 )
-from .playbook import keyword_rank, load_corpus, safe_id, search
+from .playbook import (
+    keyword_rank,
+    load_playbooks,
+    safe_id,
+    search,
+)
 from .settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -158,7 +167,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
     log_event(ctx.settings.audit_log_path, "ListMentors", mentee=mentee_slug)
     summaries: list[MentorSummary] = []
     for slug, m in ctx.mentors.items():
-        corpus = load_corpus(m.playbook_dir)
+        corpus = load_playbooks(m.playbook_dir)
         backend = ctx.backends.get(slug)
         # Surface the config-level kind (`anthropic`/`openclaw`/`stub`) — what
         # the docs say and what the operator wrote in mentor.json — rather
@@ -172,18 +181,37 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
         # MCP envelope just exposes the URL so wire-level mentees can use
         # it however they like (display, profile card, none at all).
         avatar_url = f"{ctx.settings.public_url.rstrip('/')}/mentors/{slug}/avatar" if m.avatar_path() else None
+        human_mentor = (
+            HumanMentorSummary(name=m.human_mentor.name, url=m.human_mentor.url, contact=m.human_mentor.contact)
+            if m.human_mentor
+            else None
+        )
+        playbook_entries = [
+            PlaybookEntry(
+                id=pb.id,
+                name=pb.name,
+                description=pb.description,
+                instructions=[
+                    WorkInstructionEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body)
+                    for wi in pb.instructions
+                ],
+            )
+            for pb in corpus
+        ]
         summaries.append(
             MentorSummary(
                 slug=slug,
                 name=m.name,
                 description=m.description,
                 avatar_url=avatar_url,
+                human_mentor=human_mentor,
                 playbook_count=len(corpus),
+                instruction_count=sum(len(pb.instructions) for pb in corpus),
                 confidence_threshold=m.confidence_threshold,
                 backend_kind=backend_kind,
                 backend_live=backend.is_live if backend else False,
                 is_default=(slug == ctx.settings.default_mentor),
-                playbooks=[PlaybookEntry(id=pb.id, title=pb.title, summary=pb.summary, body=pb.body) for pb in corpus],
+                playbooks=playbook_entries,
             )
         )
     return ListMentorsResponse(
@@ -195,6 +223,12 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
 
 def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None) -> dict[str, Any]:
     """Handle the ``ListPlaybooks`` MCP tool call (AMMP §5.1).
+
+    Returns the mentor's playbooks (areas of practice). Each playbook
+    carries its name + description + work-instruction summaries (id +
+    title + one-line summary, no bodies). Fetch a full playbook's
+    instruction bodies with ``GetPlaybook(id)``, or one instruction's
+    body with ``GetWorkInstruction(playbook_id, id)``.
 
     Args:
         ctx: The per-request server context.
@@ -217,20 +251,35 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
     if not m:
         return {"error": "unknown_mentor", "detail": f"slug={mentor or ctx.settings.default_mentor!r}"}
     log_event(ctx.settings.audit_log_path, "ListPlaybooks", mentor=m.slug, mentee=mentee_slug)
-    corpus = load_corpus(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir)
     return ListPlaybooksResponse(
         mentor=m.slug,
         count=len(corpus),
-        playbooks=[PlaybookSummary(id=pb.id, title=pb.title, summary=pb.summary) for pb in corpus],
+        playbooks=[
+            PlaybookSummary(
+                id=pb.id,
+                name=pb.name,
+                description=pb.description,
+                instruction_count=len(pb.instructions),
+                instructions=[
+                    WorkInstructionSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
+                ],
+            )
+            for pb in corpus
+        ],
     ).model_dump()
 
 
 def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_key: str | None) -> dict[str, Any]:
     """Handle the ``GetPlaybook`` MCP tool call (AMMP §5.2).
 
+    Returns one playbook with the full body of every work instruction
+    in it — a single round-trip for everything the mentee needs about
+    one area of practice.
+
     Args:
         ctx: The per-request server context.
-        playbook_id: Filename-stem identifier of the requested playbook.
+        playbook_id: Directory-name slug of the requested playbook.
             Sanitised via :func:`ammp_mcp.playbook.safe_id` before
             filesystem access; path-traversal attempts return ``invalid_id``.
         mentor: Mentor slug. Empty string falls through to the
@@ -261,13 +310,79 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         mentee=mentee_slug,
         request_hash=short_hash(clean_id),
     )
-    target = m.playbook_dir / f"{clean_id}.md"
-    if not target.is_file():
+    corpus = load_playbooks(m.playbook_dir)
+    pb = next((p for p in corpus if p.id == clean_id), None)
+    if pb is None:
         return {"error": "not_found", "detail": f"id={clean_id}"}
-    from .playbook._service import _load_one  # lazy import to avoid widening the public surface
+    return GetPlaybookResponse(
+        mentor=m.slug,
+        id=pb.id,
+        name=pb.name,
+        description=pb.description,
+        instructions=[
+            WorkInstructionEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body) for wi in pb.instructions
+        ],
+    ).model_dump()
 
-    pb = _load_one(target)
-    return GetPlaybookResponse(mentor=m.slug, id=pb.id, title=pb.title, body=pb.body).model_dump()
+
+def _handle_get_work_instruction(
+    ctx: ServerContext, playbook_id: str, instruction_id: str, mentor: str, api_key: str | None
+) -> dict[str, Any]:
+    """Handle the ``GetWorkInstruction`` MCP-extension tool call.
+
+    Server-side extension beyond AMMP-01's five operations: fetch one
+    specific work instruction by ``(playbook_id, instruction_id)`` when
+    the mentee already knows which one it wants, without round-tripping
+    the whole playbook.
+
+    Args:
+        ctx: The per-request server context.
+        playbook_id: Directory-name slug of the parent playbook.
+        instruction_id: Filename-stem of the requested instruction.
+        mentor: Mentor slug. Empty string falls through to the
+            configured default mentor.
+        api_key: Caller-supplied Bearer key, or ``None``. Required when
+            ``ctx.settings.require_auth`` is set.
+
+    Returns:
+        A JSON-serialisable dict — either a
+        :class:`GetWorkInstructionResponse` envelope on success, or an
+        in-band error envelope on auth failure, unknown mentor,
+        invalid id, or not-found.
+    """
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    m = _resolve_mentor(ctx, mentor)
+    if not m:
+        return {"error": "unknown_mentor"}
+    clean_pb = safe_id(playbook_id)
+    clean_id = safe_id(instruction_id)
+    if not clean_pb or not clean_id:
+        return {"error": "invalid_id"}
+    log_event(
+        ctx.settings.audit_log_path,
+        "GetWorkInstruction",
+        mentor=m.slug,
+        mentee=mentee_slug,
+        request_hash=short_hash(f"{clean_pb}/{clean_id}"),
+    )
+    corpus = load_playbooks(m.playbook_dir)
+    pb = next((p for p in corpus if p.id == clean_pb), None)
+    if pb is None:
+        return {"error": "not_found", "detail": f"playbook_id={clean_pb}"}
+    wi = next((w for w in pb.instructions if w.id == clean_id), None)
+    if wi is None:
+        return {"error": "not_found", "detail": f"playbook_id={clean_pb} id={clean_id}"}
+    return GetWorkInstructionResponse(
+        mentor=m.slug,
+        playbook_id=pb.id,
+        id=wi.id,
+        title=wi.title,
+        summary=wi.summary,
+        body=wi.body,
+    ).model_dump()
 
 
 def _handle_search_playbooks(
@@ -306,13 +421,22 @@ def _handle_search_playbooks(
         mentee=mentee_slug,
         request_hash=short_hash(query),
     )
-    corpus = load_corpus(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir)
     rows = search(corpus, query, limit=limit)
     return SearchPlaybooksResponse(
         mentor=m.slug,
         query=query,
         count=len(rows),
-        matches=[SearchMatch(id=pb.id, title=pb.title, rank=rank, snippet=snippet) for pb, rank, snippet in rows],
+        matches=[
+            SearchMatch(
+                playbook_id=wi.playbook_id,
+                id=wi.id,
+                title=wi.title,
+                rank=rank,
+                snippet=snippet,
+            )
+            for wi, rank, snippet in rows
+        ],
     ).model_dump()
 
 
@@ -389,10 +513,14 @@ async def _handle_ask_mentor(
         request_hash=short_hash(q),
     )
 
-    corpus = load_corpus(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir)
     ranked = keyword_rank(corpus, q + " " + context, limit=3)
-    relevant = [PlaybookSummary(id=pb.id, title=pb.title, summary=pb.summary) for pb, _ in ranked]
-    playbook_bodies = [(pb.title, pb.body) for pb, _ in ranked]
+    relevant = [WorkInstructionSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi, _ in ranked]
+    # Backends consume `(title, body)` pairs to assemble the grounding
+    # block in the system prompt. With the new hierarchy we cite each
+    # work instruction by its full ``<playbook> · <instruction>`` path so
+    # the LLM can attribute back accurately when synthesising.
+    playbook_bodies = [(f"{wi.playbook_id} · {wi.title}", wi.body) for wi, _ in ranked]
 
     backend = ctx.backends.get(m.slug)
     if backend is None:
@@ -408,8 +536,8 @@ async def _handle_ask_mentor(
         logger.warning("AskMentor backend call failed (%s): %s", backend.mode_label, e)
         return {
             "error": "llm_failed",
-            "detail": "the mentor is currently unable to synthesise an answer; try GetPlaybook on a relevant id",
-            "relevant_playbooks": [r.model_dump() for r in relevant],
+            "detail": "the mentor is currently unable to synthesise an answer; try GetWorkInstruction on a relevant id",
+            "relevant_instructions": [r.model_dump() for r in relevant],
         }
 
     threshold = m.confidence_threshold
@@ -421,7 +549,7 @@ async def _handle_ask_mentor(
         question=q[:500],
         answer=llm_answer.answer,
         confidence=llm_answer.confidence,
-        relevant_playbooks=relevant,
+        relevant_instructions=relevant,
         escalation_recommended=escalation_recommended,
         suggested_message_to_your_operator=suggested,
     ).model_dump()
@@ -509,13 +637,25 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
     """
     mentor_summaries = []
     for slug, m in ctx.mentors.items():
-        corpus = load_corpus(m.playbook_dir)
+        corpus = load_playbooks(m.playbook_dir)
         backend = ctx.backends.get(slug)
+        human_mentor = (
+            {
+                "name": m.human_mentor.name,
+                "url": m.human_mentor.url,
+                "contact": m.human_mentor.contact,
+            }
+            if m.human_mentor
+            else None
+        )
         mentor_summaries.append(
             {
                 "slug": slug,
                 "name": m.name,
+                "description": m.description,
+                "humanMentor": human_mentor,
                 "playbookCount": len(corpus),
+                "instructionCount": sum(len(pb.instructions) for pb in corpus),
                 "backend": backend.mode_label if backend else "unknown",
                 "backendLive": backend.is_live if backend else False,
             }
@@ -553,6 +693,7 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
             "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
+            "GetWorkInstruction",
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
@@ -567,12 +708,12 @@ def _render_landing(ctx: ServerContext) -> str:
     """Render the mentee-facing landing page served at ``GET /``.
 
     Self-contained HTML (inline CSS + JS, no external assets). For each
-    mentor loaded in ``ctx`` renders avatar, name, description, and the
-    full playbook list (title + one-line summary per playbook). All four
-    pieces are pulled fresh per request — avatar via
-    :meth:`Mentor.avatar_path`, playbooks via
-    :func:`ammp_mcp.playbook.load_corpus` — so the page reflects on-disk
-    changes to mentors and playbooks without a server restart. A single
+    mentor loaded in ``ctx`` renders avatar, name, description, the
+    *human mentor* attribution (so escalation destinations are explicit),
+    and the playbook → work-instruction tree. All four sources are
+    pulled fresh per request — avatar via :meth:`Mentor.avatar_path`,
+    playbooks via :func:`ammp_mcp.playbook.load_playbooks` — so the page
+    reflects on-disk changes without a server restart. A single
     "Request access" button opens a pre-filled ``mailto:`` to the
     operator. The Copy button uses ``navigator.clipboard.writeText``.
     Operator-side minting / rotation / revocation lives in
@@ -604,7 +745,7 @@ def _render_landing(ctx: ServerContext) -> str:
 
     mentor_blocks_parts: list[str] = []
     for slug, m in ctx.mentors.items():
-        playbooks = load_corpus(m.playbook_dir)
+        playbooks = load_playbooks(m.playbook_dir)
         # Avatar: real image if a file exists on disk; otherwise render
         # an initial-letter glyph so every mentor still has a visual.
         if m.avatar_path() is not None:
@@ -613,15 +754,40 @@ def _render_landing(ctx: ServerContext) -> str:
             initial = _h(m.name[:1].upper()) if m.name else "?"
             avatar_html = f"<div class='avatar avatar-fallback' aria-hidden='true'>{initial}</div>"
         description_html = f"<p class='mentor-desc'>{_h(m.description)}</p>" if m.description else ""
-        if playbooks:
-            playbook_items = "".join(
-                f"<li><span class='pb-title'>{_h(p.title)}</span>"
-                + (f"<span class='pb-desc'>{_h(p.summary)}</span>" if p.summary else "")
-                + "</li>"
-                for p in playbooks
-            )
+        # Human-mentor badge — "Behind: <name>" with optional link. Makes
+        # the escalation destination explicit per AMMP §3.4.
+        if m.human_mentor is not None:
+            hm = m.human_mentor
+            hm_name_html = f"<a href='{_h(hm.url)}'>{_h(hm.name)}</a>" if hm.url else _h(hm.name)
+            hm_contact = f" · <span class='hm-contact'>{_h(hm.contact)}</span>" if hm.contact else ""
+            human_html = f"<p class='human-mentor'>Behind {_h(m.name)}: {hm_name_html}{hm_contact}</p>"
         else:
-            playbook_items = "<li class='empty'>No playbooks yet.</li>"
+            human_html = ""
+        # Playbook → work-instruction nested rendering. Each playbook is
+        # an area of practice; each instruction is one craft rule.
+        if playbooks:
+            pb_html_parts: list[str] = []
+            for pb in playbooks:
+                if pb.instructions:
+                    instr_items = "".join(
+                        f"<li><span class='wi-title'>{_h(wi.title)}</span>"
+                        + (f"<span class='wi-desc'>{_h(wi.summary)}</span>" if wi.summary else "")
+                        + "</li>"
+                        for wi in pb.instructions
+                    )
+                else:
+                    instr_items = "<li class='empty'>No work instructions yet.</li>"
+                pb_desc = f"<p class='pb-desc'>{_h(pb.description)}</p>" if pb.description else ""
+                pb_html_parts.append(
+                    "<section class='playbook'>"
+                    f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span></h4>"
+                    f"{pb_desc}"
+                    f"<ul class='instructions'>{instr_items}</ul>"
+                    "</section>"
+                )
+            playbook_section = "".join(pb_html_parts)
+        else:
+            playbook_section = "<p class='empty'>No playbooks yet.</p>"
         mentor_blocks_parts.append(
             "<section class='mentor'>"
             "<div class='mentor-head'>"
@@ -629,9 +795,10 @@ def _render_landing(ctx: ServerContext) -> str:
             "<div class='mentor-id'>"
             f"<h3>{_h(m.name)} <span class='slug'>{_h(slug)}</span></h3>"
             f"{description_html}"
+            f"{human_html}"
             "</div>"
             "</div>"
-            f"<ul class='playbooks'>{playbook_items}</ul>"
+            f"{playbook_section}"
             "</section>"
         )
     mentor_blocks = (
@@ -672,20 +839,27 @@ a{{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in
 a:hover{{color:var(--accent-hover);border-bottom-color:var(--accent-hover)}}
 code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:4px;padding:.1rem .4rem}}
 @media (prefers-color-scheme: dark) {{ code{{background:rgba(255,255,255,.04)}} }}
-.mentor{{border-top:1px solid var(--rule);padding:1.3rem 0}}
+.mentor{{border-top:1px solid var(--rule);padding:1.4rem 0}}
 .mentor:last-of-type{{border-bottom:1px solid var(--rule)}}
-.mentor-head{{display:flex;gap:1rem;align-items:center;margin-bottom:.5rem}}
+.mentor-head{{display:flex;gap:1rem;align-items:center;margin-bottom:.75rem}}
 .mentor-id{{flex:1;min-width:0}}
 .mentor .slug{{font-family:var(--mono);font-size:.78rem;color:var(--ink-soft);font-weight:400;letter-spacing:.02em}}
 .mentor-desc{{margin:.15rem 0 0;color:var(--ink-soft);font-size:.95rem;line-height:1.5}}
+.human-mentor{{margin:.4rem 0 0;font-size:.85rem;color:var(--ink-soft)}}
+.human-mentor a{{border-bottom-color:var(--rule)}}
+.hm-contact{{font-family:var(--mono);font-size:.85em}}
 .avatar{{width:64px;height:64px;border-radius:50%;flex-shrink:0;object-fit:cover;border:1px solid var(--rule);background:var(--bg-lo)}}
 .avatar-fallback{{display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:1.6rem;font-weight:600;color:var(--ink-soft)}}
-.playbooks{{margin:.6rem 0 0;padding:0;list-style:none}}
-.playbooks li{{padding:.45rem 0;border-top:1px dashed var(--rule)}}
-.playbooks li:first-child{{border-top:none}}
-.playbooks .pb-title{{display:block;color:var(--ink);font-weight:500;font-size:.96rem}}
-.playbooks .pb-desc{{display:block;color:var(--ink-soft);font-size:.88rem;line-height:1.45;margin-top:.1rem}}
-.playbooks li.empty{{color:var(--ink-soft);font-style:italic;border:none}}
+.playbook{{margin-top:1rem;padding:.75rem 0 0;border-top:1px dashed var(--rule)}}
+.pb-name{{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .15rem;color:var(--ink);display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
+.pb-id{{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);font-weight:400}}
+.pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
+.instructions{{margin:.25rem 0 0;padding:0 0 0 1.1rem;color:var(--ink-soft);list-style:disc}}
+.instructions li{{margin:.2rem 0;color:var(--ink);font-size:.92rem}}
+.instructions li::marker{{color:var(--ink-soft)}}
+.instructions .wi-title{{color:var(--ink);font-weight:500}}
+.instructions .wi-desc{{display:block;color:var(--ink-soft);font-size:.85rem;line-height:1.4;margin-top:.05rem}}
+.instructions li.empty{{color:var(--ink-soft);font-style:italic;list-style:none;margin-left:-1.1rem}}
 .empty{{color:var(--ink-soft);font-style:italic}}
 .runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
 .cta{{margin:1rem 0 .5rem}}
@@ -838,12 +1012,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool
     def GetPlaybook(id: str, mentor: str = "", api_key: str | None = None) -> dict[str, Any]:
-        """Retrieve a single playbook from the given mentor's corpus."""
+        """Retrieve one playbook with the full body of every work instruction inside it."""
         return _handle_get_playbook(ctx, id, mentor, api_key)
 
     @mcp.tool
+    def GetWorkInstruction(playbook_id: str, id: str, mentor: str = "", api_key: str | None = None) -> dict[str, Any]:
+        """Retrieve one specific work instruction from a playbook.
+
+        Server-side extension over AMMP-01: lets a mentee fetch a single
+        instruction body when it already knows ``(playbook_id, id)``,
+        without round-tripping the whole playbook.
+        """
+        return _handle_get_work_instruction(ctx, playbook_id, id, mentor, api_key)
+
+    @mcp.tool
     def SearchPlaybooks(query: str, mentor: str = "", limit: int = 5, api_key: str | None = None) -> dict[str, Any]:
-        """Substring-search the mentor's corpus. Returns ranked matches."""
+        """Substring-search the mentor's corpus at work-instruction granularity. Returns ranked matches."""
         return _handle_search_playbooks(ctx, query, mentor, limit, api_key)
 
     @mcp.tool
