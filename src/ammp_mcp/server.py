@@ -932,12 +932,18 @@ def _build_desktop_bundle(public_url: str, mcp_url: str) -> bytes:
         # already present), so we replace just the inner braced part
         # with the dotted DXT path.
         .replace("{user_config_token}", "{user_config.bearer_token}")
+        # ${__dirname} is the DXT install-time substitution for the
+        # extension's install directory. Authored as a placeholder so
+        # our literal `.replace()` pass doesn't tangle with the dollar.
+        .replace("DIRNAME_PLACEHOLDER", "${__dirname}")
     )
     icon_bytes = (bundle_root / "icon.png").read_bytes()
+    server_js_bytes = (bundle_root / "server.js").read_bytes()
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", manifest)
         z.writestr("icon.png", icon_bytes)
+        z.writestr("server.js", server_js_bytes)
     return buf.getvalue()
 
 

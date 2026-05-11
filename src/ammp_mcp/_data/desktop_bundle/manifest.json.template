@@ -14,15 +14,14 @@
   "icon": "icon.png",
   "server": {
     "type": "node",
+    "entry_point": "server.js",
     "mcp_config": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "{mcp_url}",
-        "--header",
-        "Authorization:Bearer ${user_config_token}"
-      ]
+      "command": "node",
+      "args": ["DIRNAME_PLACEHOLDER/server.js"],
+      "env": {
+        "AMMP_URL": "{mcp_url}",
+        "BEARER_TOKEN": "${user_config_token}"
+      }
     }
   },
   "user_config": {
