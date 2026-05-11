@@ -793,8 +793,29 @@ async def _handle_escalate_to_human_mentor(
         await progress(0.5, f"delivered to {m.human_mentor.name}; awaiting reply")
 
     timeout = ctx.settings.escalation_default_timeout_seconds
+    heartbeat = ctx.settings.escalation_progress_heartbeat_seconds
+    loop = asyncio.get_event_loop()
+    started_at = loop.time()
+    deadline = started_at + timeout
     try:
-        await asyncio.wait_for(waiter.event.wait(), timeout=timeout)
+        while not waiter.event.is_set():
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise TimeoutError
+            chunk = min(heartbeat, remaining)
+            try:
+                await asyncio.wait_for(waiter.event.wait(), timeout=chunk)
+            except TimeoutError:
+                # Heartbeat tick — the inner timeout expired but the
+                # human hasn't replied yet. Emit a progress notification
+                # so the MCP client resets its per-tool timeout, then
+                # loop back into the wait.
+                if waiter.event.is_set():
+                    break
+                if progress is not None:
+                    elapsed = int(loop.time() - started_at)
+                    p = 0.5 + min(0.4, elapsed / max(timeout, 1.0) * 0.4)
+                    await progress(p, f"still awaiting {m.human_mentor.name}'s reply ({elapsed}s elapsed)")
     except TimeoutError:
         ctx.escalation_store.update(esc.id, status="expired", cancel_reason="timeout")
         ctx.escalation_broker.cancel(esc.id, "timeout")

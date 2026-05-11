@@ -553,6 +553,91 @@ async def test_escalate_to_human_mentor_round_trips(settings: Settings) -> None:
     assert "Sandra is asking" not in log_text
 
 
+async def test_escalate_to_human_mentor_emits_progress_heartbeats_while_waiting(settings: Settings) -> None:
+    """Long wait → periodic progress notifications fire.
+
+    The MCP per-tool timeout on Claude Desktop is ~60s; each
+    `notifications/progress` resets it. Without heartbeats, the
+    client gives up with `-32001` long before A.h can reply. Pinned
+    so a regression that drops the heartbeat surfaces as a failing
+    test, not as a client-side timeout in production.
+    """
+    import asyncio as _asyncio
+    from dataclasses import replace as _replace
+    from datetime import UTC, datetime
+
+    from ammp_mcp.escalation._adapters._base import DeliveryAdapter
+    from ammp_mcp.server import _handle_escalate_to_human_mentor, build_context
+
+    class _DelayedAdapter(DeliveryAdapter):
+        """Resolves the escalation after `delay_seconds` to simulate A.h thinking."""
+
+        kind = "delayed-test"
+
+        def __init__(self, *, answer: str, delay_seconds: float) -> None:
+            self._answer = answer
+            self._delay = delay_seconds
+            self._broker = None
+            self._store = None
+            self._tasks: list[_asyncio.Task[None]] = []
+
+        async def start(self, broker, store) -> None:
+            self._broker = broker
+            self._store = store
+
+        async def deliver(self, escalation) -> str | None:
+            async def _resolve() -> None:
+                await _asyncio.sleep(self._delay)
+                self._store.update(escalation.id, status="answered", answered_at=datetime.now(UTC), answer=self._answer)
+                self._broker.resolve(escalation.id, self._answer)
+
+            self._tasks.append(_asyncio.create_task(_resolve()))
+            return "telegram-msg-456"
+
+        async def stop(self) -> None:
+            return None
+
+    # Tight heartbeat (20 ms) and a delivery delay (≈ 80 ms) so the
+    # loop must fire ≥ 3 progress notifications before the answer
+    # lands. Total timeout stays at the production default so we
+    # don't exercise the timeout branch here.
+    settings_with_fast_heartbeat = settings.model_copy(update={"escalation_progress_heartbeat_seconds": 0.02})
+    ctx = build_context(settings_with_fast_heartbeat)
+    ctx = _replace(ctx, delivery_adapter=_DelayedAdapter(answer="Take the meeting.", delay_seconds=0.08))
+
+    progress_events: list[tuple[float, str]] = []
+
+    async def _capture(progress: float, message: str) -> None:
+        progress_events.append((progress, message))
+
+    await ctx.delivery_adapter.start(ctx.escalation_broker, ctx.escalation_store)
+    try:
+        result = await _handle_escalate_to_human_mentor(
+            ctx,
+            question="Should I take the meeting?",
+            mentor="pepe",
+            context="",
+            api_key=None,
+            progress=_capture,
+        )
+    finally:
+        await ctx.delivery_adapter.stop()
+
+    assert "error" not in result, result
+    assert result["answer"] == "Take the meeting."
+
+    # Expected progress stream: 0.1 (queued) → 0.5 (delivered) → ≥1
+    # heartbeat tick(s) carrying "still awaiting" → 1.0 (replied).
+    progresses = [p for p, _ in progress_events]
+    messages = [m for _, m in progress_events]
+    assert any(m.startswith("escalation") and "queued" in m for m in messages), messages
+    assert any("delivered" in m for m in messages), messages
+    assert any("still awaiting" in m for m in messages), (
+        f"heartbeat progress notification missing — client would time out. events={progress_events}"
+    )
+    assert progresses[-1] == 1.0
+
+
 async def test_escalate_to_human_mentor_no_human_mentor_configured(settings: Settings) -> None:
     """Mentor without `human_mentor` set returns no_human_mentor in-band error."""
     from ammp_mcp.server import _handle_escalate_to_human_mentor, build_context

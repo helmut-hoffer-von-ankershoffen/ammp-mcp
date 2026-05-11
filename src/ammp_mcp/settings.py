@@ -246,6 +246,19 @@ class Settings(BaseSettings):
             "client can pass `$/cancelRequest` to give up sooner."
         ),
     )
+    escalation_progress_heartbeat_seconds: float = Field(
+        default=25.0,
+        ge=1.0,
+        le=300.0,
+        description=(
+            "Cadence at which the long-running `EscalateToHumanMentor` "
+            "handler emits `notifications/progress` while waiting for "
+            "A.h's reply. Each notification resets the MCP client's "
+            "per-tool timeout — Claude Desktop's default is ~60s, so "
+            "keep this comfortably below that or the client gives up "
+            "with `-32001` before the human can answer."
+        ),
+    )
 
     @model_validator(mode="after")
     def _rebase_paths_when_ammp_dir_overridden(self) -> Settings:
