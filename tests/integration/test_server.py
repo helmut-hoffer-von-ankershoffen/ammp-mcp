@@ -282,6 +282,49 @@ async def test_auth_required_rejects_wrong_key(settings: Settings) -> None:
     assert result.data["detail"] == "api_key_invalid"
 
 
+async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
+    """A mentee minted AFTER `create_server` is honoured without a restart.
+
+    Pinned because `ammp mentee add` is supposed to be a one-shot
+    operator action — having to also `launchctl kickstart -k` (or
+    `docker restart`) the live server would be a perfectly avoidable
+    foot-gun. The hot-reload happens in `_authenticate`, which reads
+    `mentees.json` from disk on every authenticated call.
+    """
+    import json
+
+    from ammp_mcp.mentee import Mentee, hash_api_key, load_mentees, save_mentees
+
+    settings_auth = settings.model_copy(update={"require_auth": True})
+    server = create_server(settings_auth)
+
+    # First call: key not yet on disk → rejected (sanity baseline).
+    new_key = "ammp-hot-reload-fresh-key"
+    async with Client(server) as c:
+        r = await c.call_tool("ListPlaybooks", {"api_key": new_key})
+    assert r.data["error"] == "auth_failed"
+    assert r.data["detail"] == "api_key_invalid"
+
+    # Mint the mentee straight to disk (same path `ammp mentee add` writes).
+    mentees = load_mentees(settings.mentees_file)
+    mentees["hot-reload-mentee"] = Mentee(
+        slug="hot-reload-mentee",
+        operator="human:test",
+        runtime="claude-cowork",
+        api_key_hash=hash_api_key(new_key),
+        rate_limit_per_minute=60,
+    )
+    save_mentees(settings.mentees_file, mentees)
+    # Belt-and-braces: confirm the on-disk file actually contains the new slug.
+    assert "hot-reload-mentee" in json.loads(settings.mentees_file.read_text(encoding="utf-8"))[-1]["slug"]
+
+    # SECOND call — same server, no restart. The fresh key should now auth.
+    async with Client(server) as c:
+        r = await c.call_tool("ListPlaybooks", {"api_key": new_key})
+    assert r.data.get("error") is None, r.data
+    assert r.data["mentor"] == "pepe"
+
+
 def test_capability_advertises_auth_setting(settings: Settings) -> None:
     # Sync — TestClient handles its own event loop; no `await` needed here.
     settings_auth = settings.model_copy(update={"require_auth": True})

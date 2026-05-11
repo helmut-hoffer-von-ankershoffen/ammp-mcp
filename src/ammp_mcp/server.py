@@ -67,12 +67,21 @@ def _authenticate(ctx: ServerContext, api_key: str | None) -> str:
     ``ValueError`` with a stable error code when auth is required and
     the key is missing or unrecognised. Callers translate the error
     code into an in-band ``{"error": "auth_failed"}`` response.
+
+    Reads the mentee allowlist FROM DISK on every authenticated call
+    (cheap — a small JSON parse). This means `ammp mentee add` /
+    `rotate-key` / `remove` are visible to the running server
+    instantly, with no restart. Playbooks already hot-reload via
+    :func:`load_corpus`; mentor.json + backend instances stay cached
+    in ``ctx`` because their lifecycle is more involved (backends
+    hold sockets / semaphores).
     """
     if not ctx.settings.require_auth:
         return "anonymous"
     if not api_key:
         raise ValueError("api_key_required")
-    m = find_mentee_by_api_key(ctx.mentees, api_key)
+    mentees = load_mentees(ctx.settings.mentees_file) if ctx.settings.mentees_file.exists() else {}
+    m = find_mentee_by_api_key(mentees, api_key)
     if not m:
         raise ValueError("api_key_invalid")
     return m.slug
