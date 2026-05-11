@@ -37,8 +37,9 @@ $ ammp serve [OPTIONS]
 
 **Options**:
 
-* `--host TEXT`: Override bind host (default from settings).
-* `--port INTEGER`: Override bind port (default from settings).  [default: 0]
+* `--stdio`: Speak MCP JSON-RPC over stdin/stdout (subprocess transport). Wins over --host/--port and AMMP_TRANSPORT=http when set. Use this for Claude Desktop / Claude Code subprocess MCP integration.
+* `--host TEXT`: Override bind host (HTTP transport only).
+* `--port INTEGER`: Override bind port (HTTP transport only).  [default: 0]
 * `--help`: Show this message and exit.
 
 ## `ammp setup`
@@ -359,7 +360,12 @@ $ ammp system capability [OPTIONS]
 
 ### `ammp system serve`
 
-Start the MCP server. Same as `ammp-server` console script.
+Start the MCP server.
+
+Default transport is HTTP (Streamable-HTTP at `/mcp/`). Use ``--stdio`` for
+subprocess transport (Claude Desktop, Claude Code stdio integrations). The
+transport can also be set via ``AMMP_TRANSPORT={http,stdio}``; the
+``--stdio`` flag wins when both are present.
 
 **Usage**:
 
@@ -369,8 +375,9 @@ $ ammp system serve [OPTIONS]
 
 **Options**:
 
-* `--host TEXT`: Override bind host (default from settings).
-* `--port INTEGER`: Override bind port (default from settings).  [default: 0]
+* `--stdio`: Speak MCP JSON-RPC over stdin/stdout (subprocess transport). Wins over --host/--port and AMMP_TRANSPORT=http when set. Use this for Claude Desktop / Claude Code subprocess MCP integration.
+* `--host TEXT`: Override bind host (HTTP transport only).
+* `--port INTEGER`: Override bind port (HTTP transport only).  [default: 0]
 * `--help`: Show this message and exit.
 
 ### `ammp system setup`
