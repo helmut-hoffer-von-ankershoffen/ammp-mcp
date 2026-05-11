@@ -129,7 +129,7 @@ audit_sbom: ## Generate a CycloneDX SBOM at reports/sbom.json.
 docs_walk: ## Run the Haiku-driven docs walker (needs AMMP_ANTHROPIC_API_KEY).
 	uv run pytest -m e2e tests/e2e/test_docs_walk.py -v --no-cov
 
-cli_reference: ## Regenerate docs/CLI_REFERENCE.md from the live Typer surface.
+cli_reference: ## Regenerate CLI_REFERENCE.md from the live Typer surface.
 	uv run python tools/generate_cli_reference.py
 
 attributions: ## Regenerate ATTRIBUTIONS.md from the resolved dep tree.

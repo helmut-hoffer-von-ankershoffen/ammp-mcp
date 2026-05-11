@@ -301,7 +301,7 @@ The mentee selects the mentor *per call* via the `mentor` argument; omit it to f
 
 ## Deployment
 
-For the public deployment at `https://ammp.helmguild.com`, see [`docs/deployment.md`](docs/deployment.md). Two paths (small VPS + Caddy + Tailscale, or Cloudflare Tunnel), and a quick `cloudflared --url` spike for one-off testing.
+For the public deployment at `https://ammp.helmguild.com`, see [`DEPLOYMENT.md`](DEPLOYMENT.md). Two paths (small VPS + Caddy + Tailscale, or Cloudflare Tunnel), and a quick `cloudflared --url` spike for one-off testing.
 
 ## Status
 

@@ -1,0 +1,21 @@
+{
+  "_doc": "Reference schema for `<AMMP_DIR>/mentors/<slug>/mentor.json`. The mentor's slug is the parent directory name; this file describes the rest of the mentor's identity + answer-engine. Underscore-prefixed keys (`_doc`, `_about_*`) are stripped by the wizard and never round-trip into a saved file.",
+
+  "_about_name": "Human-readable display name. Surfaced in capability JSON and ListMentors. Distinct from the slug, which is dir-name and machine-facing.",
+  "name": "Example Mentor",
+
+  "_about_persona": "Voice + stance that AskMentor prepends to every backend call. Treat this as the mentor's identity; cite playbooks, decline gracefully when the corpus doesn't cover the question.",
+  "persona": "You are a senior agentic mentor responding over AMMP. Answer in 3-6 sentences, calm operational register, no filler. Use only information from the playbooks below; if the corpus does not directly cover the question, say so plainly.",
+
+  "_about_confidence_threshold": "When AskMentor's self-reported confidence falls below this, the response carries `escalation_recommended=true` plus suggested operator-facing phrasing. Range [0.0, 1.0]; 0.6 is a sane default.",
+  "confidence_threshold": 0.6,
+
+  "_about_backend": "Picks the answer engine. One of three kinds:\n  - `stub`     deterministic offline (confidence 0.2; useful for tests / first-clone)\n  - `anthropic`  stateless Claude via the Messages API (cheapest; persona+playbooks in the system prompt)\n  - `openclaw`  HTTPS webhook to a live agent runtime (production default for Pepe)\nThe wizard (`ammp setup --backend ...`) writes this block; you can hand-edit too.",
+  "backend": {
+    "kind": "openclaw",
+    "url": "https://openclaw.example.local/ammp/ask",
+    "auth_bearer_env": "OPENCLAW_BEARER",
+    "timeout_seconds": 60,
+    "max_concurrent": 10
+  }
+}

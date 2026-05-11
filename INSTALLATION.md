@@ -86,7 +86,7 @@ claude mcp add --scope user ammp-pepe https://ammp.helmguild.com/mcp/ \
   --header "Authorization: Bearer ammp-…"
 ```
 
-Tunnel setup is out of scope for this guide — see `docs/deployment.md` for the Cloudflare Tunnel pattern Helmut uses.
+Tunnel setup is out of scope for this guide — see `DEPLOYMENT.md` for the Cloudflare Tunnel pattern Helmut uses.
 
 ---
 
@@ -204,7 +204,7 @@ Helmut's setup runs two LaunchAgents:
 - `com.helmguild.ammp-mcp` — `ammp serve` on `127.0.0.1:8765`, `KeepAlive` on non-zero exit.
 - `com.helmguild.cloudflared-ammp` — Cloudflare Tunnel routing `ammp.helmguild.com` → `http://127.0.0.1:8765`.
 
-Templates live in `docs/deployment.md`.
+Templates live in `DEPLOYMENT.md`.
 
 ---
 
@@ -224,6 +224,6 @@ Templates live in `docs/deployment.md`.
 ## Next steps
 
 - Read `AGENTS.md` for the architecture and conventions.
-- Read `docs/CLI_REFERENCE.md` for the full Typer surface.
+- Read `CLI_REFERENCE.md` for the full Typer surface.
 - Read `SECURITY.md` for the privacy / threat model.
 - Read the AMMP draft at `https://www.helmguild.com/rfc/ammp/` for the protocol itself.

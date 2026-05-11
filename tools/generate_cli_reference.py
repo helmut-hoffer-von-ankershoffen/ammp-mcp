@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regenerate ``docs/CLI_REFERENCE.md`` from the live Typer app.
+"""Regenerate ``CLI_REFERENCE.md`` (at repo root) from the live Typer app.
 
 Usage:
     python tools/generate_cli_reference.py
@@ -19,11 +19,17 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-OUTPUT = REPO_ROOT / "docs" / "CLI_REFERENCE.md"
+OUTPUT = REPO_ROOT / "CLI_REFERENCE.md"
 
 
 def main() -> None:
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    """Render the Typer help tree into ``CLI_REFERENCE.md`` at the repo root.
+
+    Raises:
+        SystemExit: Process exit code mirroring the underlying
+            ``typer ... utils docs`` invocation when it returns
+            non-zero.
+    """
     cmd = [
         sys.executable,
         "-m",

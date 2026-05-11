@@ -101,7 +101,7 @@ Each domain folder has its own `CLAUDE.md` with module-specific public API and t
 
 ## CLI reference
 
-Live, generated copy in `docs/CLI_REFERENCE.md`. Regenerate after CLI changes:
+Live, generated copy in `CLI_REFERENCE.md`. Regenerate after CLI changes:
 
 ```sh
 uv run python tools/generate_cli_reference.py

@@ -335,7 +335,7 @@ def _docs_payload() -> str:
     """Concatenate the three docs the walker audits, plus ground-truth context."""
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     installation = (REPO_ROOT / "INSTALLATION.md").read_text(encoding="utf-8")
-    cli_ref = (REPO_ROOT / "docs" / "CLI_REFERENCE.md").read_text(encoding="utf-8")
+    cli_ref = (REPO_ROOT / "CLI_REFERENCE.md").read_text(encoding="utf-8")
     scripts = _project_scripts_block()
     return (
         "=== GROUND TRUTH: console scripts registered in pyproject.toml ===\n"
@@ -347,7 +347,7 @@ def _docs_payload() -> str:
         f"{readme}\n\n"
         "=== INSTALLATION.md ===\n"
         f"{installation}\n\n"
-        "=== docs/CLI_REFERENCE.md ===\n"
+        "=== CLI_REFERENCE.md (at repo root) ===\n"
         f"{cli_ref}\n"
     )
 
