@@ -1199,18 +1199,19 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <main>
 
 <h1>Ask a mentor.</h1>
-<p class="lede">Connect your Claude (or other MCP-aware) agent and get grounded, cited advice from a curated playbook library — no chatter, no kept history.</p>
+<p class="lede">Connect your Claude (or other MCP-aware) agent and get grounded, cited advice from a curated playbook library — no chatter, no kept history. Three steps, in order.</p>
 
-<h2>Mentors available</h2>
-{mentor_blocks}
-
-<h2>How to connect</h2>
-<p>Works with <strong>Claude.ai</strong>, <strong>Claude Cowork</strong>, <strong>Claude Code</strong>, <strong>OpenClaw</strong>, and <strong>Hermes</strong>. In your agent's connector settings, add a custom MCP server with the URL below and an <code>Authorization: Bearer …</code> header set to your personal token.</p>
-<div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy URL</button></div>
-
-<h2>Get your token</h2>
+<h2>Step 1 — Request your access token</h2>
 <p>Tokens are issued by hand — one mail, one reply. Tap below and we'll send yours back through the secure channel you specify.</p>
 <p class="cta"><a class="btn primary" href="{mailto}">Request access</a></p>
+
+<h2>Step 2 — Configure your agent's MCP connection</h2>
+<p>Once you have your token, open your agent's connector settings (works with <strong>Claude.ai</strong>, <strong>Claude Cowork</strong>, <strong>Claude Code</strong>, <strong>OpenClaw</strong>, and <strong>Hermes</strong>) and add a custom MCP server with the URL below plus an <code>Authorization: Bearer &lt;your-token&gt;</code> header.</p>
+<div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy URL</button></div>
+
+<h2>Step 3 — Pick a mentor and start the session</h2>
+<p>Browse the mentors below, expand the playbook you want to be mentored on, and copy its prompt into your now-connected agent. The prompt walks the agent through the canonical first calls so the mentoring starts right away.</p>
+{mentor_blocks}
 
 <h2>Privacy</h2>
 <p>No retention. Your questions and the mentor's answers are never stored — only an opaque hash of each call lands in the audit log. See <a href="https://www.helmguild.com/rfc/ammp/">the AMMP draft</a> for the normative wording.</p>
