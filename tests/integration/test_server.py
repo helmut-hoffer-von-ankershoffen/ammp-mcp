@@ -165,12 +165,13 @@ async def test_audit_log_records_no_plaintext(server, settings: Settings) -> Non
 
 
 async def test_landing_page_route(server) -> None:
-    """`GET /` returns a human-facing HTML landing with the live mentor list.
+    """`GET /` returns a mentee-facing HTML landing with live mentors + playbooks.
 
     Pinned because a fresh-clone visitor hitting the bare URL must see
     a usable page, not a 404 from the underlying MCP framework. Mounts
     MCP at `/mcp/` (production default) so the root is free for the
-    custom landing route.
+    custom landing route. The page is non-technical and mentee-only;
+    operator minting flow lives in OPERATING.md, not on the page.
     """
     from starlette.testclient import TestClient
 
@@ -180,30 +181,39 @@ async def test_landing_page_route(server) -> None:
     assert r.status_code == 200, r.text
     assert "text/html" in r.headers["content-type"]
     body = r.text
-    # The hero must identify what this server is.
-    assert "ammp-mcp" in body.lower()
-    # The fixture's three mentors must appear in the mentor list.
+    # All fixture mentor slugs + names must render — proves the per-request
+    # `ctx.mentors` walk is feeding the page (dynamic on add/remove).
     for slug in ("pepe", "strict", "stubmentor"):
         assert slug in body, f"mentor {slug!r} missing from landing page"
-    # Every integration card from the operator's checklist must be on the page.
+    for name in ("Pepe Arturo", "Strict Mentor", "Stub Mentor"):
+        assert name in body, f"mentor name {name!r} missing from landing page"
+    # Playbook titles from each mentor's corpus must appear — confirms
+    # `load_corpus()` is called per request, so new playbooks show up
+    # without a server restart. (Titles from the fixture playbooks.)
+    # Apostrophes get HTML-escaped (`&#x27;`); assert on apostrophe-free
+    # substrings so the test doesn't couple to the escape strategy.
+    for title in ("Welcome to Pepe", "OAuth callback resilience", "Strict Mentor"):
+        assert title in body, f"playbook title {title!r} missing from landing page"
+    # Runtime names are mentioned in a single short paragraph rather than
+    # five cards — but they all still need to be findable.
     for runtime in ("Claude.ai", "Claude Cowork", "Claude Code", "OpenClaw", "Hermes"):
         assert runtime in body, f"runtime {runtime!r} missing from landing page"
-    # Common how-to wording for the mentee — verify the canonical
-    # MCP-endpoint snippet is present so copy-paste users land on /mcp/.
+    # The canonical MCP endpoint must be visible for copy/paste.
     assert "/mcp/" in body
-    # The access-flow explanation has to be visible — without it, the
-    # "Authorization: Bearer ammp-…" placeholders are dead-ends.
-    assert "Requesting access" in body
-    assert "ammp mentee add" in body
-    # The "Request a token" CTA must be a mailto: with pre-filled subject
-    # and body (URL-encoded). Visitors who click it land in their mail
-    # client with the slug/runtime/delivery template ready.
+    # Operator-side language is gone — none of these belong on the
+    # mentee page after the simplification.
+    assert "ammp mentee add" not in body
+    assert "If you are the operator" not in body
+    assert "rotate-key" not in body
+    # The "Request access" CTA is a mailto: with pre-filled subject + body.
     assert "mailto:helmuthva@gmail.com" in body
     assert "subject=" in body and "body=" in body
-    # Copy-to-clipboard buttons on every integration card. The vanilla-JS
-    # handler is inline at the foot of <body>.
-    assert 'button class="btn copy"' in body or 'class="btn copy"' in body
+    # Single Copy-URL button with the inline vanilla-JS handler.
+    assert 'class="btn copy"' in body
     assert "navigator.clipboard.writeText" in body
+    # Cache-Control: no-store prevents browsers (and Cloudflare) from
+    # serving a stale landing across deploys.
+    assert "no-store" in r.headers.get("cache-control", "")
 
 
 async def test_capability_route(server) -> None:
@@ -339,9 +349,9 @@ async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
         async with Client(server) as c:
             await c.call_tool("ListPlaybooks", {"api_key": new_key})
             await c.call_tool("ListPlaybooks", {"api_key": new_key})
-        assert (
-            spy.call_count == 0
-        ), f"Expected zero re-parses across two requests when mentees.json was untouched, got {spy.call_count}."
+        assert spy.call_count == 0, (
+            f"Expected zero re-parses across two requests when mentees.json was untouched, got {spy.call_count}."
+        )
 
 
 def test_capability_advertises_auth_setting(settings: Settings) -> None:

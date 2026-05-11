@@ -556,58 +556,68 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
 
 
 def _render_landing(ctx: ServerContext) -> str:
-    """Render the operator-facing landing page served at ``GET /``.
+    """Render the mentee-facing landing page served at ``GET /``.
 
-    Self-contained HTML (inline CSS + JS, no external assets). Lists
-    the live mentors from ``ctx`` so a visitor immediately sees what
-    this deployment exposes; then walks through how to connect as a
-    mentee from each of the supported runtimes (Claude.ai, Claude
-    Cowork, Claude Code, OpenClaw, Hermes) plus the bash-plus-CLI path.
-    URLs have a Copy-to-clipboard button (clipboard.writeText, vanilla
-    JS). The "Request a token" button is a `mailto:` with URL-encoded
-    subject + body so the visitor's mail client opens pre-filled.
+    Self-contained HTML (inline CSS + JS, no external assets). For each
+    mentor loaded in ``ctx``, lists the mentor's name and playbook
+    titles — both pulled fresh per request, so the page stays in sync
+    when mentors or playbooks are added / removed without a restart.
+    A single "Request access" button opens a pre-filled ``mailto:`` to
+    the operator. The Copy button uses ``navigator.clipboard.writeText``.
+    Operator-side minting / rotation / revocation lives in
+    ``OPERATING.md``, not on this page.
 
     Args:
         ctx: The boot-time server context — used for the live mentor
-            list, the public URL, and the capability JSON link.
+            list and the public URL.
 
     Returns:
         A complete HTML document as a string, ready for ``HTMLResponse``.
     """
+    from html import escape as _h
     from urllib.parse import quote as _q
 
     base = ctx.settings.public_url.rstrip("/")
     mcp_url = f"{base}/mcp/"
-    claude_code_cmd = f'claude mcp add --scope user ammp-pepe {mcp_url} --header "Authorization: Bearer ammp-…"'
+    host = base.replace("https://", "").replace("http://", "")
 
-    # Pre-fill the operator's inbox with the three things the access flow
-    # needs. The visitor edits the placeholders in the body.
-    mailto_subject = "ammp-mcp — mentee token request"
+    mailto_subject = "ammp-mcp — please connect me"
     mailto_body = (
         "Hi Helmut,\n\n"
-        f"I'd like to connect a mentee to {base}.\n\n"
-        "  Mentee slug      : <kebab-case, e.g. claude-cowork-sandra>\n"
-        "  Runtime          : <claude-ai | claude-cowork | claude-code | openclaw | hermes>\n"
-        "  Delivery channel : <Signal / iMessage / Telegram + number>\n\n"
+        f"I'd like to connect to {base} as a mentee.\n\n"
+        "  Where I'll connect from : <Claude.ai / Claude Cowork / Claude Code / OpenClaw / Hermes>\n"
+        "  Best secure channel     : <Signal / iMessage / Telegram + number>\n\n"
         "Thanks!\n"
     )
     mailto = f"mailto:helmuthva@gmail.com?subject={_q(mailto_subject)}&body={_q(mailto_body)}"
 
-    mentor_rows = "".join(
-        f'<li><span class="slug">{slug}</span> <span class="name">{m.name}</span>'
-        f'<span class="count">{len(load_corpus(m.playbook_dir))} playbook(s)</span></li>'
-        for slug, m in ctx.mentors.items()
+    mentor_blocks_parts: list[str] = []
+    for slug, m in ctx.mentors.items():
+        playbooks = load_corpus(m.playbook_dir)
+        items = (
+            "".join(f"<li>{_h(p.title)}</li>" for p in playbooks)
+            if playbooks
+            else "<li class='empty'>No playbooks yet.</li>"
+        )
+        mentor_blocks_parts.append(
+            f"<section class='mentor'>"
+            f"<h3>{_h(m.name)} <span class='slug'>{_h(slug)}</span></h3>"
+            f"<ul class='playbooks'>{items}</ul>"
+            f"</section>"
+        )
+    mentor_blocks = (
+        "".join(mentor_blocks_parts)
+        if mentor_blocks_parts
+        else "<p class='empty'>No mentors are currently available.</p>"
     )
-    if not mentor_rows:
-        mentor_rows = '<li><span class="count">No mentors loaded.</span></li>'
 
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>ammp-mcp · {base.replace("https://", "").replace("http://", "")}</title>
+<title>ammp · {host}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="AMMP Mentoring-track server. Connect a mentee agent (Claude.ai, Claude Cowork, Claude Code, OpenClaw, Hermes) over MCP, or use the CLI.">
+<meta name="description" content="Ask a mentor — connect your Claude (or other MCP-aware) agent and get grounded, cited guidance from a curated playbook library.">
 <style>
 :root {{
   --bg-hi:#F2EDE2; --bg:#ECE6D9; --bg-lo:#E2DBC8;
@@ -624,124 +634,64 @@ def _render_landing(ctx: ServerContext) -> str:
 }}
 *{{box-sizing:border-box}}
 html,body{{margin:0;padding:0;background:linear-gradient(180deg,var(--bg-hi),var(--bg) 50%,var(--bg-lo));background-attachment:fixed;color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.7;-webkit-font-smoothing:antialiased}}
-main{{max-width:44rem;margin:0 auto;padding:3.5rem 1.75rem 3rem}}
-h1{{font-family:var(--serif);font-weight:600;font-size:2.25rem;margin:0 0 .35rem;letter-spacing:-.01em}}
-h2{{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin:2.75rem 0 1rem}}
-h3{{font-family:var(--serif);font-size:1.05rem;margin:0 0 .35rem;font-weight:600}}
-.lede{{color:var(--ink-soft);font-style:italic;margin:0 0 .5rem}}
-.meta{{font-family:var(--mono);font-size:.82rem;color:var(--ink-soft);margin:1.25rem 0 0}}
+main{{max-width:40rem;margin:0 auto;padding:3.5rem 1.75rem 3rem}}
+h1{{font-family:var(--serif);font-weight:600;font-size:2.25rem;margin:0 0 .4rem;letter-spacing:-.01em}}
+h2{{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin:2.5rem 0 .9rem}}
+h3{{font-family:var(--serif);font-size:1.1rem;margin:0 0 .4rem;font-weight:600;display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}}
+.lede{{color:var(--ink-soft);margin:0 0 .25rem;font-size:1.02rem}}
 a{{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 30%,transparent);padding-bottom:1px}}
 a:hover{{color:var(--accent-hover);border-bottom-color:var(--accent-hover)}}
-code,kbd,pre{{font-family:var(--mono);font-size:.92em}}
-pre{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:6px;padding:.9rem 1rem;overflow-x:auto;font-size:.85rem;line-height:1.55;margin:.75rem 0 0}}
-@media (prefers-color-scheme: dark) {{ pre{{background:rgba(255,255,255,.04)}} }}
-.integration{{border-top:1px solid var(--rule);padding:1.25rem 0}}
-.integration:last-of-type{{border-bottom:1px solid var(--rule)}}
-.integration .lead{{color:var(--ink-soft);margin:.15rem 0 .35rem;font-size:.95rem}}
-.mentor-list{{margin:0;padding:0;list-style:none;border-top:1px solid var(--rule)}}
-.mentor-list li{{display:flex;gap:1rem;align-items:baseline;border-bottom:1px solid var(--rule);padding:.55rem 0;font-family:var(--mono);font-size:.92rem}}
-.mentor-list .slug{{color:var(--accent);min-width:8rem}}
-.mentor-list .name{{color:var(--ink)}}
-.mentor-list .count{{color:var(--ink-soft);font-size:.85em;margin-left:auto}}
-footer{{color:var(--ink-soft);font-size:.82rem;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--rule)}}
-footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
+code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:4px;padding:.1rem .4rem}}
+@media (prefers-color-scheme: dark) {{ code{{background:rgba(255,255,255,.04)}} }}
+.mentor{{border-top:1px solid var(--rule);padding:1.1rem 0}}
+.mentor:last-of-type{{border-bottom:1px solid var(--rule)}}
+.mentor .slug{{font-family:var(--mono);font-size:.78rem;color:var(--ink-soft);font-weight:400;letter-spacing:.02em}}
+.playbooks{{margin:.25rem 0 0;padding:0 0 0 1.1rem;color:var(--ink-soft)}}
+.playbooks li{{margin:.15rem 0;color:var(--ink)}}
+.playbooks li.empty{{color:var(--ink-soft);font-style:italic;list-style:none;margin-left:-1.1rem}}
+.empty{{color:var(--ink-soft);font-style:italic}}
+.runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
+.cta{{margin:1rem 0 .5rem}}
 button{{font:inherit}}
-.btn{{display:inline-flex;align-items:center;gap:.4rem;padding:.35rem .75rem;margin:.5rem .5rem 0 0;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);font-family:var(--sans);font-size:.85rem;cursor:pointer;text-decoration:none}}
+.btn{{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .9rem;margin:.25rem .4rem .25rem 0;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);font-family:var(--sans);font-size:.92rem;cursor:pointer;text-decoration:none}}
 .btn:hover{{background:var(--accent);color:var(--bg)}}
-.btn.copy{{font-family:var(--mono);font-size:.78rem;padding:.25rem .55rem;margin-left:.5rem;vertical-align:middle}}
-.btn.copy[data-copied="1"]{{border-color:#3a8a3a;color:#3a8a3a;background:transparent}}
 .btn.primary{{background:var(--accent);color:var(--bg);border-color:var(--accent)}}
 .btn.primary:hover{{background:var(--accent-hover);border-color:var(--accent-hover)}}
-.url-row{{font-family:var(--mono);font-size:.85rem;margin:.4rem 0}}
-.url-row .label{{color:var(--ink-soft);display:inline-block;min-width:5.5rem}}
-.url-row code{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:4px;padding:.1rem .4rem;font-size:.92em}}
-@media (prefers-color-scheme: dark) {{ .url-row code{{background:rgba(255,255,255,.04)}} }}
+.btn.copy{{font-family:var(--mono);font-size:.82rem;padding:.3rem .6rem}}
+.btn.copy[data-copied="1"]{{border-color:#3a8a3a;color:#3a8a3a;background:transparent}}
+.url-row{{font-family:var(--mono);font-size:.88rem;margin:.5rem 0;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}}
+.url-row code{{flex:1;min-width:0;overflow-wrap:anywhere}}
+footer{{color:var(--ink-soft);font-size:.82rem;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--rule)}}
+footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 </style>
 </head>
 <body>
 <main>
 
-<h1>ammp-mcp</h1>
-<p class="lede">AMMP Mentoring-track server — multi-mentor, multi-mentee, privacy-preserving.</p>
-<p class="meta">{base} · <a href="{base}/.well-known/agent.json">capability JSON</a> · <a href="https://www.helmguild.com/rfc/ammp/">RFC draft-ammp-01</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">source</a></p>
+<h1>Ask a mentor.</h1>
+<p class="lede">Connect your Claude (or other MCP-aware) agent and get grounded, cited advice from a curated playbook library — no chatter, no kept history.</p>
 
-<h2>Mentors hosted here</h2>
-<ul class="mentor-list">
-{mentor_rows}
-</ul>
+<h2>Mentors available</h2>
+{mentor_blocks}
 
-<h2>Requesting access</h2>
-<p>Every mentee call carries a per-mentee Bearer token. There is no self-service mint endpoint — gatekept by design (AMMP's allowlist is what makes <em>multi-mentee</em> a privacy posture, not a wishful default).</p>
-<p>
-  <a class="btn primary" href="{mailto}">📧 Request a token</a>
-</p>
-<p><strong>If you want to connect:</strong> the button opens your mail client pre-filled with the three pieces of info the operator needs — the mentee <code>slug</code> you want (kebab-case, e.g. <code>claude-cowork-sandra</code>), the runtime you'll connect from (<code>claude-ai</code>, <code>claude-cowork</code>, <code>claude-code</code>, <code>openclaw</code>, or <code>hermes</code>), and a secure channel (Signal / iMessage / Telegram) to receive the token on. The operator mints + sends it; the token is shown to them <strong>once</strong> and never re-derivable.</p>
-<p><strong>If you are the operator:</strong> on the host where ammp-mcp runs, mint a mentee and copy the plaintext token straight into a secure channel (Signal, 1Password share, encrypted email — never plain email / Slack / SMS). The token format is <code>ammp-&lt;32 url-safe bytes&gt;</code>; only its SHA-256 lands on disk.</p>
-<pre>$ ammp mentee add claude-cowork-sandra \\
-    --operator human:sandra --runtime claude-cowork
-✓ Minted first mentee claude-cowork-sandra.
-API KEY for the first mentee — copy now, you will not see it again:
-  ammp-zxV3l8_Z_cXY1cRVr22cQY3RTOrWZ2E7EpOVldb_YrE</pre>
-<p>If a token leaks, rotate it: <code>ammp mentee rotate-key &lt;slug&gt;</code> prints a fresh one and invalidates the old hash on disk. To revoke entirely, <code>ammp mentee remove &lt;slug&gt;</code>.</p>
+<h2>How to connect</h2>
+<p>Works with <strong>Claude.ai</strong>, <strong>Claude Cowork</strong>, <strong>Claude Code</strong>, <strong>OpenClaw</strong>, and <strong>Hermes</strong>. In your agent's connector settings, add a custom MCP server with the URL below and an <code>Authorization: Bearer …</code> header set to your personal token.</p>
+<div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy URL</button></div>
 
-<h2>Connect as a mentee</h2>
+<h2>Get your token</h2>
+<p>Tokens are issued by hand — one mail, one reply. Tap below and we'll send yours back through the secure channel you specify.</p>
+<p class="cta"><a class="btn primary" href="{mailto}">Request access</a></p>
 
-<div class="integration">
-<h3>Claude.ai <span class="meta">runtime: <code>claude-ai</code></span></h3>
-<p class="lead">Settings → Connectors → Custom. Paste the MCP URL and Bearer token.</p>
-<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
-<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
-</div>
-
-<div class="integration">
-<h3>Claude Cowork <span class="meta">runtime: <code>claude-cowork</code></span></h3>
-<p class="lead">Add as a custom MCP connector. The Bearer key is per-mentee — request one above.</p>
-<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
-<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
-</div>
-
-<div class="integration">
-<h3>Claude Code <span class="meta">runtime: <code>claude-code</code></span></h3>
-<p class="lead">One CLI call registers the server at user scope so every cwd sees it. Swap <code>ammp-…</code> for the token you received.</p>
-<div class="url-row"><code>{claude_code_cmd}</code> <button class="btn copy" data-copy='{claude_code_cmd}'>Copy</button></div>
-</div>
-
-<div class="integration">
-<h3>OpenClaw <span class="meta">runtime: <code>openclaw</code></span></h3>
-<p class="lead">OpenClaw natively speaks MCP. Add the server via your runtime's connector UI or its config file with the same URL + Bearer header.</p>
-<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
-<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
-</div>
-
-<div class="integration">
-<h3>Hermes <span class="meta">runtime: <code>hermes</code></span></h3>
-<p class="lead">Hermes connects to MCP servers through its standard tool-server registry. Point it at the same URL + Bearer; no Hermes-specific handshake.</p>
-<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
-<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
-</div>
-
-<h2>Or use via CLI</h2>
-<p>Every wire-level operation has a matching <code>ammp</code> subcommand. Useful for shell-plus-Bash agents that prefer not to speak MCP.</p>
-<pre>uvx ammp-mcp                                              # install + run
-ammp mentor list                                          # who is hosted here
-ammp playbook list --mentor pepe                          # the corpus
-ammp playbook show 01-cite-or-decline --mentor pepe       # one playbook body
-ammp mentor ask "how do you stay grounded?" --mentor pepe # AskMentor parity
-ammp mentor escalate "two playbooks contradict" --mentor pepe \\
-  --why-stuck "neither covers idempotency"                # EscalateToHuman parity</pre>
-
-<h2>Privacy posture</h2>
-<p>No-retention. Mentor never accumulates a profile of the mentee. Audit log is hash-only — operation, mentor slug, mentee slug, opaque 8-hex hash, never any payload. Cross-compartment escalation is prohibited: <code>EscalateToHuman</code> returns guidance text the mentee hands to <em>its own</em> operator. See <a href="https://www.helmguild.com/rfc/ammp/">draft-ammp-01 §6.2 / §3.4</a> for the normative wording.</p>
+<h2>Privacy</h2>
+<p>No retention. Your questions and the mentor's answers are never stored — only an opaque hash of each call lands in the audit log. See <a href="https://www.helmguild.com/rfc/ammp/">the AMMP draft</a> for the normative wording.</p>
 
 <footer>
-<p>Reference implementation of the <a href="https://www.helmguild.com/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-licensed. Operator: <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>.</p>
+<p>Reference implementation of the <a href="https://www.helmguild.com/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-licensed. Run by <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>. <a href="{base}/.well-known/agent.json">Capability JSON</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">Source</a></p>
 </footer>
 
 </main>
 
 <script>
-// Tiny copy-to-clipboard handler. Falls back gracefully on browsers that
-// don't allow async clipboard access (rare, mostly old Safari over HTTP).
 document.querySelectorAll('button.btn.copy').forEach(function(b) {{
   b.addEventListener('click', async function() {{
     try {{
