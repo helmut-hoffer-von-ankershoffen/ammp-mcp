@@ -194,7 +194,7 @@ For a stay-alive local deployment (e.g. behind a Cloudflare Tunnel), write a **L
 
 Helmut's setup runs two LaunchAgents:
 
-- `com.helmguild.ammp-mcp` — `ammp-server` on `127.0.0.1:8765`, `KeepAlive` on non-zero exit.
+- `com.helmguild.ammp-mcp` — `ammp serve` on `127.0.0.1:8765`, `KeepAlive` on non-zero exit.
 - `com.helmguild.cloudflared-ammp` — Cloudflare Tunnel routing `ammp.helmguild.com` → `http://127.0.0.1:8765`.
 
 Templates live in `docs/deployment.md`.

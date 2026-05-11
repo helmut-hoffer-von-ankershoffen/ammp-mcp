@@ -24,7 +24,7 @@ uv run ammp --help                     # housekeeping CLI (mentors, mentees, sta
 uv run ammp setup                      # first-run installation wizard
 uv run ammp status                     # validate the current install
 uv run ammp usage --days 7             # aggregate the audit log for the last week
-uv run ammp serve                      # boot the MCP server (alias for ammp-server)
+uv run ammp serve                      # boot the MCP server (alias for `ammp system serve`)
 
 uv run pytest -m unit                  # offline solitary tests
 uv run pytest -m integration           # in-memory FastMCP client + Typer CliRunner

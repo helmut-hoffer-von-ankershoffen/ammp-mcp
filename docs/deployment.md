@@ -89,7 +89,7 @@ For a 10-minute spike before deciding A vs B:
 
 ```bash
 brew install cloudflared
-.venv/bin/ammp-server &
+.venv/bin/ammp serve &
 cloudflared tunnel --url http://127.0.0.1:8765
 # prints a https://*.trycloudflare.com URL — random, ephemeral, but immediately reachable
 ```

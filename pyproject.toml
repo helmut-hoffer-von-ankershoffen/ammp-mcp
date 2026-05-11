@@ -72,7 +72,6 @@ dev = [
 
 [project.scripts]
 ammp = "ammp_mcp.cli:app"
-ammp-server = "ammp_mcp.server:run"
 
 [project.urls]
 Homepage = "https://www.helmguild.com/rfc/ammp/"

@@ -185,7 +185,7 @@ git clone https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp
 cd ammp-mcp
 
 uv run ammp --help              # housekeeping CLI
-uv run ammp-server              # boot the HTTP MCP server
+uv run ammp serve               # boot the HTTP MCP server
 
 # Or, with pip in a venv:
 python3.13 -m venv .venv
@@ -200,7 +200,7 @@ export AMMP_ANTHROPIC_API_KEY=sk-ant-…
 export AMMP_REQUIRE_AUTH=true
 
 # Boot the server (HTTP transport on 127.0.0.1:8765 by default)
-ammp-server
+ammp serve
 ```
 
 In another shell:
@@ -236,7 +236,7 @@ ammp setup                                      # first-run install wizard
 ammp status                                     # validate the install
 ammp usage --days 7                             # aggregate the audit log
 ammp capability                                 # offline /.well-known/agent.json
-ammp serve                                      # same as ammp-server
+ammp serve                                      # boot the HTTP MCP server (alias for `ammp system serve`)
 ammp serve --stdio                              # subprocess transport for Claude Desktop / Claude Code
 ```
 
