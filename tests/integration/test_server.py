@@ -279,9 +279,11 @@ async def test_landing_page_route(server) -> None:
     assert "helmut.hoffer-von-ankershoffen.me" in body
     assert "Behind Pepe Arturo" in body
     # Pepe has an avatar.png in the fixture, so an <img> tag with the
-    # mentor-avatar route must render. stubmentor has no avatar; it
+    # mentor-avatar route must render. The src is relative ("mentors/...")
+    # so it resolves correctly whether the landing is served at root or
+    # at a mount prefix like `/ammp/`. stubmentor has no avatar; it
     # falls back to an initial-letter glyph (`<div class='avatar avatar-fallback'>`).
-    assert "src='/mentors/pepe/avatar'" in body or 'src="/mentors/pepe/avatar"' in body
+    assert "src='mentors/pepe/avatar'" in body or 'src="mentors/pepe/avatar"' in body
     assert "avatar-fallback" in body  # stubmentor + strict have no avatar file
     # Runtime names are mentioned in a single short paragraph rather than
     # five cards — but they all still need to be findable.
@@ -312,6 +314,40 @@ async def test_landing_page_route(server) -> None:
     # Cache-Control: no-store prevents browsers (and Cloudflare) from
     # serving a stale landing across deploys.
     assert "no-store" in r.headers.get("cache-control", "")
+
+
+async def test_mount_path_prefix_relocates_all_routes(settings: Settings) -> None:
+    """When `mount_path=/ammp`, every route this server exposes lives under the
+    prefix and bare `/` returns a 302 redirect.
+
+    Pinned because the prefix is what lets `mcp.helmguild.com` host
+    additional MCP servers later under sibling prefixes (e.g. `/review`).
+    """
+    from starlette.testclient import TestClient
+
+    settings_pref = settings.model_copy(update={"mount_path": "/ammp", "public_url": "http://test.invalid/ammp"})
+    server = create_server(settings_pref)
+    app = server.http_app(path="/ammp/mcp/")
+    with TestClient(app) as http:
+        # Root redirects to the prefixed landing.
+        r_root = http.get("/", follow_redirects=False)
+        assert r_root.status_code == 302
+        assert r_root.headers["location"] == "/ammp/"
+        # Prefixed landing serves the page.
+        r_landing = http.get("/ammp/")
+        assert r_landing.status_code == 200
+        assert "Mentor your agent." in r_landing.text
+        # Capability JSON lives under the prefix.
+        r_caps = http.get("/ammp/.well-known/agent.json")
+        assert r_caps.status_code == 200
+        assert r_caps.json()["url"] == "http://test.invalid/ammp"
+        # Avatar route lives under the prefix.
+        r_avatar = http.get("/ammp/mentors/pepe/avatar")
+        assert r_avatar.status_code == 200
+        # Bare avatar path (no prefix) returns 404 — proves the route
+        # actually moved, didn't double-register.
+        r_avatar_bare = http.get("/mentors/pepe/avatar")
+        assert r_avatar_bare.status_code == 404
 
 
 async def test_landing_renders_a_prompt_per_playbook(server) -> None:

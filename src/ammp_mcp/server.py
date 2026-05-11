@@ -1024,7 +1024,9 @@ def _render_landing(ctx: ServerContext) -> str:
         # Avatar: real image if a file exists on disk; otherwise render
         # an initial-letter glyph so every mentor still has a visual.
         if m.avatar_path() is not None:
-            avatar_html = f"<img class='avatar' src='/mentors/{_h(slug)}/avatar' alt='{_h(m.name)}' width='96' height='96' loading='lazy'>"
+            # Relative src — resolves correctly whether the landing is
+            # served at `/` or at a mount prefix like `/ammp/`.
+            avatar_html = f"<img class='avatar' src='mentors/{_h(slug)}/avatar' alt='{_h(m.name)}' width='96' height='96' loading='lazy'>"
         else:
             initial = _h(m.name[:1].upper()) if m.name else "?"
             avatar_html = f"<div class='avatar avatar-fallback' aria-hidden='true'>{initial}</div>"
@@ -1469,12 +1471,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         """
         return _handle_escalate_to_human(ctx, situation, mentor, why_stuck, api_key)
 
-    @mcp.custom_route("/.well-known/agent.json", methods=["GET"])
+    # Routes register under an optional mount prefix so this server can
+    # share `mcp.helmguild.com` with other MCP servers later (e.g. an
+    # AMMP Review-track server at `/review`). When `mount_path` is empty
+    # (local dev default), the prefix is "" and routes live at root.
+    prefix = ctx.settings.mount_path.rstrip("/")
+
+    @mcp.custom_route(f"{prefix}/.well-known/agent.json", methods=["GET"])
     async def agent_card(_request: Request) -> JSONResponse:
         """AMMP capability advertisement. AMMP §10."""
         return JSONResponse(_build_capability_payload(ctx))
 
-    @mcp.custom_route("/mentors/{slug}/avatar", methods=["GET"])
+    @mcp.custom_route(f"{prefix}/mentors/{{slug}}/avatar", methods=["GET"])
     async def mentor_avatar(request: Request) -> Response:
         """Serve a mentor's avatar image, if one is present on disk.
 
@@ -1494,7 +1502,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
-    @mcp.custom_route("/", methods=["GET"])
+    @mcp.custom_route(f"{prefix}/", methods=["GET"])
     async def landing(_request: Request) -> HTMLResponse:
         """Human-facing landing page — how to connect a mentee + CLI usage."""
         return HTMLResponse(
@@ -1506,5 +1514,22 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             # browser + intermediate (Cloudflare, Caddy) not to hold it.
             headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
+
+    # When mounted under a prefix, root `/` redirects to the prefixed
+    # landing so visitors who hit the bare hostname find the page.
+    # Future portal evolution: replace this with a portal page listing
+    # every MCP server hosted under this domain.
+    if prefix:
+
+        @mcp.custom_route("/", methods=["GET"])
+        async def root_redirect(_request: Request) -> Response:
+            """Redirect bare hostname to the mounted landing page."""
+            return Response(
+                status_code=302,
+                headers={
+                    "Location": f"{prefix}/",
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                },
+            )
 
     return mcp

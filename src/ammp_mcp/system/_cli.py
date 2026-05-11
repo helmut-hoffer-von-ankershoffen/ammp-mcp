@@ -124,7 +124,12 @@ def serve(
         return
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     server = create_server(s)
-    server.run(transport="http", host=host or s.host, port=port or s.port)
+    # The MCP transport lives under the same prefix as the rest of
+    # this server's routes (landing, capability, avatars). When
+    # `mount_path` is empty (local dev), the transport is at /mcp/.
+    # When set to `/ammp` (production), it's at /ammp/mcp/.
+    transport_path = f"{s.mount_path.rstrip('/')}/mcp/"
+    server.run(transport="http", host=host or s.host, port=port or s.port, path=transport_path)
 
 
 # ─── ammp system setup ───────────────────────────────────────────────────

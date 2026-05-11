@@ -183,7 +183,7 @@ You'll need to re-mint any mentees (the SHA-256 hashes go away with the file).
 
 The deployed instance at `https://mcp.helmguild.com` runs as two macOS LaunchAgents on Helmut's Mac:
 
-- `com.helmguild.ammp-mcp` — `~/.openclaw/workspace/repos/ammp-mcp/.venv/bin/ammp serve` on `127.0.0.1:8765`. Env vars in the plist pin `AMMP_REQUIRE_AUTH=true`, `AMMP_PUBLIC_URL=https://mcp.helmguild.com`, `AMMP_DEFAULT_MENTOR=pepe`, `AMMP_MENTORS_ROOT=…/Pepe Arturo/Mentorship/ammp-corpus`, and `AMMP_MENTEES_FILE=…/repos/ammp-mcp/mentees.json`.
+- `com.helmguild.ammp-mcp` — `~/.openclaw/workspace/repos/ammp-mcp/.venv/bin/ammp serve` on `127.0.0.1:8765`. Env vars in the plist pin `AMMP_REQUIRE_AUTH=true`, `AMMP_PUBLIC_URL=https://mcp.helmguild.com/ammp`, `AMMP_MOUNT_PATH=/ammp`, `AMMP_DEFAULT_MENTOR=pepe`, `AMMP_MENTORS_ROOT=…/Pepe Arturo/Mentorship/ammp-corpus`, and `AMMP_MENTEES_FILE=…/repos/ammp-mcp/mentees.json`. The mount prefix lets `mcp.helmguild.com` host sibling MCP servers later under `/<other>/`.
 - `com.helmguild.cloudflared-ammp` — Cloudflare Tunnel routing `mcp.helmguild.com` → `http://127.0.0.1:8765`.
 
 Logs at `~/Library/Logs/ammp-mcp.{out,err}.log`. Reload either with `launchctl unload <plist> && launchctl load <plist>`, or `launchctl kickstart -k gui/$(id -u)/com.helmguild.ammp-mcp` for an in-place restart.

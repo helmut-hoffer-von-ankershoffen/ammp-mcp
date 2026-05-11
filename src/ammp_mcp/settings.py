@@ -136,7 +136,19 @@ class Settings(BaseSettings):
     public_url: str = Field(
         default="http://127.0.0.1:8765",
         description=(
-            "URL the server advertises in /.well-known/agent.json. In production set to https://mcp.helmguild.com."
+            "URL the server advertises in /.well-known/agent.json. In production set to "
+            "the full public URL including any mount prefix, e.g. https://mcp.helmguild.com/ammp."
+        ),
+    )
+    mount_path: str = Field(
+        default="",
+        description=(
+            "URL prefix under which every route this server exposes lives — landing, "
+            "capability JSON, mentor avatars, and the MCP transport. Empty means root "
+            "(local dev). In production set to `/ammp` so `mcp.helmguild.com` can host "
+            "additional MCP servers under sibling prefixes later. Leading slash "
+            "expected; trailing slash optional (it's normalised on read). When non-empty, "
+            "root `/` returns a 302 redirect to `<mount_path>/`."
         ),
     )
 
