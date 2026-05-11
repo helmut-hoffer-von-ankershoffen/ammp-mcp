@@ -918,6 +918,7 @@ def _build_desktop_bundle(public_url: str, mcp_url: str) -> bytes:
         response body.
     """
     import io
+    import tarfile
     import zipfile
 
     from ._data import desktop_bundle_path
@@ -939,11 +940,27 @@ def _build_desktop_bundle(public_url: str, mcp_url: str) -> bytes:
     )
     icon_bytes = (bundle_root / "icon.png").read_bytes()
     server_js_bytes = (bundle_root / "server.js").read_bytes()
+    node_modules_tar = bundle_root / "node_modules.tar.gz"
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("manifest.json", manifest)
         z.writestr("icon.png", icon_bytes)
         z.writestr("server.js", server_js_bytes)
+        # Inflate bundled mcp-remote + its deps into the zip so the
+        # connector is self-contained — no `npx` on the host PATH
+        # required. The tarball is committed pre-built; regenerate by
+        # running `npm install mcp-remote` in a scratch dir and tarring
+        # the resulting node_modules. See bundle/CLAUDE.md for the
+        # refresh procedure.
+        with tarfile.open(node_modules_tar, "r:gz") as tar:
+            for member in tar:
+                if not member.isfile():
+                    continue
+                extracted = tar.extractfile(member)
+                if extracted is None:
+                    continue
+                z.writestr(member.name, extracted.read())
     return buf.getvalue()
 
 
