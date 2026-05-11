@@ -55,7 +55,7 @@ dependencies = [
     "typer>=0.15,<1",
     "rich>=13,<16",
     "anthropic>=0.40,<1",
-    "starlette>=0.47,<1",
+    "starlette>=0.47,<2",
 ]
 
 [project.optional-dependencies]
