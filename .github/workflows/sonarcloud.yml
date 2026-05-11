@@ -73,7 +73,7 @@ jobs:
       # letting a regression land on main. Polls the gate result (the
       # scan writes its task token to `.scannerwork/report-task.txt`).
       - name: Enforce SonarCloud Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@d304d050a4ad4ffd0d4a08abdf5b5b08fb1665f6 # v1.2.0
+        uses: SonarSource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b # v1.2.0
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
