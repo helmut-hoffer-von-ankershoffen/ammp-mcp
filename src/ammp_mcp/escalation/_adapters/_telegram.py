@@ -212,6 +212,20 @@ class TelegramDeliveryAdapter(DeliveryAdapter):
                 match = esc
                 break
         if match is None:
+            # Late reply: A.h answered after the MCP call was cancelled
+            # or expired. The mentee can't receive the answer anymore
+            # (no waiter), but log it explicitly so the operator can
+            # see the question got an answer they may want to forward
+            # manually. Silent drops here masked a real bug for a full
+            # session before we noticed (2026-05-11).
+            for esc in (*self._store.list_by_status("cancelled"), *self._store.list_by_status("expired")):
+                if esc.delivery_ref == parent_id:
+                    logger.warning(
+                        "telegram: late reply to escalation %s (status=%s) — call already gone, answer dropped",
+                        esc.id,
+                        esc.status,
+                    )
+                    return
             return
         text = (message.get("text") or "").strip()
         if not text:

@@ -796,7 +796,7 @@ async def _handle_escalate_to_human_mentor(
 
     timeout = ctx.settings.escalation_default_timeout_seconds
     heartbeat = ctx.settings.escalation_progress_heartbeat_seconds
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     started_at = loop.time()
     deadline = started_at + timeout
     timed_out = False
