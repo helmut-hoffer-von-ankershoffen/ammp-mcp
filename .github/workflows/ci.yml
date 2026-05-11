@@ -44,7 +44,17 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies (locked)
-        run: uv sync --extra dev --frozen
+        # `docstring-parser` and `docstring_parser_fork` both ship under
+        # the same `docstring_parser/` namespace. The fork adds
+        # `DocstringYields` (used by pydoclint); the official 0.18 does
+        # not. Whichever installs last wins on disk. uv's install order
+        # is internal and varies by Python version (3.11/3.12 land the
+        # fork last; 3.13/3.14 land the official last and break pydoclint).
+        # `--reinstall-package` re-runs the fork install at the end, so
+        # its `common.py` is always the final write.
+        run: |
+          uv sync --extra dev --frozen
+          uv sync --extra dev --frozen --reinstall-package docstring_parser_fork
 
       - name: Ruff
         run: uv run ruff check .
