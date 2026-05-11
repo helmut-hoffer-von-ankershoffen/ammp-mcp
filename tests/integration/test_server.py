@@ -305,6 +305,136 @@ async def test_landing_page_route(server) -> None:
     assert "no-store" in r.headers.get("cache-control", "")
 
 
+async def test_escalate_to_human_mentor_round_trips(settings: Settings) -> None:
+    """B.a → A.a → A.h flow: long-running tool returns A.h's reply.
+
+    Uses an in-test delivery adapter that synthetically resolves the
+    broker once `deliver()` runs, simulating A.h replying immediately.
+    Verifies the response envelope shape + that the escalation lands
+    in the persistent jsonl with `status=answered`.
+    """
+    import asyncio as _asyncio
+
+    from ammp_mcp.escalation._adapters._base import DeliveryAdapter
+    from ammp_mcp.server import build_context
+
+    class _InstantAdapter(DeliveryAdapter):
+        """Fakes a human mentor that replies immediately on deliver."""
+
+        kind = "instant-test"
+
+        def __init__(self, answer: str) -> None:
+            self._answer = answer
+            self._broker = None
+            self._store = None
+            self._tasks: list[_asyncio.Task[None]] = []
+
+        async def start(self, broker, store) -> None:
+            self._broker = broker
+            self._store = store
+
+        async def deliver(self, escalation) -> str | None:
+            # Schedule resolution on next loop tick so the handler's
+            # `event.wait()` is already registered.
+            from datetime import UTC, datetime
+
+            async def _resolve() -> None:
+                await _asyncio.sleep(0)
+                self._store.update(escalation.id, status="answered", answered_at=datetime.now(UTC), answer=self._answer)
+                self._broker.resolve(escalation.id, self._answer)
+
+            self._tasks.append(_asyncio.create_task(_resolve()))
+            return "telegram-msg-123"
+
+        async def stop(self) -> None:
+            return None
+
+    # Build a custom context with our instant adapter.
+    ctx = build_context(settings)
+    # Swap the adapter (ServerContext is frozen; rebuild).
+    from dataclasses import replace as _replace
+
+    ctx = _replace(ctx, delivery_adapter=_InstantAdapter(answer="Run the A/B for 7 days at parity."))
+
+    # Re-create server with our patched ctx — easier path: create a
+    # minimal server bound to the same ctx by going via the test
+    # context directly. We exercise `_handle_escalate_to_human_mentor`
+    # without spinning up the full MCP transport.
+    from ammp_mcp.server import _handle_escalate_to_human_mentor
+
+    # Adapter `start()` would normally be called by the FastMCP
+    # lifespan; do it explicitly for this direct-handler test.
+    await ctx.delivery_adapter.start(ctx.escalation_broker, ctx.escalation_store)
+    try:
+        result = await _handle_escalate_to_human_mentor(
+            ctx,
+            question="Sandra is asking about Instagram reel scheduling cadence — should we go 2/wk or 4/wk?",
+            mentor="pepe",
+            context="",
+            api_key=None,
+        )
+    finally:
+        await ctx.delivery_adapter.stop()
+
+    assert "error" not in result, result
+    assert result["mentor"] == "pepe"
+    assert result["escalation_id"]
+    assert result["answer"] == "Run the A/B for 7 days at parity."
+    assert result["answered_at"]
+    # Persistence: the jsonl now has this escalation as answered.
+    persisted = ctx.escalation_store.get(result["escalation_id"])
+    assert persisted is not None
+    assert persisted.status == "answered"
+    assert persisted.answer == "Run the A/B for 7 days at parity."
+    assert persisted.delivery_ref == "telegram-msg-123"
+    # Audit log: hash-only, no payload leakage.
+    log_text = settings.audit_log_path.read_text(encoding="utf-8")
+    assert "op=EscalateToHumanMentor" in log_text
+    assert "Sandra is asking" not in log_text
+
+
+async def test_escalate_to_human_mentor_no_human_mentor_configured(settings: Settings) -> None:
+    """Mentor without `human_mentor` set returns no_human_mentor in-band error."""
+    from ammp_mcp.server import _handle_escalate_to_human_mentor, build_context
+
+    ctx = build_context(settings)
+    await ctx.delivery_adapter.start(ctx.escalation_broker, ctx.escalation_store)
+    try:
+        # `strict` fixture has no human_mentor configured.
+        result = await _handle_escalate_to_human_mentor(
+            ctx, question="anything", mentor="strict", context="", api_key=None
+        )
+    finally:
+        await ctx.delivery_adapter.stop()
+    assert result["error"] == "no_human_mentor"
+
+
+async def test_ask_mentor_carries_escalation_draft_when_low_confidence(server) -> None:
+    """A low-confidence AskMentor for pepe carries a B.h-approval draft."""
+    async with Client(server) as c:
+        result = await c.call_tool(
+            "AskMentor",
+            {"question": "Should we ship this without further review?"},
+        )
+    assert result.data["escalation_recommended"] is True
+    # Pepe has a human_mentor configured in the fixture → draft surfaces.
+    draft = result.data["escalation_to_human_mentor_draft"]
+    assert draft is not None
+    assert draft["human_mentor"]["name"] == "Helmut Hoffer von Ankershoffen"
+    assert "Should we ship" in draft["question"]
+    assert "approve" in draft["suggested_message_to_your_operator"].lower()
+
+
+async def test_ask_mentor_no_draft_when_no_human_mentor(server) -> None:
+    """A mentor without `human_mentor` doesn't surface a draft even at low confidence."""
+    async with Client(server) as c:
+        result = await c.call_tool(
+            "AskMentor",
+            {"question": "anything", "mentor": "strict"},
+        )
+    assert result.data["escalation_to_human_mentor_draft"] is None
+
+
 async def test_mentor_avatar_route_serves_file(server) -> None:
     """`GET /mentors/<slug>/avatar` streams the on-disk PNG with a sane cache header."""
     from starlette.testclient import TestClient
@@ -365,6 +495,7 @@ async def test_capability_route(server) -> None:
         "SearchPlaybooks",
         "AskMentor",
         "EscalateToHuman",
+        "EscalateToHumanMentor",
     }
     # humanMentor surfaces in the capability JSON too — operators who
     # discover via /.well-known/agent.json see who's behind each mentor.
@@ -502,6 +633,7 @@ async def test_tools_listed_match_ammp_operations(server) -> None:
         "SearchPlaybooks",
         "AskMentor",
         "EscalateToHuman",
+        "EscalateToHumanMentor",
     }
 
 

@@ -88,6 +88,7 @@ async def test_stdio_transport_round_trip(isolated_tree: Path) -> None:
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
+            "EscalateToHumanMentor",
         }, names
 
         # ListPlaybooks — pepe has two playbooks (areas of practice).

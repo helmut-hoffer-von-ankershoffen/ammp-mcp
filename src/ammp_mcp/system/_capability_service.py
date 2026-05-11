@@ -65,5 +65,6 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
+            "EscalateToHumanMentor",
         ],
     }

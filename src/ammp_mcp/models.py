@@ -229,14 +229,41 @@ class SearchPlaybooksResponse(BaseModel):
     matches: list[SearchMatch]
 
 
+class EscalationToHumanMentorDraft(BaseModel):
+    """Draft of an escalation to A.h that B.a can show its operator B.h.
+
+    Surfaced on ``AskMentor`` responses when the mentor's confidence
+    falls below threshold. B.a is expected to present this draft to
+    its operator B.h for review/edit/approval before invoking
+    ``EscalateToHumanMentor`` on A.a. The draft summarises *only the
+    professional question*; private context the mentee may have
+    received from B.h does not appear here.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(
+        description="The professional question X drafted by A.a — fit to forward to A.h once B.h has approved (or edited)."
+    )
+    human_mentor: HumanMentorSummary = Field(
+        description="The human standing behind A.a, so B.h knows who the question will reach."
+    )
+    suggested_message_to_your_operator: str = Field(
+        description="First-person phrasing B.a can quote verbatim to B.h to request approval for the forward."
+    )
+
+
 class AskMentorResponse(BaseModel):
     """Response envelope for the ``AskMentor`` AMMP operation.
 
     When confidence falls below the mentor's threshold,
-    ``escalation_recommended`` is set and
-    ``suggested_message_to_your_operator`` is populated — the mentor
-    proactively offers an escalation path even without an explicit
-    ``EscalateToHuman`` call.
+    ``escalation_recommended`` is set and the response carries:
+
+    * ``suggested_message_to_your_operator`` — first-person phrasing
+      to surface to B.h.
+    * ``escalation_to_human_mentor_draft`` — when A.a is configured
+      with a ``human_mentor``, the draft B.a can ask B.h to approve
+      for forwarding to A.h via ``EscalateToHumanMentor``.
 
     ``relevant_instructions`` cites the work instructions the mentor's
     keyword ranker considered most relevant to the question — both for
@@ -252,6 +279,7 @@ class AskMentorResponse(BaseModel):
     relevant_instructions: list[WorkInstructionSummary] = Field(default_factory=list)
     escalation_recommended: bool = False
     suggested_message_to_your_operator: str | None = None
+    escalation_to_human_mentor_draft: EscalationToHumanMentorDraft | None = None
 
 
 class EscalateToHumanResponse(BaseModel):
@@ -263,6 +291,29 @@ class EscalateToHumanResponse(BaseModel):
     guidance: str
     suggested_message_to_your_operator: str
     invariant: str = "Human-Gated Escalation (AMMP §3.4)"
+
+
+class EscalateToHumanMentorResponse(BaseModel):
+    """Response envelope for the ``EscalateToHumanMentor`` AMMP-extension.
+
+    Server-side extension over AMMP-01: relays a B.h-approved question
+    from B.a to A.h (the human behind A.a) and returns A.h's answer Z
+    synchronously. The MCP call is long-running — the handler waits on
+    A.h's reply, emitting ``notifications/progress`` along the way.
+
+    Per AMMP §3.4, this cross-compartment forward is only legitimate
+    when B.h has explicitly approved it. The server records the
+    escalation id in the hash-only audit log and stores full
+    pending-state under ``<AMMP_DIR>/escalations.jsonl``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    mentor: str
+    escalation_id: str
+    answer: str
+    answered_at: str = Field(description="ISO 8601 timestamp at which A.h's reply landed back on the server.")
+    invariant: str = "Mentor-Mediated Escalation (B.h approved)"
 
 
 class ErrorResponse(BaseModel):

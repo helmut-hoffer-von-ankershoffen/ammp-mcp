@@ -11,23 +11,30 @@ Bearer API key matching an entry in the mentee allowlist.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
 from . import __ammp_draft__, __version__
 from .audit import log_event, short_hash
 from .backends import LLMAnswer, MentorBackend, build_backend
+from .escalation import EscalationBroker, EscalationStore
+from .escalation._adapters import DeliveryAdapter, DeliveryError, LogDeliveryAdapter, TelegramDeliveryAdapter
+from .escalation._service import expire_orphaned_pending, new_escalation
 from .mentee import Mentee, find_mentee_by_api_key, load_mentees
 from .mentor import Mentor, get_mentor, load_mentors
 from .models import (
     AskMentorResponse,
+    EscalateToHumanMentorResponse,
     EscalateToHumanResponse,
+    EscalationToHumanMentorDraft,
     GetPlaybookResponse,
     GetWorkInstructionResponse,
     HumanMentorSummary,
@@ -68,6 +75,37 @@ class ServerContext:
     mentors: dict[str, Mentor]
     mentees: dict[str, Mentee]
     backends: dict[str, MentorBackend]
+    escalation_store: EscalationStore
+    escalation_broker: EscalationBroker
+    delivery_adapter: DeliveryAdapter
+
+
+def _build_delivery_adapter(s: Settings) -> DeliveryAdapter:
+    """Construct the configured delivery adapter, or fall back to log-only.
+
+    ``escalation_adapter=telegram`` requires both the bot token and
+    chat id to be set; missing either degrades to the log adapter
+    with a warning so the server still boots cleanly on a fresh
+    install. Returns whichever adapter is appropriate.
+
+    Args:
+        s: The settings instance whose escalation-related fields
+            drive adapter selection.
+
+    Returns:
+        A :class:`DeliveryAdapter` ready to ``start()``.
+    """
+    if s.escalation_adapter == "telegram":
+        if not (s.escalation_telegram_bot_token and s.escalation_telegram_chat_id):
+            logger.warning(
+                "escalation_adapter=telegram but bot_token / chat_id not configured; falling back to log adapter"
+            )
+            return LogDeliveryAdapter()
+        return TelegramDeliveryAdapter(
+            bot_token=s.escalation_telegram_bot_token,
+            chat_id=s.escalation_telegram_chat_id,
+        )
+    return LogDeliveryAdapter()
 
 
 # Module-level mtime cache for the mentee allowlist. `_load_mentees_cached`
@@ -543,6 +581,24 @@ async def _handle_ask_mentor(
     threshold = m.confidence_threshold
     escalation_recommended = llm_answer.confidence < threshold
     suggested = _build_escalation_prompt(q, llm_answer.confidence, threshold) if escalation_recommended else None
+    # When confidence is low AND a human mentor is configured, also
+    # surface a draft B.a can ask B.h to approve forwarding via
+    # EscalateToHumanMentor. The draft text is the same question text;
+    # B.a / B.h may edit before invoking the tool.
+    escalation_draft: EscalationToHumanMentorDraft | None = None
+    if escalation_recommended and m.human_mentor is not None:
+        hm = m.human_mentor
+        escalation_draft = EscalationToHumanMentorDraft(
+            question=q,
+            human_mentor=HumanMentorSummary(name=hm.name, url=hm.url, contact=hm.contact),
+            suggested_message_to_your_operator=(
+                f"To your operator: \"My mentor isn't confident enough to answer this on its own. "
+                f"They've offered to forward a B.h-approved version of the question to their human mentor, "
+                f"{hm.name}. Could you review and approve the draft below before I forward it? "
+                f"I won't forward anything until you say go."
+                f'\n\nDraft to forward: {q[:600]}"'
+            ),
+        )
 
     return AskMentorResponse(
         mentor=m.slug,
@@ -552,6 +608,7 @@ async def _handle_ask_mentor(
         relevant_instructions=relevant,
         escalation_recommended=escalation_recommended,
         suggested_message_to_your_operator=suggested,
+        escalation_to_human_mentor_draft=escalation_draft,
     ).model_dump()
 
 
@@ -611,6 +668,136 @@ def _handle_escalate_to_human(
             "before acting."
         ),
         suggested_message_to_your_operator=suggested,
+    ).model_dump()
+
+
+async def _handle_escalate_to_human_mentor(
+    ctx: ServerContext,
+    question: str,
+    mentor: str,
+    context: str,
+    api_key: str | None,
+    progress: Callable[[float, str], Awaitable[None]] | None = None,
+) -> dict[str, Any]:
+    """Long-running: forward a B.h-approved question to A.h, return A.h's reply.
+
+    The flow (B.a is the calling mentee, B.h is its operator, A.a is
+    this server's mentor, A.h is the human behind A.a):
+
+    1. B.a (after getting B.h's approval) calls this tool with the
+       final question text X.
+    2. The handler persists an :class:`Escalation`, opens a waiter on
+       the in-memory broker, and hands X to the configured delivery
+       adapter (Telegram bot, OpenClaw bridge, or log-only).
+    3. The handler emits ``notifications/progress`` updates as the
+       delivery transitions ``pending → delivered → answered`` and
+       awaits the broker's event.
+    4. When A.h replies, the adapter calls
+       :meth:`EscalationBroker.resolve`; the waiter wakes, and the
+       handler returns A.h's reply Z to B.a synchronously.
+
+    Cancellation: if B.a's MCP client sends ``$/cancelRequest``, the
+    awaiting task is cancelled; the handler marks the escalation
+    ``cancelled`` and propagates the cancellation back up. Adapter
+    inbound replies arriving after cancellation are silently
+    dropped (no waiter to resolve; the late reply is logged).
+
+    Args:
+        ctx: The per-request server context.
+        question: The B.h-approved question text X. Empty / whitespace
+            returns ``empty_question``.
+        mentor: A.a's slug. Empty falls through to the configured
+            default mentor.
+        context: Optional context attached for A.h.
+        api_key: B.a's Bearer key. Required when ``require_auth``.
+        progress: Optional callback for MCP progress notifications.
+            Called with ``(0..1 progress, "human readable")``.
+
+    Returns:
+        A JSON-serialisable dict — either an
+        :class:`EscalateToHumanMentorResponse` envelope on success, or
+        an in-band error envelope on auth failure, unknown mentor, no
+        human mentor configured, delivery failure, timeout, or
+        cancellation.
+
+    Raises:
+        asyncio.CancelledError: Re-raised when the MCP client sends
+            ``$/cancelRequest``. The escalation is marked ``cancelled``
+            in the store before propagating so the audit log stays
+            consistent.
+    """
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    m = _resolve_mentor(ctx, mentor)
+    if not m:
+        return {"error": "unknown_mentor"}
+    if m.human_mentor is None:
+        return {
+            "error": "no_human_mentor",
+            "detail": f"mentor {m.slug!r} has no human_mentor configured; cannot relay",
+        }
+    q = (question or "").strip()
+    if not q:
+        return {"error": "empty_question"}
+
+    esc = new_escalation(
+        mentor_slug=m.slug,
+        mentee_slug=mentee_slug,
+        question=q,
+        context=context.strip() if context else None,
+    )
+    ctx.escalation_store.append(esc)
+    log_event(
+        ctx.settings.audit_log_path,
+        "EscalateToHumanMentor",
+        mentor=m.slug,
+        mentee=mentee_slug,
+        request_hash=short_hash(q),
+    )
+    waiter = ctx.escalation_broker.open(esc.id)
+    if progress is not None:
+        await progress(0.1, f"escalation {esc.id[:8]} queued for delivery to {m.human_mentor.name}")
+
+    try:
+        delivery_ref = await ctx.delivery_adapter.deliver(esc)
+    except DeliveryError as e:
+        ctx.escalation_store.update(esc.id, status="cancelled", cancel_reason=f"delivery_failed: {e}")
+        ctx.escalation_broker.cancel(esc.id, f"delivery_failed: {e}")
+        return {"error": "delivery_failed", "detail": str(e)}
+    ctx.escalation_store.update(esc.id, status="delivered", delivery_ref=delivery_ref)
+    if progress is not None:
+        await progress(0.5, f"delivered to {m.human_mentor.name}; awaiting reply")
+
+    timeout = ctx.settings.escalation_default_timeout_seconds
+    try:
+        await asyncio.wait_for(waiter.event.wait(), timeout=timeout)
+    except TimeoutError:
+        ctx.escalation_store.update(esc.id, status="expired", cancel_reason="timeout")
+        ctx.escalation_broker.cancel(esc.id, "timeout")
+        return {"error": "timeout", "detail": f"no reply within {timeout:.0f}s", "escalation_id": esc.id}
+    except asyncio.CancelledError:
+        ctx.escalation_store.update(esc.id, status="cancelled", cancel_reason="mcp_cancelled")
+        ctx.escalation_broker.cancel(esc.id, "mcp_cancelled")
+        raise
+
+    if waiter.answer is None:
+        # Cancelled or expired between deliver and wake — surface as error.
+        return {
+            "error": "cancelled",
+            "detail": waiter.cancel_reason or "no answer received",
+            "escalation_id": esc.id,
+        }
+    final = ctx.escalation_store.get(esc.id)
+    answered_at = final.answered_at.isoformat() if final and final.answered_at else ""
+    if progress is not None:
+        await progress(1.0, "human mentor replied")
+    return EscalateToHumanMentorResponse(
+        mentor=m.slug,
+        escalation_id=esc.id,
+        answer=waiter.answer,
+        answered_at=answered_at,
     ).model_dump()
 
 
@@ -697,6 +884,7 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
+            "EscalateToHumanMentor",
         ],
     }
 
@@ -947,7 +1135,19 @@ def build_context(settings: Settings | None = None) -> ServerContext:
     mentors = load_mentors(s.mentors_root)
     mentees = load_mentees(s.mentees_file) if s.mentees_file.exists() else {}
     backends: dict[str, MentorBackend] = {slug: build_backend(m.backend, s) for slug, m in mentors.items()}
-    return ServerContext(settings=s, mentors=mentors, mentees=mentees, backends=backends)
+    store = EscalationStore(s.escalations_file)
+    expire_orphaned_pending(store)
+    broker = EscalationBroker()
+    adapter = _build_delivery_adapter(s)
+    return ServerContext(
+        settings=s,
+        mentors=mentors,
+        mentees=mentees,
+        backends=backends,
+        escalation_store=store,
+        escalation_broker=broker,
+        delivery_adapter=adapter,
+    )
 
 
 def create_server(settings: Settings | None = None) -> FastMCP:
@@ -968,13 +1168,30 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     ctx = build_context(settings)
 
     logger.info(
-        "boot: %d mentors loaded (%s), %d mentees in allowlist, backends={%s}",
+        "boot: %d mentors loaded (%s), %d mentees in allowlist, backends={%s}, escalation_adapter=%s",
         len(ctx.mentors),
         ",".join(ctx.mentors) or "none",
         len(ctx.mentees),
         ", ".join(f"{slug}:{b.mode_label}({'live' if b.is_live else 'stub'})" for slug, b in ctx.backends.items())
         or "none",
+        ctx.delivery_adapter.kind,
     )
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _lifespan(_server: FastMCP[Any]) -> Any:
+        """Start the delivery adapter on server boot; stop it on shutdown.
+
+        The adapter's inbound task (Telegram long-poll, for the
+        Telegram adapter) lives for the duration of the server.
+        """
+        await ctx.delivery_adapter.start(ctx.escalation_broker, ctx.escalation_store)
+        try:
+            yield {}
+        finally:
+            await ctx.delivery_adapter.stop()
+
     mcp: FastMCP[Any] = FastMCP(
         name="ammp-mcp",
         instructions=(
@@ -983,8 +1200,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             "posture: no-retention; the mentor never accumulates a profile of "
             "the mentee. EscalateToHuman returns guidance text the mentee "
             "hands to its own operator — the mentor never reaches across "
-            "compartments."
+            "compartments. EscalateToHumanMentor (server-side extension) "
+            "forwards a B.h-approved question to the human behind the mentor "
+            "and is long-running — the call blocks until the human replies."
         ),
+        lifespan=_lifespan,
     )
 
     # MCP tool functions are deliberately PascalCase — the function name
@@ -1048,6 +1268,53 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         directly.
         """
         return await _handle_ask_mentor(ctx, question, mentor, context, api_key)
+
+    @mcp.tool
+    async def EscalateToHumanMentor(
+        question: str,
+        mentor: str = "",
+        context: str = "",
+        api_key: str | None = None,
+        ctx_mcp: Context | None = None,
+    ) -> dict[str, Any]:
+        """Forward a B.h-approved question to A.h (the human behind A.a).
+
+        Long-running MCP tool. The call blocks until A.h replies (or
+        the configured timeout fires, or B.a sends $/cancelRequest).
+        While waiting, the server emits ``notifications/progress``
+        updates: queued → delivered → answered.
+
+        Required precondition (enforced by B.a, not by this server):
+        B.h has approved forwarding the question to A.h. The
+        cross-compartment forward is only legitimate with that consent
+        (AMMP §3.4).
+
+        Args:
+            question: The B.h-approved question text X.
+            mentor: Slug of the agentic mentor A.a whose human A.h
+                the question should reach. Empty falls through to the
+                configured default mentor.
+            context: Optional context to attach for A.h.
+            api_key: B.a's Bearer key. Required when ``require_auth``.
+            ctx_mcp: FastMCP-injected context for progress notifications.
+
+        Returns:
+            On success: ``{mentor, escalation_id, answer, answered_at}``.
+            On failure: an in-band error envelope. Errors:
+            ``auth_failed``, ``unknown_mentor``, ``no_human_mentor``,
+            ``empty_question``, ``delivery_failed``, ``timeout``,
+            ``cancelled``.
+        """
+
+        async def _report(progress: float, message: str) -> None:
+            """Forward progress to the MCP client when a context is attached."""
+            if ctx_mcp is not None:
+                try:
+                    await ctx_mcp.report_progress(progress=progress, message=message)
+                except Exception as e:
+                    logger.debug("report_progress failed (non-fatal): %s", e)
+
+        return await _handle_escalate_to_human_mentor(ctx, question, mentor, context, api_key, progress=_report)
 
     @mcp.tool
     def EscalateToHuman(

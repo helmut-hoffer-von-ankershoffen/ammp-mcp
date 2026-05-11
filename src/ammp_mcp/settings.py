@@ -82,6 +82,19 @@ def _default_audit_log_path() -> Path:
     return _resolve_ammp_dir() / "audit.log"
 
 
+def _default_escalations_file() -> Path:
+    """Return the default escalations jsonl path (``<AMMP_DIR>/escalations.jsonl``).
+
+    Returns:
+        Absolute :class:`~pathlib.Path` to the append-only JSONL of
+        mentor-mediated escalations.
+    """
+    return _resolve_ammp_dir() / "escalations.jsonl"
+
+
+EscalationAdapterKind = Literal["log", "telegram"]
+
+
 class Settings(BaseSettings):
     """Server configuration — loaded once at boot, immutable thereafter."""
 
@@ -181,6 +194,47 @@ class Settings(BaseSettings):
         description="Hash-only audit log location (AMMP §6.2). Defaults to `<AMMP_DIR>/audit.log`.",
     )
 
+    # ─── Escalation to human mentor ───────────────────────────────
+    escalations_file: Path = Field(
+        default_factory=_default_escalations_file,
+        description=(
+            "Append-only JSONL of every mentor-mediated escalation. Defaults to `<AMMP_DIR>/escalations.jsonl`."
+        ),
+    )
+    escalation_adapter: EscalationAdapterKind = Field(
+        default="log",
+        description=(
+            "Delivery adapter for `EscalateToHumanMentor`. `log` is a "
+            "no-op default that just logs (escalations sit pending until "
+            "operator action). `telegram` delivers to a configured bot + "
+            "chat id; A.h replies in Telegram, the reply is routed back "
+            "to the waiting MCP tool call."
+        ),
+    )
+    escalation_telegram_bot_token: str | None = Field(
+        default=None,
+        description=("Bot token from @BotFather. Required when `escalation_adapter=telegram`."),
+    )
+    escalation_telegram_chat_id: str | None = Field(
+        default=None,
+        description=(
+            "Telegram chat id A.h reads escalations from. Numeric "
+            "string (e.g. `123456789`); for a private chat with the "
+            "bot, find it by sending `/start` and inspecting "
+            "`getUpdates`. Required when `escalation_adapter=telegram`."
+        ),
+    )
+    escalation_default_timeout_seconds: float = Field(
+        default=86400.0,  # 24h — humans take time
+        ge=60.0,
+        le=604800.0,
+        description=(
+            "How long the long-running `EscalateToHumanMentor` tool "
+            "call waits before giving up on a human reply. The MCP "
+            "client can pass `$/cancelRequest` to give up sooner."
+        ),
+    )
+
     @model_validator(mode="after")
     def _rebase_paths_when_ammp_dir_overridden(self) -> Settings:
         """If the caller overrode `ammp_dir` directly, propagate to the leaves.
@@ -203,6 +257,8 @@ class Settings(BaseSettings):
             object.__setattr__(self, "mentees_file", explicit_ammp_dir / "mentees.json")
         if str(self.audit_log_path).startswith(str(env_default)):
             object.__setattr__(self, "audit_log_path", explicit_ammp_dir / "audit.log")
+        if str(self.escalations_file).startswith(str(env_default)):
+            object.__setattr__(self, "escalations_file", explicit_ammp_dir / "escalations.jsonl")
         return self
 
 
