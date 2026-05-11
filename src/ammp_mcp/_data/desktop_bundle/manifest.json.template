@@ -1,5 +1,5 @@
 {
-  "dxt_version": "0.1",
+  "manifest_version": "0.3",
   "name": "helmguild-ammp",
   "display_name": "helmguild AMMP",
   "version": "0.1.0",
@@ -11,6 +11,9 @@
   },
   "homepage": "{public_url}/",
   "documentation": "https://www.helmguild.com/rfc/ammp/",
+  "privacy_policies": [
+    "https://www.helmguild.com/imprint/"
+  ],
   "icon": "icon.png",
   "server": {
     "type": "node",
