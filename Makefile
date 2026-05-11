@@ -15,7 +15,8 @@ PYTHON_VERSION ?= 3.13
 
 .PHONY: help all install clean lint lint_fix pre_commit_run_all \
         test test_unit test_integration test_e2e test_coverage_reset \
-        dist audit docs_walk \
+        dist dist_smoke_test audit audit_vulnerabilities audit_licenses audit_sbom \
+        docs_walk \
         serve status capability cli_reference attributions
 
 # ─── Help (default) ──────────────────────────────────────────────────────
@@ -31,8 +32,15 @@ help: ## Show this help.
 
 ##@ Setup
 
-install: ## Install dev deps + pre-push hooks (one-shot for a fresh clone).
-	uv sync --extra dev
+install: ## Install dev deps from uv.lock + pre-push hooks (one-shot for a fresh clone).
+	uv sync --extra dev --frozen
+	# `docstring-parser` and `docstring_parser_fork` both ship files under
+	# the same `docstring_parser/` namespace. The fork adds DocstringYields
+	# (used by pydoclint); the official 0.18 does not. Whichever installs
+	# last wins on disk. uv's install order varies by Python version
+	# (3.13/3.14 land the official last and break pydoclint). Recopy the
+	# fork as the final step so its `common.py` always wins.
+	uv sync --extra dev --frozen --reinstall-package docstring_parser_fork
 	uv run pre-commit install --hook-type pre-push
 
 clean: ## Reset the dev tree — remove caches, .venv, reports, dist.
@@ -81,12 +89,40 @@ test_coverage_reset: ## Wipe coverage data (use before re-running for a clean ba
 dist: ## Build sdist + wheel via uv.
 	uv build
 
-audit: ## Vulnerability + license + SBOM scan (matches CI's audit.yml).
+dist_smoke_test: dist ## Build, then install the wheel into a throwaway venv and smoke-test it.
+	uv venv /tmp/ammp-mcp-wheel-smoke
+	uv pip install --python /tmp/ammp-mcp-wheel-smoke/bin/python dist/*.whl
+	/tmp/ammp-mcp-wheel-smoke/bin/python -c "import ammp_mcp; print('OK', ammp_mcp.__version__)"
+	/tmp/ammp-mcp-wheel-smoke/bin/ammp --help > /dev/null
+
+audit: audit_vulnerabilities audit_licenses audit_sbom  ## Run the full audit pipeline (matches audit.yml).
+
+audit_vulnerabilities: ## pip-audit + fail-on-any-vulnerability (writes reports/vulnerabilities.json).
 	mkdir -p reports
-	uv run --with pip-audit --with pip-licenses --with cyclonedx-bom -- \
-		pip-audit --skip-editable --format columns
-	uv run --with pip-licenses -- \
-		pip-licenses --format=csv --output-file=reports/licenses.csv
+	uv run --with pip-audit -- pip-audit \
+		--skip-editable \
+		--format json \
+		--output reports/vulnerabilities.json
+	uv run --with pip-audit -- pip-audit --skip-editable --format columns || true
+	uv run python scripts/audit_vulnerabilities.py
+
+audit_licenses: ## pip-licenses + license allow-list enforcement (writes reports/licenses.{json,csv}).
+	mkdir -p reports
+	uv run --with pip-licenses -- pip-licenses \
+		--format=json \
+		--with-urls \
+		--with-license-file \
+		--output-file=reports/licenses.json
+	uv run --with pip-licenses -- pip-licenses \
+		--format=csv \
+		--output-file=reports/licenses.csv
+	uv run python scripts/audit_licenses.py
+
+audit_sbom: ## Generate a CycloneDX SBOM at reports/sbom.json.
+	mkdir -p reports
+	uv run --with cyclonedx-bom -- cyclonedx-py environment \
+		--output-format json \
+		--output-file reports/sbom.json
 
 ##@ Documentation
 

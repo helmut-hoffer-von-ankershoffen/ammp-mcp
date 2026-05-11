@@ -13,6 +13,10 @@ env:
   # ships its Node 24 release.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+# Every step delegates to the Makefile so the local-dev surface and CI
+# stay byte-identical. No direct `uv …` or tool calls inside steps —
+# `make help` is the single source of truth for what runs.
+
 jobs:
   lint-and-test:
     name: Lint, type-check, test (Python ${{ matrix.python }})
@@ -33,46 +37,20 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # uv resolves and installs deterministically from uv.lock, matching
-      # what `uv sync` does locally. Crucially, that means the
-      # docstring-parser / docstring_parser_fork on-disk install order
-      # is identical to local — no install-order workarounds needed.
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Install dependencies (locked)
-        # `docstring-parser` and `docstring_parser_fork` both ship under
-        # the same `docstring_parser/` namespace. The fork adds
-        # `DocstringYields` (used by pydoclint); the official 0.18 does
-        # not. Whichever installs last wins on disk. uv's install order
-        # is internal and varies by Python version (3.11/3.12 land the
-        # fork last; 3.13/3.14 land the official last and break pydoclint).
-        # `--reinstall-package` re-runs the fork install at the end, so
-        # its `common.py` is always the final write.
-        run: |
-          uv sync --extra dev --frozen
-          uv sync --extra dev --frozen --reinstall-package docstring_parser_fork
+      - name: Install (locked deps + pre-push hooks)
+        run: make install
 
-      - name: Ruff
-        run: uv run ruff check .
+      - name: Lint + type-check + docstrings
+        run: make lint
 
-      - name: Ruff format check
-        run: uv run ruff format --check .
-
-      - name: Mypy
-        run: uv run mypy src/ammp_mcp
-
-      - name: Docstring coverage (every function in src/ has one)
-        run: uv run python scripts/check_docstrings.py
-
-      - name: Pydoclint (Args/Returns/Raises match the signature)
-        run: uv run pydoclint src/ammp_mcp
-
-      - name: Pytest (unit + integration)
-        run: uv run pytest -m "unit or integration" --cov=ammp_mcp --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
+      - name: Tests (unit + integration with coverage)
+        run: make test
 
       # Codecov upload — runs only on the canonical Python (3.13) so we don't
       # double-count coverage across the matrix. `slug` is required for the
@@ -148,12 +126,12 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Install dependencies (locked)
+      - name: Install (locked deps + pre-push hooks)
         if: steps.secret_check.outputs.skip != 'true'
-        run: uv sync --extra dev --frozen
+        run: make install
 
       - name: Run the doc walker
         if: steps.secret_check.outputs.skip != 'true'
         env:
           AMMP_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: uv run pytest -m e2e tests/e2e/test_docs_walk.py -v
+        run: make docs_walk

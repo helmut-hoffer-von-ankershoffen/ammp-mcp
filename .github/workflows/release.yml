@@ -98,15 +98,14 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Install (locked)
-        run: uv sync --extra dev --frozen
+      - name: Install (locked deps + pre-push hooks)
+        run: make install
 
-      - name: Lint, type-check, test
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
-          uv run mypy src/ammp_mcp
-          uv run pytest -m "unit or integration" -q
+      - name: Lint + type-check + docstrings
+        run: make lint
+
+      - name: Tests (unit + integration with coverage)
+        run: make test
 
   # -----------------------------------------------------------------------
   build:
@@ -126,20 +125,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Build distributions
-        # `uv build` does sdist + wheel in one shot, picks up the project's
-        # hatchling backend via pyproject.toml — no extra deps needed.
-        run: uv build
-
-      - name: Smoke-test the wheel imports cleanly
-        # Install the just-built wheel into a throwaway uv-managed env so
-        # the smoke test exercises the real installed artefact, not the
-        # editable source tree.
-        run: |
-          uv venv /tmp/wheel-smoke
-          uv pip install --python /tmp/wheel-smoke/bin/python dist/*.whl
-          /tmp/wheel-smoke/bin/python -c "import ammp_mcp; print('OK', ammp_mcp.__version__)"
-          /tmp/wheel-smoke/bin/ammp --help > /dev/null
+      - name: Build distributions + smoke-test the wheel
+        run: make dist_smoke_test
 
       - name: Generate SHA256SUMS for dist/*
         working-directory: dist

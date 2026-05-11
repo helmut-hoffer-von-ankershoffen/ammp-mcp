@@ -49,16 +49,11 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Install project + test deps (locked)
-        run: uv sync --extra dev --frozen
+      - name: Install (locked deps + pre-push hooks)
+        run: make install
 
       - name: Generate coverage + JUnit reports for Sonar
-        run: |
-          mkdir -p reports
-          uv run pytest -m "unit or integration" \
-            --cov=ammp_mcp \
-            --cov-report=xml:reports/coverage.xml \
-            --junitxml=reports/junit.xml
+        run: make test
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@59db25f34e16620e48ab4bb9e4a5dce155cb5432 # v8.0.0
