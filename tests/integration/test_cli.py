@@ -286,3 +286,72 @@ def test_system_health_fails_when_unreachable(runner: CliRunner) -> None:
 def test_health_alias_works(runner: CliRunner) -> None:
     r = runner.invoke(app, ["health", "--url", "http://127.0.0.1:1", "--no-probe-backends"])
     assert r.exit_code == 1
+
+
+# ─── CLI parity with AMMP wire protocol ───────────────────────────────────
+#
+# `ammp mentor ask`, `ammp mentor escalate`, `ammp playbook search` invoke
+# the same in-process handlers the MCP server uses. These tests pin the
+# CLI surface to the protocol — both happy and error paths.
+
+
+def test_mentor_ask_with_stub_backend(runner: CliRunner) -> None:
+    """`ammp mentor ask` against a stub-backend mentor returns a deterministic answer."""
+    r = runner.invoke(app, ["mentor", "ask", "what should I do?", "--mentor", "stubmentor"])
+    assert r.exit_code == 0, r.output
+    assert "AskMentor" in r.output
+    assert "answer" in r.output
+
+
+def test_mentor_ask_unknown_mentor_errors(runner: CliRunner) -> None:
+    """Unknown mentor slug → exit 1 with a helpful error."""
+    r = runner.invoke(app, ["mentor", "ask", "anything", "--mentor", "ghost"])
+    assert r.exit_code == 1
+    assert "failed" in r.output.lower() or "unknown" in r.output.lower()
+
+
+def test_mentor_ask_json_output(runner: CliRunner) -> None:
+    """`--json` emits parseable JSON with the expected handler shape."""
+    r = runner.invoke(app, ["mentor", "ask", "hello", "--mentor", "stubmentor", "--json"])
+    assert r.exit_code == 0, r.output
+    payload = json.loads(r.output)
+    assert payload["mentor"] == "stubmentor"
+    assert "answer" in payload
+    assert "confidence" in payload
+
+
+def test_mentor_escalate_happy_path(runner: CliRunner) -> None:
+    """`ammp mentor escalate` returns suggested phrasing for the operator."""
+    r = runner.invoke(
+        app,
+        ["mentor", "escalate", "two playbooks contradict", "--mentor", "stubmentor", "--why-stuck", "unsure"],
+    )
+    assert r.exit_code == 0, r.output
+    assert "EscalateToHuman" in r.output
+
+
+def test_mentor_escalate_unknown_mentor_errors(runner: CliRunner) -> None:
+    r = runner.invoke(app, ["mentor", "escalate", "anything", "--mentor", "ghost"])
+    assert r.exit_code == 1
+
+
+def test_playbook_search_finds_match(runner: CliRunner) -> None:
+    """`ammp playbook search` substring-searches the corpus."""
+    r = runner.invoke(app, ["playbook", "search", "callback", "--mentor", "pepe"])
+    assert r.exit_code == 0, r.output
+    # The auth.md playbook mentions "OAuth callback resilience".
+    assert "auth" in r.output
+
+
+def test_playbook_search_unknown_mentor_errors(runner: CliRunner) -> None:
+    r = runner.invoke(app, ["playbook", "search", "anything", "--mentor", "ghost"])
+    assert r.exit_code == 1
+
+
+def test_playbook_search_json_output(runner: CliRunner) -> None:
+    r = runner.invoke(app, ["playbook", "search", "callback", "--mentor", "pepe", "--json"])
+    assert r.exit_code == 0, r.output
+    payload = json.loads(r.output)
+    assert payload["mentor"] == "pepe"
+    assert payload["query"] == "callback"
+    assert payload["count"] >= 1
