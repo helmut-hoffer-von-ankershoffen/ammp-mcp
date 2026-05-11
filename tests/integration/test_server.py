@@ -164,6 +164,35 @@ async def test_audit_log_records_no_plaintext(server, settings: Settings) -> Non
     assert secret_q not in log_text
 
 
+async def test_landing_page_route(server) -> None:
+    """`GET /` returns a human-facing HTML landing with the live mentor list.
+
+    Pinned because a fresh-clone visitor hitting the bare URL must see
+    a usable page, not a 404 from the underlying MCP framework. Mounts
+    MCP at `/mcp/` (production default) so the root is free for the
+    custom landing route.
+    """
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/")
+    assert r.status_code == 200, r.text
+    assert "text/html" in r.headers["content-type"]
+    body = r.text
+    # The hero must identify what this server is.
+    assert "ammp-mcp" in body.lower()
+    # The fixture's three mentors must appear in the mentor list.
+    for slug in ("pepe", "strict", "stubmentor"):
+        assert slug in body, f"mentor {slug!r} missing from landing page"
+    # Every integration card from the operator's checklist must be on the page.
+    for runtime in ("Claude.ai", "Claude Cowork", "Claude Code", "OpenClaw", "Hermes"):
+        assert runtime in body, f"runtime {runtime!r} missing from landing page"
+    # Common how-to wording for the mentee — verify the canonical
+    # MCP-endpoint snippet is present so copy-paste users land on /mcp/.
+    assert "/mcp/" in body
+
+
 async def test_capability_route(server) -> None:
     """The /.well-known/agent.json AMMP capability advertisement."""
     async with Client(server) as c:

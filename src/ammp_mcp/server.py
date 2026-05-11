@@ -17,7 +17,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 
 from . import __ammp_draft__, __version__
 from .audit import log_event, short_hash
@@ -505,6 +505,151 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
     }
 
 
+# ─── Human-facing landing page ────────────────────────────────────────────
+
+
+def _render_landing(ctx: ServerContext) -> str:
+    """Render the operator-facing landing page served at ``GET /``.
+
+    Self-contained HTML (inline CSS, no external assets). Lists the
+    live mentors from ``ctx`` so a visitor immediately sees what this
+    deployment exposes; then walks through how to connect as a mentee
+    from each of the supported runtimes (Claude.ai, Claude Cowork,
+    Claude Code, OpenClaw, Hermes) plus the bash-plus-CLI path.
+
+    Args:
+        ctx: The boot-time server context — used for the live mentor
+            list, the public URL, and the capability JSON link.
+
+    Returns:
+        A complete HTML document as a string, ready for ``HTMLResponse``.
+    """
+    base = ctx.settings.public_url.rstrip("/")
+    mentor_rows = "".join(
+        f'<li><span class="slug">{slug}</span> <span class="name">{m.name}</span>'
+        f'<span class="count">{len(load_corpus(m.playbook_dir))} playbook(s)</span></li>'
+        for slug, m in ctx.mentors.items()
+    )
+    if not mentor_rows:
+        mentor_rows = '<li><span class="count">No mentors loaded.</span></li>'
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ammp-mcp · {base.replace("https://", "").replace("http://", "")}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="AMMP Mentoring-track server. Connect a mentee agent (Claude.ai, Claude Cowork, Claude Code, OpenClaw, Hermes) over MCP, or use the CLI.">
+<style>
+:root {{
+  --bg-hi:#F2EDE2; --bg:#ECE6D9; --bg-lo:#E2DBC8;
+  --ink:#1A1F2C; --ink-soft:#535868; --rule:#CFC8B6;
+  --accent:#2E4F6B; --accent-hover:#3B6488;
+  --serif:"Iowan Old Style","Apple Garamond","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Inter","SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}}
+@media (prefers-color-scheme: dark) {{
+  :root {{ --bg-hi:#1A1F2C; --bg:#161B25; --bg-lo:#11161F;
+           --ink:#E8E3D6; --ink-soft:#98A0B2; --rule:#3A4150;
+           --accent:#9FC5E8; --accent-hover:#BBD5F2; }}
+}}
+*{{box-sizing:border-box}}
+html,body{{margin:0;padding:0;background:linear-gradient(180deg,var(--bg-hi),var(--bg) 50%,var(--bg-lo));background-attachment:fixed;color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.7;-webkit-font-smoothing:antialiased}}
+main{{max-width:44rem;margin:0 auto;padding:3.5rem 1.75rem 3rem}}
+h1{{font-family:var(--serif);font-weight:600;font-size:2.25rem;margin:0 0 .35rem;letter-spacing:-.01em}}
+h2{{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin:2.75rem 0 1rem}}
+h3{{font-family:var(--serif);font-size:1.05rem;margin:0 0 .35rem;font-weight:600}}
+.lede{{color:var(--ink-soft);font-style:italic;margin:0 0 .5rem}}
+.meta{{font-family:var(--mono);font-size:.82rem;color:var(--ink-soft);margin:1.25rem 0 0}}
+a{{color:var(--accent);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--accent) 30%,transparent);padding-bottom:1px}}
+a:hover{{color:var(--accent-hover);border-bottom-color:var(--accent-hover)}}
+code,kbd,pre{{font-family:var(--mono);font-size:.92em}}
+pre{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:6px;padding:.9rem 1rem;overflow-x:auto;font-size:.85rem;line-height:1.55;margin:.75rem 0 0}}
+@media (prefers-color-scheme: dark) {{ pre{{background:rgba(255,255,255,.04)}} }}
+.integration{{border-top:1px solid var(--rule);padding:1.25rem 0}}
+.integration:last-of-type{{border-bottom:1px solid var(--rule)}}
+.integration .lead{{color:var(--ink-soft);margin:.15rem 0 .35rem;font-size:.95rem}}
+.mentor-list{{margin:0;padding:0;list-style:none;border-top:1px solid var(--rule)}}
+.mentor-list li{{display:flex;gap:1rem;align-items:baseline;border-bottom:1px solid var(--rule);padding:.55rem 0;font-family:var(--mono);font-size:.92rem}}
+.mentor-list .slug{{color:var(--accent);min-width:8rem}}
+.mentor-list .name{{color:var(--ink)}}
+.mentor-list .count{{color:var(--ink-soft);font-size:.85em;margin-left:auto}}
+footer{{color:var(--ink-soft);font-size:.82rem;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--rule)}}
+footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
+</style>
+</head>
+<body>
+<main>
+
+<h1>ammp-mcp</h1>
+<p class="lede">AMMP Mentoring-track server — multi-mentor, multi-mentee, privacy-preserving.</p>
+<p class="meta">{base} · <a href="{base}/.well-known/agent.json">capability JSON</a> · <a href="https://www.helmguild.com/rfc/ammp/">RFC draft-ammp-01</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">source</a></p>
+
+<h2>Mentors hosted here</h2>
+<ul class="mentor-list">
+{mentor_rows}
+</ul>
+
+<h2>Connect as a mentee</h2>
+
+<div class="integration">
+<h3>Claude.ai <span class="meta">runtime: <code>claude-ai</code></span></h3>
+<p class="lead">Settings → Connectors → Custom. Paste the MCP URL and Bearer token.</p>
+<pre>URL:     {base}/mcp/
+Header:  Authorization: Bearer ammp-…</pre>
+</div>
+
+<div class="integration">
+<h3>Claude Cowork <span class="meta">runtime: <code>claude-cowork</code></span></h3>
+<p class="lead">Add as a custom MCP connector. The Bearer key is per-mentee — request one from the operator.</p>
+<pre>URL:     {base}/mcp/
+Header:  Authorization: Bearer ammp-…</pre>
+</div>
+
+<div class="integration">
+<h3>Claude Code <span class="meta">runtime: <code>claude-code</code></span></h3>
+<p class="lead">One CLI call registers the server at user scope so every cwd sees it.</p>
+<pre>claude mcp add --scope user ammp-pepe {base}/mcp/ \\
+  --header "Authorization: Bearer ammp-…"</pre>
+</div>
+
+<div class="integration">
+<h3>OpenClaw <span class="meta">runtime: <code>openclaw</code></span></h3>
+<p class="lead">OpenClaw natively speaks MCP. Add the server via your runtime's connector UI or its config file with the same URL + Bearer header.</p>
+<pre>URL:     {base}/mcp/
+Header:  Authorization: Bearer ammp-…</pre>
+</div>
+
+<div class="integration">
+<h3>Hermes <span class="meta">runtime: <code>hermes</code></span></h3>
+<p class="lead">Hermes connects to MCP servers through its standard tool-server registry. Point it at the same URL + Bearer; no Hermes-specific handshake.</p>
+<pre>URL:     {base}/mcp/
+Header:  Authorization: Bearer ammp-…</pre>
+</div>
+
+<h2>Or use via CLI</h2>
+<p>Every wire-level operation has a matching <code>ammp</code> subcommand. Useful for shell-plus-Bash agents that prefer not to speak MCP.</p>
+<pre>uvx ammp-mcp                                              # install + run
+ammp mentor list                                          # who is hosted here
+ammp playbook list --mentor pepe                          # the corpus
+ammp playbook show 01-cite-or-decline --mentor pepe       # one playbook body
+ammp mentor ask "how do you stay grounded?" --mentor pepe # AskMentor parity
+ammp mentor escalate "two playbooks contradict" --mentor pepe \\
+  --why-stuck "neither covers idempotency"                # EscalateToHuman parity</pre>
+
+<h2>Privacy posture</h2>
+<p>No-retention. Mentor never accumulates a profile of the mentee. Audit log is hash-only — operation, mentor slug, mentee slug, opaque 8-hex hash, never any payload. Cross-compartment escalation is prohibited: <code>EscalateToHuman</code> returns guidance text the mentee hands to <em>its own</em> operator. See <a href="https://www.helmguild.com/rfc/ammp/">draft-ammp-01 §6.2 / §3.4</a> for the normative wording.</p>
+
+<footer>
+<p>Reference implementation of the <a href="https://www.helmguild.com/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-licensed. Operator: <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>.</p>
+</footer>
+
+</main>
+</body>
+</html>"""
+
+
 # ─── Server factory ──────────────────────────────────────────────────────
 
 
@@ -639,5 +784,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     async def agent_card(_request: Request) -> JSONResponse:
         """AMMP capability advertisement. AMMP §10."""
         return JSONResponse(_build_capability_payload(ctx))
+
+    @mcp.custom_route("/", methods=["GET"])
+    async def landing(_request: Request) -> HTMLResponse:
+        """Human-facing landing page — how to connect a mentee + CLI usage."""
+        return HTMLResponse(_render_landing(ctx))
 
     return mcp
