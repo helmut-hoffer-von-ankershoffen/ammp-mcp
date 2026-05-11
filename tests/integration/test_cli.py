@@ -23,6 +23,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def runner(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
+    monkeypatch.setenv("AMMP_DIR", str(isolated_tree))
     monkeypatch.setenv("AMMP_MENTORS_ROOT", str(isolated_tree / "mentors"))
     monkeypatch.setenv("AMMP_MENTEES_FILE", str(isolated_tree / "mentees.json"))
     monkeypatch.setenv("AMMP_AUDIT_LOG_PATH", str(isolated_tree / "audit.log"))
@@ -202,10 +203,10 @@ def test_setup_writes_backend_block_and_first_mentee(runner: CliRunner, isolated
     assert pepe_mj["backend"]["kind"] == "openclaw"
     assert pepe_mj["backend"]["url"] == "https://test.invalid/ammp/ask"
     assert pepe_mj["backend"]["auth_bearer_env"] == "MY_TEST_BEARER"
-    # .env scaffold written into cwd
-    env_path = isolated_tree / ".env"
-    assert env_path.exists()
-    body = env_path.read_text(encoding="utf-8")
+    # config.env scaffold written into AMMP_DIR (not cwd)
+    config_env = isolated_tree / "config.env"
+    assert config_env.exists()
+    body = config_env.read_text(encoding="utf-8")
     assert "AMMP_REQUIRE_AUTH=true" in body
     assert "MY_TEST_BEARER=" in body
 

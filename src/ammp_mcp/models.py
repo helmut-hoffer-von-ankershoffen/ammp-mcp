@@ -32,6 +32,24 @@ class ListPlaybooksResponse(BaseModel):
     playbooks: list[PlaybookSummary]
 
 
+class PlaybookEntry(BaseModel):
+    """One playbook entry embedded in a ``ListMentors`` mentor summary.
+
+    Includes the full body so a mentee can take a single ``ListMentors``
+    call and have everything it needs to ground itself — no follow-up
+    ``GetPlaybook`` round-trip required. Mentees that only need a brief
+    overview should still prefer ``ListPlaybooks(mentor)``, which omits
+    bodies.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    title: str
+    summary: str = ""
+    body: str
+
+
 class MentorSummary(BaseModel):
     """One mentor in a ``ListMentors`` result list.
 
@@ -40,7 +58,9 @@ class MentorSummary(BaseModel):
     what the docs reference. ``backend_live`` indicates whether the
     runtime can actually reach the synthesis path (an Anthropic backend
     without an API key still reports kind ``"anthropic"`` but is not
-    live).
+    live). ``playbooks`` embeds each playbook's id, title, summary, and
+    full body so a single ``ListMentors`` call gives the mentee a
+    complete picture of what every mentor on this server offers.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -52,6 +72,7 @@ class MentorSummary(BaseModel):
     backend_kind: str
     backend_live: bool
     is_default: bool = False
+    playbooks: list[PlaybookEntry] = Field(default_factory=list)
 
 
 class ListMentorsResponse(BaseModel):

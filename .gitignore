@@ -4,12 +4,11 @@ audit.log
 server.log
 mentees.json
 
-# Real mentor corpora live outside the repo (e.g. the operator's Obsidian
-# vault) and are pulled in via AMMP_MENTORS_ROOT. The repo only ships
-# `mentors/example/`. A local clone may symlink or copy a real mentor in for
-# development — keep it untracked.
-mentors/*/
-!mentors/example/
+# Runtime state lives in ~/.ammp/ (or wherever AMMP_DIR points). The shipped
+# example mentor is package data at src/ammp_mcp/_data/example_mentor/. A
+# repo-root `mentors/` directory, if it exists, is local dev scratch — never
+# committed.
+mentors/
 
 __pycache__/
 *.pyc

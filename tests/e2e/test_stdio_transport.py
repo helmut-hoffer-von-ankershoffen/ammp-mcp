@@ -32,6 +32,9 @@ def _stdio_env(isolated_tree: Path) -> dict[str, str]:
     """Build a clean env that points the subprocess at the test fixtures."""
     return {
         **os.environ,
+        # Pin AMMP_DIR so `ammp serve`'s auto-bootstrap writes config.env
+        # under the tmp tree, never into the developer's real `~/.ammp/`.
+        "AMMP_DIR": str(isolated_tree),
         "AMMP_MENTORS_ROOT": str(isolated_tree / "mentors"),
         "AMMP_MENTEES_FILE": str(isolated_tree / "mentees.json"),
         "AMMP_AUDIT_LOG_PATH": str(isolated_tree / "audit.log"),

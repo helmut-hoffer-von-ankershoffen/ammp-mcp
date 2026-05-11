@@ -446,6 +446,10 @@ $ ammp system capability [OPTIONS]
 
 Start the MCP server.
 
+Auto-bootstraps `~/.ammp/` (creates the dir, copies the shipped
+example mentor, writes a `config.env` scaffold) on first run so a
+fresh install can `ammp serve` immediately. Re-runs are no-ops.
+
 Default transport is HTTP (Streamable-HTTP at `/mcp/`). Use ``--stdio`` for
 subprocess transport (Claude Desktop, Claude Code stdio integrations). The
 transport can also be set via ``AMMP_TRANSPORT={http,stdio}``; the

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -87,6 +86,10 @@ def serve(
 ) -> None:
     """Start the MCP server.
 
+    Auto-bootstraps `~/.ammp/` (creates the dir, copies the shipped
+    example mentor, writes a `config.env` scaffold) on first run so a
+    fresh install can `ammp serve` immediately. Re-runs are no-ops.
+
     Default transport is HTTP (Streamable-HTTP at `/mcp/`). Use ``--stdio`` for
     subprocess transport (Claude Desktop, Claude Code stdio integrations). The
     transport can also be set via ``AMMP_TRANSPORT={http,stdio}``; the
@@ -95,8 +98,16 @@ def serve(
     import logging
 
     from ..server import create_server
+    from ..settings import reset_settings_for_testing
+    from ._setup_service import bootstrap_ammp_dir
 
     s = get_settings()
+    # Auto-bootstrap is quiet by default so the boot log stays clean; if it
+    # had to do work, reset the singleton so the freshly written
+    # config.env is picked up on the next get_settings() call.
+    if bootstrap_ammp_dir(s, quiet=stdio):
+        reset_settings_for_testing()
+        s = get_settings()
     transport = "stdio" if stdio else s.transport
     if transport == "stdio":
         # Stdio MCP frames go on stdin/stdout; log to stderr so the wire stays clean.
@@ -149,9 +160,16 @@ def setup(
     mentee, writes a .env scaffold with the required env vars, and prints
     the next-step commands. Idempotent.
     """
+    from ..settings import reset_settings_for_testing
+    from ._setup_service import bootstrap_ammp_dir
+
     s = get_settings()
-    repo_root = Path.cwd()
-    _setup_print_header(s, repo_root)
+    bootstrap_ammp_dir(s)
+    # If bootstrap wrote a fresh config.env, re-read settings so the
+    # wizard works against the new tree from this point on.
+    reset_settings_for_testing()
+    s = get_settings()
+    _setup_print_header(s)
     _setup_validate(s.mentors_root, mentor_slug, backend)
     if backend == "openclaw":
         openclaw_url, auth_bearer_env = _setup_resolve_openclaw_args(yes, openclaw_url, auth_bearer_env)
@@ -160,10 +178,10 @@ def setup(
 
     api_key = _setup_mint_mentee_if_needed(s.mentees_file) if mint_first_mentee else None
 
-    env_path = repo_root / ".env"
-    existing = _setup_load_existing_env(env_path)
+    config_env = s.ammp_dir / "config.env"
+    existing = _setup_load_existing_env(config_env)
     merged = _setup_compose_env(s, backend, auth_bearer_env, require_auth, existing)
-    _setup_write_env(env_path, merged, auth_bearer_env)
+    _setup_write_env(config_env, merged, auth_bearer_env)
     _setup_print_next_steps(backend, auth_bearer_env)
 
     if api_key:

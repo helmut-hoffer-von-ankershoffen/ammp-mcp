@@ -31,6 +31,7 @@ from .models import (
     ListMentorsResponse,
     ListPlaybooksResponse,
     MentorSummary,
+    PlaybookEntry,
     PlaybookSummary,
     SearchMatch,
     SearchPlaybooksResponse,
@@ -116,6 +117,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
                 backend_kind=backend_kind,
                 backend_live=backend.is_live if backend else False,
                 is_default=(slug == ctx.settings.default_mentor),
+                playbooks=[PlaybookEntry(id=pb.id, title=pb.title, summary=pb.summary, body=pb.body) for pb in corpus],
             )
         )
     return ListMentorsResponse(

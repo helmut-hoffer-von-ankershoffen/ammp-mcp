@@ -49,6 +49,16 @@ async def test_list_mentors_returns_all_mentors(server) -> None:
     # no backend block, so they report the global fallback (`anthropic`).
     assert by_slug["stubmentor"]["backend_kind"] == "stub"
     assert by_slug["pepe"]["backend_kind"] == "anthropic"
+    # Each mentor entry embeds its full playbook corpus (id, title,
+    # summary, body) so a single ListMentors call surfaces everything a
+    # mentee needs to ground itself without follow-up GetPlaybook calls.
+    pepe_playbooks = by_slug["pepe"]["playbooks"]
+    assert len(pepe_playbooks) == by_slug["pepe"]["playbook_count"] == 2
+    pb_ids = {pb["id"] for pb in pepe_playbooks}
+    assert pb_ids == {"intro", "auth"}  # see conftest fixture
+    for pb in pepe_playbooks:
+        assert pb["title"]
+        assert pb["body"]  # full content, not just summary
 
 
 async def test_list_mentors_advertised_in_capability(server) -> None:

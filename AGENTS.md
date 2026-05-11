@@ -4,7 +4,7 @@ Operator guide for AI agents (and humans) editing this repo. Match the project's
 
 ## What this is
 
-Reference implementation of **AMMP** (the Agentic Mentor-Mentee Protocol — Mentoring track), an open IETF Internet-Draft for agentic mentoring + on-demand engineering review. Implemented as a FastMCP server exposing five operations (`ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`).
+Reference implementation of **AMMP** (the Agentic Mentor-Mentee Protocol — Mentoring track), an open IETF Internet-Draft for agentic mentoring + on-demand engineering review. Implemented as a FastMCP server exposing six MCP tools — the five AMMP §5 operations (`ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) plus a server-side `ListMentors` extension that lets mentees enumerate mentors over the same wire.
 
 - IETF draft: `https://www.helmguild.com/rfc/ammp/`
 - Deployed instance: `https://ammp.helmguild.com` (one specific deployment; the implementation is protocol-named, not persona-named).
@@ -18,10 +18,14 @@ src/ammp_mcp/
 ├── __main__.py            # `python -m ammp_mcp` entry
 ├── cli.py                 # Root Typer app — wires sub-apps + top-level aliases (thin shell)
 ├── server.py              # FastMCP factory + tool handlers
-├── settings.py            # pydantic-settings root config
+├── settings.py            # pydantic-settings root config (AMMP_DIR + leaves)
 ├── audit.py               # Hash-only audit log (cross-cutting)
 ├── llm.py                 # Legacy v0.2 shim (kept for backwards compat)
 ├── models.py              # Response envelopes only (PlaybookSummary, AskMentorResponse, …)
+│
+├── _data/                 # Packaged data shipped with the wheel
+│   ├── __init__.py        # `example_mentor_path()` — resolves to the dir below
+│   └── example_mentor/    # Reference corpus copied into ~/.ammp/mentors/example/ on bootstrap
 │
 ├── mentor/                # Mentor domain
 │   ├── _models.py         # Mentor + BackendConfig discriminated union
@@ -41,7 +45,7 @@ src/ammp_mcp/
 │   └── CLAUDE.md
 │
 ├── system/                # Install-level operations
-│   ├── _setup_service.py
+│   ├── _setup_service.py  # bootstrap_ammp_dir + wizard helpers
 │   ├── _status_service.py
 │   ├── _health_service.py
 │   ├── _usage_service.py
@@ -63,15 +67,33 @@ src/ammp_mcp/
 - Private modules are underscore-prefixed; public API lives in the package's `__init__.py`.
 - Cross-cutting concerns (audit, settings, response models, server, the root cli) stay flat.
 
+## Runtime directory (`~/.ammp/`)
+
+Everything the server reads or writes lives under a single directory — `~/.ammp/` by default, overridable with `AMMP_DIR`. The repo ships zero runtime state; the example mentor lives as package data at `src/ammp_mcp/_data/example_mentor/` and is copied into `~/.ammp/mentors/example/` on first run.
+
+```
+~/.ammp/
+├── config.env       # auto-loaded by pydantic-settings (then `.env` in cwd as fallback)
+├── mentors/         # one subdir per mentor (slug = dirname)
+├── mentees.json     # Bearer-key allowlist (SHA-256 hashes only)
+└── audit.log        # hash-only audit log
+```
+
+`ammp serve` calls `system._setup_service.bootstrap_ammp_dir()` on every boot — idempotent, exits early when the tree is already set up. The bootstrap only seeds the example mentor when `AMMP_MENTORS_ROOT` is the default (`<AMMP_DIR>/mentors`); operators who have pointed it at an Obsidian vault or other curated location see no example-mentor write into their tree.
+
+Each leaf can still be overridden individually (`AMMP_MENTORS_ROOT`, `AMMP_MENTEES_FILE`, `AMMP_AUDIT_LOG_PATH`) for installs that want one piece in a different place. The production LaunchAgent does this — points `AMMP_MENTORS_ROOT` at an Obsidian vault while keeping `mentees.json` and `audit.log` under `~/.ammp/`.
+
 ## Conventions (load-bearing)
 
 - **Subject-then-action CLI**: `ammp mentor list` not `ammp list mentors`. Top-level aliases exist for the most-used system verbs (`ammp serve`, `ammp setup`, etc.) — canonical home stays on `ammp system <verb>`.
+- **Auto-bootstrap on `ammp serve`**: a fresh install with no `~/.ammp/` boots cleanly anyway; the server creates the tree, copies the example mentor, writes `config.env`. The wizard (`ammp setup`) adds backend choice + first mentee on top of that.
 - **Pluggable backends**: each mentor's `mentor.json` selects its answer engine via `backend.kind ∈ {anthropic, openclaw, stub}`. The factory in `backends/factory.py` is the only place that constructs concrete backends.
 - **Mentee allowlist**: SHA-256-hashed Bearer keys in `mentees.json`. Plaintext keys are shown once at mint time. `hash_api_key` uses plain SHA-256 — not a slow KDF — because the inputs are 256-bit OS-CSPRNG random tokens, not human-chosen passwords. CodeQL flags this as a false positive; the rationale lives in `mentee/_service.py:hash_api_key.__doc__` and the dismissal lives on the alert in GitHub.
 - **Hash-only audit log**: `audit.log` records `<ts> op=<op> mentor=<slug> mentee=<slug> hash=<8 hex>` and never any payload. `ammp system usage` aggregates it without leaking content.
 - **No-retention**: the server never persists mentee questions or full context past the audit-log hash. Privacy posture is advertised in `/.well-known/agent.json`.
+- **`ListMentors` is a server-side extension** over AMMP-01's five §5 ops. Same data the capability JSON publishes, exposed over the MCP wire so mentees don't need an out-of-band HTTP fetch. The envelope embeds each mentor's full playbook list (id/title/summary/body) so a single call can cold-start a mentee.
 - **JSON files written by the CLI use `ensure_ascii=False`** so em-dashes and smart quotes survive round-trips (`mentor.json`, `mentees.json`).
-- **`.env` files stay ASCII-only** — pydantic-settings crashes on unicode in `.env` under ASCII locales.
+- **`.env` / `config.env` files stay ASCII-only** — pydantic-settings crashes on unicode under ASCII locales.
 
 ## Per-module guidance
 
@@ -124,6 +146,6 @@ git -c user.email=helmuthva@gmail.com -c user.name='Helmut Hoffer von Ankershoff
 
 ## What lives elsewhere
 
-- The AMMP RFC (`draft-ammp-01`) and the helmguild manifesto live in `helmut-hoffer-von-ankershoffen/helmguild.com`. This repo references the draft URL but doesn't copy it.
+- The AMMP RFC (`draft-ammp-01`) and the helmguild manifesto live in `helmut-hoffer-von-ankershoffen/helmguild.com`. This repo references the draft URL but doesn't copy it. Keep the spec in sync when extending the protocol surface — the `ListMentors` extension is currently a server-side addition; if it migrates into the draft, update both at the same time.
 - The deployed instance (`ammp.helmguild.com`) is managed by two LaunchAgents on Helmut's Mac — `~/Library/LaunchAgents/com.helmguild.ammp-mcp.plist` and `com.helmguild.cloudflared-ammp.plist`. Not represented in this repo.
-- Pepe Arturo (one example mentor running on this server) is a separate persona; this repo only ships his `mentor.json` + playbooks under `mentors/pepe/`. The implementation itself stays protocol-named, never persona-named.
+- Pepe Arturo (one example mentor running on this server) is a separate persona; his corpus lives in Helmut's Obsidian vault (`~/Obsidian/vaults/AI Agents Memory/Pepe Arturo/Mentorship/ammp-corpus/pepe/`), pulled in via `AMMP_MENTORS_ROOT`. The implementation itself stays protocol-named, never persona-named.

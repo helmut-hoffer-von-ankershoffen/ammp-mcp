@@ -187,28 +187,31 @@ cd ammp-mcp
 
 uv run ammp --help              # housekeeping CLI
 uv run ammp serve               # boot the HTTP MCP server
-
-# Or, with pip in a venv:
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-
-# Optional — enable real LLM synthesis. Without it AskMentor falls back to a
-# deterministic stub with confidence 0.2 (which triggers escalation).
-export AMMP_ANTHROPIC_API_KEY=sk-ant-…
-
-# Optional — turn on Bearer-key auth (default off for localhost dev)
-export AMMP_REQUIRE_AUTH=true
-
-# Boot the server (HTTP transport on 127.0.0.1:8765 by default)
-ammp serve
+                                # — auto-bootstraps `~/.ammp/` on first run
 ```
+
+`ammp serve` is the one-command path: on first run it creates `~/.ammp/`, copies the shipped example mentor into `~/.ammp/mentors/example/`, writes a `~/.ammp/config.env` scaffold, and starts serving on `127.0.0.1:8765`. Re-runs find the tree already there and skip the bootstrap. `uv run ammp setup` is the interactive wizard if you want to pick a backend (`anthropic` / `openclaw` / `stub`) and mint a first mentee in the same step.
 
 In another shell:
 
 ```bash
 curl -s http://127.0.0.1:8765/.well-known/agent.json | python -m json.tool
 ```
+
+## Runtime directory layout
+
+Everything the server reads or writes at runtime lives under a single directory — `~/.ammp/` by default, overridable with `AMMP_DIR`:
+
+```
+~/.ammp/
+├── config.env       # `.env`-style settings file (auto-loaded)
+├── mentors/         # one subdirectory per mentor
+│   └── example/     # shipped reference corpus, copied from package data
+├── mentees.json     # Bearer-key allowlist (SHA-256 hashes only)
+└── audit.log        # hash-only audit log (AMMP §6.2)
+```
+
+The repo itself ships no runtime state. The shipped example mentor is package data at `src/ammp_mcp/_data/example_mentor/` — `ammp setup` (and the `ammp serve` auto-bootstrap) copies it into the operator's `~/.ammp/mentors/example/`. Operators who want their real corpus stored elsewhere (e.g. an Obsidian vault) can point `AMMP_MENTORS_ROOT` at any directory; the example mentor is only copied into the default location, never into operator-curated paths.
 
 ## CLI
 
@@ -245,24 +248,25 @@ Every operation a mentee can invoke over the MCP wire (`ListMentors`, `ListPlayb
 
 ## Configuration
 
-All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
+All settings are env vars prefixed `AMMP_`. The server auto-loads `<AMMP_DIR>/config.env` first (the canonical location written by `ammp setup`), then `.env` in the cwd as a fallback for dev clones.
 
 | Var | Default | Notes |
 |---|---|---|
+| `AMMP_DIR` | `~/.ammp` | Single directory holding `config.env`, `mentors/`, `mentees.json`, `audit.log`. Override to relocate the whole tree. |
 | `AMMP_TRANSPORT` | `http` | `http` (Streamable-HTTP on `/mcp/`) or `stdio` (subprocess transport for Claude Desktop / Claude Code). Stdio mode ignores `host` / `port`. |
 | `AMMP_HOST` | `127.0.0.1` | Bind address. Set `0.0.0.0` for container deploys. |
 | `AMMP_PORT` | `8765` | |
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://ammp.helmguild.com` in production. |
-| `AMMP_MENTORS_ROOT` | `./mentors` | One subdir per mentor. |
+| `AMMP_MENTORS_ROOT` | `<AMMP_DIR>/mentors` | One subdir per mentor. Override to point at an Obsidian vault or other curated location. |
 | `AMMP_DEFAULT_MENTOR` | `example` | Used when a mentee omits `mentor`. |
-| `AMMP_MENTEES_FILE` | `./mentees.json` | The allowlist. |
+| `AMMP_MENTEES_FILE` | `<AMMP_DIR>/mentees.json` | The allowlist. |
 | `AMMP_REQUIRE_AUTH` | `false` | Flip on for production. |
 | `AMMP_ANTHROPIC_API_KEY` | unset | When unset, `AskMentor` returns a deterministic stub (low confidence). |
 | `AMMP_LLM_MODEL` | `claude-opus-4-7` | |
 | `AMMP_LLM_MAX_CONCURRENT` | `10` | Bounded `asyncio.Semaphore`. |
 | `AMMP_LLM_TIMEOUT_SECONDS` | `30.0` | |
 | `AMMP_LLM_CONFIDENCE_THRESHOLD` | `0.6` | Below this, mentor-triggered escalation kicks in. |
-| `AMMP_AUDIT_LOG_PATH` | `./audit.log` | Hash-only audit log. |
+| `AMMP_AUDIT_LOG_PATH` | `<AMMP_DIR>/audit.log` | Hash-only audit log. |
 
 ## Pre-push hook
 

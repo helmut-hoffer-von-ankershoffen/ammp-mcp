@@ -42,6 +42,11 @@ def stdio_env(isolated_tree: Path, **overrides: str) -> dict[str, str]:
     """
     env = {
         **os.environ,
+        # Critical: pin AMMP_DIR to the isolated tree so `ammp serve`'s
+        # auto-bootstrap writes its config.env inside the tmp_path, not
+        # into the developer's real `~/.ammp/`. Without this, a stdio
+        # test contaminates `~/.ammp/config.env` with tmp_path values.
+        "AMMP_DIR": str(isolated_tree),
         "AMMP_MENTORS_ROOT": str(isolated_tree / "mentors"),
         "AMMP_MENTEES_FILE": str(isolated_tree / "mentees.json"),
         "AMMP_AUDIT_LOG_PATH": str(isolated_tree / "audit.log"),

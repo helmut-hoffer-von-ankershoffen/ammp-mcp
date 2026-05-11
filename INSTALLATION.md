@@ -20,10 +20,15 @@ The five-minute path is at the top. Deeper paths follow.
 git clone https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp
 cd ammp-mcp
 
-# CLI is available immediately — uv builds an env from pyproject.toml.
-uv run ammp setup        # first-run wizard (writes .env, mints first mentee)
+# One command. `ammp serve` auto-bootstraps `~/.ammp/` on first run
+# (copies the shipped example mentor, writes a config.env scaffold)
+# then starts serving on 127.0.0.1:8765.
+uv run ammp serve
+
+# Or run the interactive wizard first — pick a backend, mint a mentee:
+uv run ammp setup        # writes ~/.ammp/config.env, mints first mentee
 uv run ammp status       # validates the install
-uv run ammp serve        # boots the HTTP MCP server on 127.0.0.1:8765
+uv run ammp serve
 ```
 
 In another shell, confirm the server advertises its capability:
@@ -40,10 +45,11 @@ You should see a JSON document naming the loaded mentors, advertising the AMMP d
 
 The wizard is **idempotent** — safe to re-run.
 
-1. Validated the mentor under `mentors/<default>/` (default `example`). To run your own mentor, copy the shipped scaffold: `cp -r mentors/example mentors/yourname`, edit `mentor.json`, and replace the playbooks with your own. The real corpus does not have to live in the repo — point `AMMP_MENTORS_ROOT` at any directory containing one subdirectory per mentor.
-2. Wrote `<mentor>/mentor.json` with `backend.kind = openclaw` (live runtime). Override with `--backend anthropic` (stateless Claude) or `--backend stub` (offline tests).
-3. Minted a first mentee `claude-cowork-helmut`, stored only the SHA-256 hash, **printed the plaintext API key once**. Copy it now — there is no way to recover it later.
-4. Wrote a `.env` scaffold to the repo root with the required env vars (mentors_root, mentees_file, audit_log_path, plus the secret name your backend needs).
+1. Bootstrapped `~/.ammp/` (or wherever `AMMP_DIR` points). Created the directory, copied the shipped example mentor into `~/.ammp/mentors/example/`, and wrote a minimal `~/.ammp/config.env` scaffold. `ammp serve` does this same bootstrap automatically if you skip the wizard.
+2. Validated the mentor directory at `<AMMP_DIR>/mentors/<default>/` (default `example`). To run your own mentor, copy the scaffold: `cp -r ~/.ammp/mentors/example ~/.ammp/mentors/yourname`, edit `mentor.json`, and replace the playbooks with your own. Or set `AMMP_MENTORS_ROOT` to point at an existing curated location (e.g. an Obsidian vault) — the example mentor is only seeded into the default location, never into operator-curated paths.
+3. Wrote `<mentor>/mentor.json` with `backend.kind = openclaw` (live runtime). Override with `--backend anthropic` (stateless Claude) or `--backend stub` (offline tests).
+4. Minted a first mentee `claude-cowork-helmut`, stored only the SHA-256 hash, **printed the plaintext API key once**. Copy it now — there is no way to recover it later.
+5. Wrote the full `~/.ammp/config.env` with the required env vars (mentors_root, mentees_file, audit_log_path, plus the secret name your backend needs).
 
 To restart the wizard without prompts, run `uv run ammp setup --yes`.
 
@@ -109,18 +115,19 @@ For Claude Desktop and similar hosts that prefer subprocess-MCP over HTTP, run t
 
 ## Configuration
 
-All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
+All settings are env vars prefixed `AMMP_`. The server auto-loads `<AMMP_DIR>/config.env` first (the canonical location), then `.env` in cwd as a fallback for dev clones.
 
 | Var | Default | Notes |
 |---|---|---|
+| `AMMP_DIR` | `~/.ammp` | Single directory holding `config.env`, `mentors/`, `mentees.json`, `audit.log`. Override to relocate the whole tree. |
 | `AMMP_TRANSPORT` | `http` | `http` or `stdio`. Stdio wins over `--host` / `--port`. |
 | `AMMP_HOST` | `127.0.0.1` | HTTP bind host. Use `0.0.0.0` only behind a reverse proxy. |
 | `AMMP_PORT` | `8765` | HTTP bind port. |
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Public URL advertised in the capability JSON. Set to `https://ammp.helmguild.com` (or your own) when behind a tunnel. |
-| `AMMP_MENTORS_ROOT` | `./mentors` | Directory with one subfolder per mentor. |
+| `AMMP_MENTORS_ROOT` | `<AMMP_DIR>/mentors` | Directory with one subfolder per mentor. Override to point at e.g. an Obsidian vault. |
 | `AMMP_DEFAULT_MENTOR` | `example` | Mentor slug used when a request omits `mentor=`. |
-| `AMMP_MENTEES_FILE` | `./mentees.json` | Allowlist (SHA-256 hashes only). |
-| `AMMP_AUDIT_LOG_PATH` | `./audit.log` | Hash-only audit log. |
+| `AMMP_MENTEES_FILE` | `<AMMP_DIR>/mentees.json` | Allowlist (SHA-256 hashes only). |
+| `AMMP_AUDIT_LOG_PATH` | `<AMMP_DIR>/audit.log` | Hash-only audit log. |
 | `AMMP_REQUIRE_AUTH` | `false` | Bearer-key auth on incoming MCP calls. Default is off for localhost dev; flip on for production. |
 | `AMMP_ANTHROPIC_API_KEY` | (empty) | Needed when any mentor uses `backend.kind = anthropic`. |
 | `AMMP_LLM_MODEL` | `claude-opus-4-7` | Override per-mentor via `backend.model`. |

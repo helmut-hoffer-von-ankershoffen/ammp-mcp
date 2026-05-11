@@ -119,7 +119,11 @@ def settings(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[S
     settings_module.reset_settings_for_testing()
     audit.reset_salt_for_testing()
     monkeypatch.delenv("AMMP_ANTHROPIC_API_KEY", raising=False)
+    # `_env_file=None` disables loading from ~/.ammp/config.env or .env so
+    # tests stay hermetic regardless of what's on the dev machine.
     s = Settings(
+        _env_file=None,
+        ammp_dir=isolated_tree,
         mentors_root=isolated_tree / "mentors",
         mentees_file=isolated_tree / "mentees.json",
         audit_log_path=isolated_tree / "audit.log",
