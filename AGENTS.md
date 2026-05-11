@@ -12,7 +12,7 @@ Reference implementation of **AMMP** (the Agentic Mentor-Mentee Protocol — Men
 The corpus is a two-level hierarchy: each mentor has zero or more **playbooks** (areas of practice; each is one subdirectory with `playbook.json` + `*.md` files), and each playbook contains zero or more **work instructions** (one craft rule per markdown file).
 
 - IETF draft: `https://www.helmguild.com/rfc/ammp/`
-- Deployed instance: `https://mcp.helmguild.com` (one specific deployment; the implementation is protocol-named, not persona-named).
+- Deployed instance: `https://mcp.helmguild.com/ammp` (one specific deployment under the gateway hostname; the implementation is protocol-named, not persona-named).
 - License: MIT.
 
 ## Architecture (modulith)
@@ -118,7 +118,7 @@ Each domain folder has its own `CLAUDE.md` with module-specific public API and t
 
 ## Operating playbook
 
-[`OPERATING.md`](OPERATING.md) is the day-to-day operator manual: minting / rotating / revoking mentees, adding / editing mentors and playbooks, which changes need a server restart (mentor.json, env vars) and which don't (mentees, playbooks — both hot-reloaded), health probes, audit-log breakdown, and the deployed-instance shape at `mcp.helmguild.com`. When in doubt about how to do a runtime task, look there before re-deriving from source.
+[`OPERATING.md`](OPERATING.md) is the day-to-day operator manual: minting / rotating / revoking mentees, adding / editing mentors and playbooks, which changes need a server restart (mentor.json, env vars) and which don't (mentees, playbooks — both hot-reloaded), health probes, audit-log breakdown, and the deployed-instance shape at `mcp.helmguild.com/ammp`. When in doubt about how to do a runtime task, look there before re-deriving from source.
 
 ## CLI reference
 
@@ -168,5 +168,5 @@ git -c user.email=helmuthva@gmail.com -c user.name='Helmut Hoffer von Ankershoff
 ## What lives elsewhere
 
 - The AMMP RFC (`draft-ammp-01`) and the helmguild manifesto live in `helmut-hoffer-von-ankershoffen/helmguild.com`. This repo references the draft URL but doesn't copy it. Keep the spec in sync when extending the protocol surface — the `ListMentors` extension is currently a server-side addition; if it migrates into the draft, update both at the same time.
-- The deployed instance (`mcp.helmguild.com`) is managed by two LaunchAgents on Helmut's Mac — `~/Library/LaunchAgents/com.helmguild.ammp-mcp.plist` and `com.helmguild.cloudflared-ammp.plist`. Not represented in this repo.
+- The deployed instance (`mcp.helmguild.com/ammp`) is managed by two LaunchAgents on Helmut's Mac — `~/Library/LaunchAgents/com.helmguild.ammp-mcp.plist` and `com.helmguild.cloudflared-ammp.plist`. The Cloudflare Tunnel routes the hostname `mcp.helmguild.com` to the local server; the `/ammp` prefix is enforced at the FastMCP app level via `AMMP_MOUNT_PATH`. Not represented in this repo.
 - Pepe Arturo (one example mentor running on this server) is a separate persona; his corpus lives in Helmut's Obsidian vault (`~/Obsidian/vaults/AI Agents Memory/Pepe Arturo/Mentorship/ammp-corpus/pepe/`), pulled in via `AMMP_MENTORS_ROOT`. The implementation itself stays protocol-named, never persona-named.

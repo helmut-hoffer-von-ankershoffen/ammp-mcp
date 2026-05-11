@@ -171,7 +171,7 @@ class Settings(BaseSettings):
         description=(
             "When True, every MCP request must carry a Bearer API key matching "
             "an entry in mentees.json. False is fine for localhost dev; flip on "
-            "for the public deployment at mcp.helmguild.com."
+            "for the public deployment at mcp.helmguild.com/ammp."
         ),
     )
 

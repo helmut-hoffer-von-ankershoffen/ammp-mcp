@@ -69,7 +69,7 @@ def test_prompt_helper_includes_escalation_step_when_human_mentor_set(tmp_path) 
         human_mentor=HumanMentor(name="Helmut Hoffer von Ankershoffen", url=None, contact=None),
     )
     prompt = _build_mentor_playbook_prompt(
-        public_url="https://mcp.helmguild.com",
+        public_url="https://mcp.helmguild.com/ammp",
         mentor=m,
         playbook_id="personal-assistant-for-managers",
         playbook_name="Personal Assistant for managers",
@@ -79,7 +79,7 @@ def test_prompt_helper_includes_escalation_step_when_human_mentor_set(tmp_path) 
     # Identity
     assert "Pepe Arturo" in prompt
     assert "Personal Assistant for managers" in prompt
-    assert "https://mcp.helmguild.com" in prompt
+    assert "https://mcp.helmguild.com/ammp" in prompt
     assert 'mentor: "pepe"' in prompt
     assert 'id: "personal-assistant-for-managers"' in prompt
     # Plural-aware count
@@ -104,7 +104,7 @@ def test_prompt_helper_omits_escalation_step_when_no_human_mentor(tmp_path) -> N
         mentor_dir=tmp_path,
     )
     prompt = _build_mentor_playbook_prompt(
-        public_url="https://mcp.helmguild.com",
+        public_url="https://mcp.helmguild.com/ammp",
         mentor=m,
         playbook_id="rules",
         playbook_name="Strict rules",

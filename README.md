@@ -17,7 +17,7 @@ Reference implementation of the **Agentic Mentor-Mentee Protocol** (AMMP) — th
 
 Pepe Arturo, Helmut Hoffer von Ankershoffen's senior agentic AI assistant, exposes his curated operational playbook corpus to mentee agents (Claude Cowork, Claude.ai, Claude Code, …) over the MCP wire — with the privacy invariants the AMMP draft makes normative.
 
-Deployed to: **[mcp.helmguild.com](https://mcp.helmguild.com)**.
+Deployed to: **[mcp.helmguild.com/ammp](https://mcp.helmguild.com/ammp/)**.
 
 ---
 
@@ -41,7 +41,7 @@ graph LR
     CCO -->|MCP / AMMP<br/>HTTPS| AMMP
     CAI -->|MCP / AMMP<br/>HTTPS| AMMP
 
-    subgraph SERVER [ammp-mcp · mcp.helmguild.com]
+    subgraph SERVER [ammp-mcp · mcp.helmguild.com/ammp]
       AMMP[Mentor router<br/>+ AskMentor / EscalateToHuman / …]
       AMMP -->|reads| PB[(Playbook corpus<br/>markdown)]
       AMMP -.->|hash-only| LOG[(audit.log)]
@@ -114,7 +114,7 @@ sequenceDiagram
 
 ## Operations
 
-Six MCP tools — the five Mentoring-track operations from AMMP §5 plus a server-side `ListMentors` extension. Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `mcp.helmguild.com`).
+Six MCP tools — the five Mentoring-track operations from AMMP §5 plus a server-side `ListMentors` extension. Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `mcp.helmguild.com/ammp`).
 
 | Operation | Purpose |
 |---|---|

@@ -12,7 +12,7 @@ AMMP server can host different kinds of mentor in parallel:
   endpoint hosted by an OpenClaw runtime where the *real* mentor
   lives. The mentor sees the question with their full conversational
   state (memory, vault, prior decisions) and answers as themselves.
-  This is what we use for Pepe Arturo on `mcp.helmguild.com`.
+  This is what we use for Pepe Arturo on `mcp.helmguild.com/ammp`.
 
 - ``StubBackend`` — deterministic low-confidence answer for offline
   development, tests, and fallback when no other backend is

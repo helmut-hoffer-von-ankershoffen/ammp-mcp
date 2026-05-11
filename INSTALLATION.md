@@ -79,7 +79,7 @@ The mentor's answer will cite the relevant playbooks from its corpus. If confide
 
 ## Connect a mentee — Claude Code (remote / deployed instance)
 
-If `ammp-mcp` is deployed behind a public tunnel (e.g. `https://mcp.helmguild.com`):
+If `ammp-mcp` is deployed behind a public tunnel under a mount prefix (e.g. `https://mcp.helmguild.com/ammp`):
 
 ```bash
 claude mcp add --scope user ammp-pepe https://mcp.helmguild.com/ammp/mcp/ \
