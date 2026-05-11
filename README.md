@@ -313,6 +313,10 @@ pytest                  # all of the above (e2e self-skips without key)
 
 The mentee selects the mentor *per call* via the `mentor` argument; omit it to fall through to the server default.
 
+## Operating
+
+For day-to-day operations — minting mentees, rotating tokens, editing mentors / playbooks, what needs a server restart and what doesn't — see [`OPERATING.md`](OPERATING.md).
+
 ## Status
 
 **v0.3** — multi-mentor + multi-mentee + LLM-synthesised AskMentor + Typer CLI + tagged test suite. Ships open-source under MIT.

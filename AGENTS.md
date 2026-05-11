@@ -99,6 +99,10 @@ Each leaf can still be overridden individually (`AMMP_MENTORS_ROOT`, `AMMP_MENTE
 
 Each domain folder has its own `CLAUDE.md` with module-specific public API and test coverage. Read those before touching code in that domain. `mentor/CLAUDE.md` is the canonical template.
 
+## Operating playbook
+
+[`OPERATING.md`](OPERATING.md) is the day-to-day operator manual: minting / rotating / revoking mentees, adding / editing mentors and playbooks, which changes need a server restart (mentor.json, env vars) and which don't (mentees, playbooks — both hot-reloaded), health probes, audit-log breakdown, and the deployed-instance shape at `ammp.helmguild.com`. When in doubt about how to do a runtime task, look there before re-deriving from source.
+
 ## CLI reference
 
 Live, generated copy in `CLI_REFERENCE.md`. Regenerate after CLI changes:
