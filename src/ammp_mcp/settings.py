@@ -51,7 +51,7 @@ class Settings(BaseSettings):
         description="Root directory holding one subdirectory per mentor (slug = dirname).",
     )
     default_mentor: str = Field(
-        default="pepe", description="Mentor slug used when a mentee omits the `mentor` argument."
+        default="example", description="Mentor slug used when a mentee omits the `mentor` argument."
     )
 
     # ─── Mentee allowlist ─────────────────────────────────────────

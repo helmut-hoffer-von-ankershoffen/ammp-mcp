@@ -122,7 +122,7 @@ def serve(
 def setup(
     yes: bool = typer.Option(False, "--yes", "-y", help="Accept all defaults; no prompts."),
     mentor_slug: str = typer.Option(
-        "pepe",
+        "example",
         help="Slug of the default mentor to configure (matches a directory under mentors/).",
     ),
     backend: str = typer.Option(

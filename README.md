@@ -114,7 +114,7 @@ sequenceDiagram
 
 ## Operations
 
-All five Mentoring-track operations from AMMP §5. Each takes an optional `mentor` slug; calls without it route to the default mentor (`pepe`).
+All five Mentoring-track operations from AMMP §5. Each takes an optional `mentor` slug; calls without it route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `ammp.helmguild.com`).
 
 | Operation | Purpose |
 |---|---|
@@ -214,15 +214,15 @@ curl -s http://127.0.0.1:8765/.well-known/agent.json | python -m json.tool
 The Typer-based CLI handles housekeeping. Subject-then-action layout (`ammp <subject> <action>`); `ammp --help` lists everything.
 
 ```bash
-# Inspect
+# Inspect (omit `--mentor` to fall through to the configured default)
 ammp mentor list                                # registered mentors + corpus sizes
-ammp playbook list --mentor pepe                # playbooks for a mentor
-ammp playbook show 07-compartmentalization      # AMMP GetPlaybook
-ammp playbook search "escalate" --mentor pepe   # AMMP SearchPlaybooks
+ammp playbook list --mentor example             # playbooks for a mentor
+ammp playbook show 01-cite-or-decline           # AMMP GetPlaybook
+ammp playbook search "escalate" --mentor example # AMMP SearchPlaybooks
 
 # Ask + escalate (CLI parity with AMMP AskMentor / EscalateToHuman)
-ammp mentor ask "how do you stay grounded?" --mentor pepe
-ammp mentor escalate "two playbooks contradict on retry policy" --mentor pepe --why-stuck "neither covers idempotency"
+ammp mentor ask "how do you stay grounded?" --mentor example
+ammp mentor escalate "two playbooks contradict on retry policy" --mentor example --why-stuck "neither covers idempotency"
 
 # Mentee allowlist (hashes only)
 ammp mentee list
@@ -253,7 +253,7 @@ All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
 | `AMMP_PORT` | `8765` | |
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://ammp.helmguild.com` in production. |
 | `AMMP_MENTORS_ROOT` | `./mentors` | One subdir per mentor. |
-| `AMMP_DEFAULT_MENTOR` | `pepe` | Used when a mentee omits `mentor`. |
+| `AMMP_DEFAULT_MENTOR` | `example` | Used when a mentee omits `mentor`. |
 | `AMMP_MENTEES_FILE` | `./mentees.json` | The allowlist. |
 | `AMMP_REQUIRE_AUTH` | `false` | Flip on for production. |
 | `AMMP_ANTHROPIC_API_KEY` | unset | When unset, `AskMentor` returns a deterministic stub (low confidence). |

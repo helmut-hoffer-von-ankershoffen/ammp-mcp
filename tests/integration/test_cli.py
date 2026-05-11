@@ -27,6 +27,9 @@ def runner(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> CliRunner:
     monkeypatch.setenv("AMMP_MENTEES_FILE", str(isolated_tree / "mentees.json"))
     monkeypatch.setenv("AMMP_AUDIT_LOG_PATH", str(isolated_tree / "audit.log"))
     monkeypatch.setenv("AMMP_PUBLIC_URL", "http://test.invalid")
+    # The fixture's primary mentor is `pepe`; pin explicitly because the
+    # package default flipped to `example` and `example` is not in the tree.
+    monkeypatch.setenv("AMMP_DEFAULT_MENTOR", "pepe")
     # Rich truncates table cells to terminal width; force wide so slugs render in full.
     monkeypatch.setenv("COLUMNS", "200")
     settings_module.reset_settings_for_testing()
@@ -206,7 +209,9 @@ def test_setup_rejects_unknown_backend(runner: CliRunner, isolated_tree: Path) -
     cwd_before = os.getcwd()
     os.chdir(isolated_tree)
     try:
-        r = runner.invoke(app, ["setup", "--yes", "--backend", "ghost"])
+        # Pin mentor-slug to the fixture's `pepe` so the wizard reaches backend
+        # validation rather than failing earlier on a missing `mentors/example/`.
+        r = runner.invoke(app, ["setup", "--yes", "--mentor-slug", "pepe", "--backend", "ghost"])
     finally:
         os.chdir(cwd_before)
     assert r.exit_code == 2

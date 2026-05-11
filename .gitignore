@@ -3,6 +3,14 @@
 audit.log
 server.log
 mentees.json
+
+# Real mentor corpora live outside the repo (e.g. the operator's Obsidian
+# vault) and are pulled in via AMMP_MENTORS_ROOT. The repo only ships
+# `mentors/example/`. A local clone may symlink or copy a real mentor in for
+# development — keep it untracked.
+mentors/*/
+!mentors/example/
+
 __pycache__/
 *.pyc
 *.pyo

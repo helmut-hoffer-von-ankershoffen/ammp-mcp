@@ -126,6 +126,9 @@ def settings(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[S
         require_auth=False,
         anthropic_api_key=None,
         public_url="http://test.invalid",
+        # Fixture's primary mentor is `pepe` (see isolated_tree); pin
+        # explicitly because the package default flipped to `example`.
+        default_mentor="pepe",
     )
     yield s
     settings_module.reset_settings_for_testing()

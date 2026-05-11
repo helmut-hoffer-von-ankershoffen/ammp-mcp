@@ -40,7 +40,7 @@ You should see a JSON document naming the loaded mentors, advertising the AMMP d
 
 The wizard is **idempotent** — safe to re-run.
 
-1. Validated the mentor under `mentors/<default>/` (default `pepe`). If you don't have one yet, copy the shipped example: `cp -r mentors/pepe mentors/yourname`, edit `mentor.json`.
+1. Validated the mentor under `mentors/<default>/` (default `example`). To run your own mentor, copy the shipped scaffold: `cp -r mentors/example mentors/yourname`, edit `mentor.json`, and replace the playbooks with your own. The real corpus does not have to live in the repo — point `AMMP_MENTORS_ROOT` at any directory containing one subdirectory per mentor.
 2. Wrote `<mentor>/mentor.json` with `backend.kind = openclaw` (live runtime). Override with `--backend anthropic` (stateless Claude) or `--backend stub` (offline tests).
 3. Minted a first mentee `claude-cowork-helmut`, stored only the SHA-256 hash, **printed the plaintext API key once**. Copy it now — there is no way to recover it later.
 4. Wrote a `.env` scaffold to the repo root with the required env vars (mentors_root, mentees_file, audit_log_path, plus the secret name your backend needs).
@@ -65,7 +65,7 @@ claude mcp list | grep ammp-pepe
 
 Then from inside Claude Code, the five AMMP operations (`ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) are available as MCP tools. Try:
 
-> *Use the AskMentor tool against mentor `pepe`: "what's the helmguild stance on cross-compartment escalation?"*
+> *Use the AskMentor tool against mentor `example`: "how do you stay grounded under ambiguity?"*
 
 The mentor's answer will cite the relevant playbooks from its corpus. If confidence drops below the mentor's threshold, the response will also recommend `EscalateToHuman` with suggested phrasing.
 
@@ -118,7 +118,7 @@ All settings are env vars prefixed `AMMP_` (or a `.env` file in cwd):
 | `AMMP_PORT` | `8765` | HTTP bind port. |
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Public URL advertised in the capability JSON. Set to `https://ammp.helmguild.com` (or your own) when behind a tunnel. |
 | `AMMP_MENTORS_ROOT` | `./mentors` | Directory with one subfolder per mentor. |
-| `AMMP_DEFAULT_MENTOR` | `pepe` | Mentor slug used when a request omits `mentor=`. |
+| `AMMP_DEFAULT_MENTOR` | `example` | Mentor slug used when a request omits `mentor=`. |
 | `AMMP_MENTEES_FILE` | `./mentees.json` | Allowlist (SHA-256 hashes only). |
 | `AMMP_AUDIT_LOG_PATH` | `./audit.log` | Hash-only audit log. |
 | `AMMP_REQUIRE_AUTH` | `false` | Bearer-key auth on incoming MCP calls. Default is off for localhost dev; flip on for production. |
@@ -138,8 +138,8 @@ Each mentor selects its backend in `mentor.json`:
 
 ```jsonc
 {
-  "slug": "pepe",
-  "name": "Pepe Arturo",
+  "slug": "your-mentor",
+  "name": "Your Mentor's Display Name",
   "persona": "...",
   "confidence_threshold": 0.6,
   "backend": {
@@ -205,7 +205,7 @@ Templates live in `docs/deployment.md`.
 
 | Symptom | Likely cause |
 |---|---|
-| `ammp setup` errors with `No mentor directory found` | `mentors/<default>/` doesn't exist. Copy `mentors/pepe/` as a starting template. |
+| `ammp setup` errors with `No mentor directory found` | `mentors/<default>/` doesn't exist. Copy `mentors/example/` as a starting template, or point `AMMP_MENTORS_ROOT` at the directory that contains your mentor. |
 | `ammp serve` boots but `AskMentor` returns `confidence=0.2` always | No `AMMP_ANTHROPIC_API_KEY` set; falling back to the deterministic stub. Set the key in `.env` and restart. |
 | `claude mcp list` shows `ammp-pepe` but tools error | Bearer key wrong. Re-mint via `ammp mentee rotate-key <slug>` and update the `--header` flag. |
 | `ammp status` warns about a missing env var | A mentor's `backend.auth_bearer_env` points at an unset variable. Add it to `.env`. |

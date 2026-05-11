@@ -55,7 +55,7 @@ $ ammp setup [OPTIONS]
 **Options**:
 
 * `-y, --yes`: Accept all defaults; no prompts.
-* `--mentor-slug TEXT`: Slug of the default mentor to configure (matches a directory under mentors/).  [default: pepe]
+* `--mentor-slug TEXT`: Slug of the default mentor to configure (matches a directory under mentors/).  [default: example]
 * `--backend TEXT`: Backend kind for the mentor: &#x27;openclaw&#x27; (live agent runtime), &#x27;anthropic&#x27; (stateless), or &#x27;stub&#x27;.  [default: openclaw]
 * `--openclaw-url TEXT`: OpenClaw webhook URL (when backend=openclaw).  [default: https://openclaw.helmguild.local/ammp/ask]
 * `--auth-bearer-env TEXT`: Env var name holding the Bearer token sent to the OpenClaw webhook.  [default: OPENCLAW_BEARER]
@@ -475,7 +475,7 @@ $ ammp system setup [OPTIONS]
 **Options**:
 
 * `-y, --yes`: Accept all defaults; no prompts.
-* `--mentor-slug TEXT`: Slug of the default mentor to configure (matches a directory under mentors/).  [default: pepe]
+* `--mentor-slug TEXT`: Slug of the default mentor to configure (matches a directory under mentors/).  [default: example]
 * `--backend TEXT`: Backend kind for the mentor: &#x27;openclaw&#x27; (live agent runtime), &#x27;anthropic&#x27; (stateless), or &#x27;stub&#x27;.  [default: openclaw]
 * `--openclaw-url TEXT`: OpenClaw webhook URL (when backend=openclaw).  [default: https://openclaw.helmguild.local/ammp/ask]
 * `--auth-bearer-env TEXT`: Env var name holding the Bearer token sent to the OpenClaw webhook.  [default: OPENCLAW_BEARER]

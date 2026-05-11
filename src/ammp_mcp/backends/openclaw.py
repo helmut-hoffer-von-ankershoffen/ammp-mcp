@@ -15,15 +15,15 @@ Wire contract (the receiving service MUST implement this):
 
     Request body:
     {
-      "mentor": "pepe",            // mentor slug
-      "name": "Pepe Arturo",       // display name
+      "mentor": "<slug>",          // mentor slug
+      "name": "<display name>",    // display name
       "persona": "...",            // mentor's persona string
       "question": "...",           // mentee's question
       "playbooks": [               // top-N retrieved playbooks
         {"title": "...", "body": "..."},
         ...
       ],
-      "ammp_version": "0.2.0",
+      "ammp_version": "<x.y.z>",
       "ammp_draft": "draft-ammp-01"
     }
 
