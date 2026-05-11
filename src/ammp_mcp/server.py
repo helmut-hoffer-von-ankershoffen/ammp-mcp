@@ -901,6 +901,14 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     @mcp.custom_route("/", methods=["GET"])
     async def landing(_request: Request) -> HTMLResponse:
         """Human-facing landing page — how to connect a mentee + CLI usage."""
-        return HTMLResponse(_render_landing(ctx))
+        return HTMLResponse(
+            _render_landing(ctx),
+            # The mentor list is rendered from live ctx; the integration
+            # cards quote the live public URL. Cache should never serve
+            # a stale version of either. `no-store` plus the long-form
+            # `no-cache, must-revalidate` belt-and-braces tells every
+            # browser + intermediate (Cloudflare, Caddy) not to hold it.
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
 
     return mcp
