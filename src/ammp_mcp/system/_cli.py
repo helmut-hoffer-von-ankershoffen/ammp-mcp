@@ -282,7 +282,10 @@ def health(
     HEADs each openclaw mentor backend's webhook URL.
     """
     s = get_settings()
-    target = (url or s.public_url or f"http://{s.host}:{s.port}").rstrip("/")
+    # `s.public_url` always has a value (settings default is the loopback
+    # URL); dropping the per-call f-string fallback removes a duplicate
+    # `http://` literal that SonarCloud flagged as a security hotspot.
+    target = (url or s.public_url).rstrip("/")
     agent_url = f"{target}/.well-known/agent.json"
 
     table = Table(title=f"ammp-mcp runtime health · target={target}", show_lines=False)
