@@ -175,11 +175,18 @@ async def test_stdio_transport_rejects_empty_query(isolated_tree: Path) -> None:
         assert out.get("error") == "empty_query"
 
 
-async def test_stdio_transport_rejects_invalid_api_key(isolated_tree: Path) -> None:
-    """With auth on, calls without a valid Bearer key → ``auth_failed``.
+async def test_stdio_transport_with_require_auth_rejects_when_no_http_request(isolated_tree: Path) -> None:
+    """With ``AMMP_REQUIRE_AUTH=true`` and no HTTP request in scope, every stdio
+    call returns ``auth_failed``.
 
-    Pins the auth contract over the stdio transport: the server enforces
-    the same Bearer requirement regardless of which transport speaks to it.
+    Stdio mode has no HTTP transport, so there's no ``Authorization``
+    header to read; the new auth path reads the Bearer token from the
+    HTTP request via FastMCP's request-scoped ContextVar (see
+    ``_authenticate``). Pinned here so operators understand the
+    contract: production auth requires the HTTP transport. The stdio
+    transport is for trusted-parent contexts (Claude Code, Desktop
+    subprocess) where the parent controls who can speak to the server
+    — turn ``require_auth`` off when running in stdio mode.
     """
     env = {
         **_stdio_env(isolated_tree),
@@ -192,27 +199,6 @@ async def test_stdio_transport_rejects_invalid_api_key(isolated_tree: Path) -> N
         cwd=str(Path(__file__).resolve().parent.parent.parent),
     )
     async with Client(transport) as client:
-        # Missing api_key.
         out = _payload(await client.call_tool("ListPlaybooks", {"mentor": "pepe"}))
         assert out.get("error") == "auth_failed"
         assert "api_key_required" in str(out.get("detail", ""))
-
-        # Wrong api_key.
-        out = _payload(
-            await client.call_tool(
-                "ListPlaybooks",
-                {"mentor": "pepe", "api_key": "ammp-not-a-real-key"},
-            )
-        )
-        assert out.get("error") == "auth_failed"
-        assert "api_key_invalid" in str(out.get("detail", ""))
-
-        # Correct key seeded by the `isolated_tree` fixture → succeeds.
-        out = _payload(
-            await client.call_tool(
-                "ListPlaybooks",
-                {"mentor": "pepe", "api_key": "ammp-test-key-1"},
-            )
-        )
-        assert out.get("mentor") == "pepe"
-        assert out.get("count") == 2

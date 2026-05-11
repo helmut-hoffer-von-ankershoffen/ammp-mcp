@@ -673,29 +673,69 @@ def test_offline_and_live_capability_operations_match(settings: Settings) -> Non
 
 
 async def test_auth_required_rejects_missing_key(settings: Settings) -> None:
+    """No api_key + no Authorization header → in-band auth_failed."""
+    from ammp_mcp.server import _handle_list_playbooks, build_context
+
     settings_auth = settings.model_copy(update={"require_auth": True})
-    server = create_server(settings_auth)
-    async with Client(server) as c:
-        result = await c.call_tool("ListPlaybooks", {})
-    assert result.data["error"] == "auth_failed"
-    assert result.data["detail"] == "api_key_required"
+    ctx = build_context(settings_auth)
+    result = _handle_list_playbooks(ctx, mentor="", api_key=None)
+    assert result["error"] == "auth_failed"
+    assert result["detail"] == "api_key_required"
 
 
 async def test_auth_required_accepts_valid_key(settings: Settings) -> None:
+    """Explicit api_key resolves the mentee without needing an HTTP request."""
+    from ammp_mcp.server import _handle_list_playbooks, build_context
+
     settings_auth = settings.model_copy(update={"require_auth": True})
-    server = create_server(settings_auth)
-    async with Client(server) as c:
-        result = await c.call_tool("ListPlaybooks", {"api_key": "ammp-test-key-1"})
-    assert result.data["mentor"] == "pepe"
+    ctx = build_context(settings_auth)
+    result = _handle_list_playbooks(ctx, mentor="", api_key="ammp-test-key-1")
+    assert result["mentor"] == "pepe"
 
 
 async def test_auth_required_rejects_wrong_key(settings: Settings) -> None:
+    """An unknown api_key → auth_failed with detail=api_key_invalid."""
+    from ammp_mcp.server import _handle_list_playbooks, build_context
+
     settings_auth = settings.model_copy(update={"require_auth": True})
-    server = create_server(settings_auth)
-    async with Client(server) as c:
-        result = await c.call_tool("ListPlaybooks", {"api_key": "wrong"})
-    assert result.data["error"] == "auth_failed"
-    assert result.data["detail"] == "api_key_invalid"
+    ctx = build_context(settings_auth)
+    result = _handle_list_playbooks(ctx, mentor="", api_key="wrong")
+    assert result["error"] == "auth_failed"
+    assert result["detail"] == "api_key_invalid"
+
+
+async def test_auth_reads_bearer_from_http_authorization_header(settings: Settings) -> None:
+    """When no api_key is passed, _authenticate reads `Authorization: Bearer …` from the HTTP request.
+
+    This is the production path: MCP-over-HTTP carries the per-mentee
+    token in the standard Authorization header; the tool wrappers don't
+    take an api_key parameter so the LLM never gets prompted for one.
+    """
+    from contextlib import ExitStack
+    from unittest.mock import Mock, patch
+
+    from fastmcp.server import http as fastmcp_http
+
+    from ammp_mcp.server import _handle_list_playbooks, build_context
+
+    settings_auth = settings.model_copy(update={"require_auth": True})
+    ctx = build_context(settings_auth)
+
+    fake_request = Mock()
+    fake_request.headers = {"authorization": "Bearer ammp-test-key-1"}
+
+    with ExitStack() as stack:
+        # Inject the fake request into FastMCP's request ContextVar.
+        stack.enter_context(fastmcp_http.set_http_request(fake_request))
+        # Force `request_ctx.get()` (the first place get_http_request looks)
+        # to miss, so the fallback path that reads _current_http_request fires.
+        from fastmcp.server import dependencies as deps
+
+        stack.enter_context(patch.object(deps, "request_ctx"))
+        deps.request_ctx.get.side_effect = LookupError
+        result = _handle_list_playbooks(ctx, mentor="", api_key=None)
+    assert result.get("error") is None, result
+    assert result["mentor"] == "pepe"
 
 
 async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
@@ -713,16 +753,16 @@ async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
     from unittest.mock import patch
 
     from ammp_mcp.mentee import Mentee, hash_api_key, load_mentees, save_mentees
+    from ammp_mcp.server import _handle_list_playbooks, build_context
 
     settings_auth = settings.model_copy(update={"require_auth": True})
-    server = create_server(settings_auth)
+    ctx = build_context(settings_auth)
 
     # First call: key not yet on disk → rejected (sanity baseline).
     new_key = "ammp-hot-reload-fresh-key"
-    async with Client(server) as c:
-        r = await c.call_tool("ListPlaybooks", {"api_key": new_key})
-    assert r.data["error"] == "auth_failed"
-    assert r.data["detail"] == "api_key_invalid"
+    r = _handle_list_playbooks(ctx, mentor="", api_key=new_key)
+    assert r["error"] == "auth_failed"
+    assert r["detail"] == "api_key_invalid"
 
     # Mint the mentee straight to disk (same path `ammp mentee add` writes).
     # Sleep a beat so the on-disk mtime is strictly newer than the cached
@@ -742,19 +782,17 @@ async def test_auth_hot_reloads_mentees_from_disk(settings: Settings) -> None:
     # Belt-and-braces: confirm the on-disk file actually contains the new slug.
     assert "hot-reload-mentee" in json.loads(settings.mentees_file.read_text(encoding="utf-8"))[-1]["slug"]
 
-    # SECOND call — same server, no restart. The fresh key should now auth.
-    async with Client(server) as c:
-        r = await c.call_tool("ListPlaybooks", {"api_key": new_key})
-    assert r.data.get("error") is None, r.data
-    assert r.data["mentor"] == "pepe"
+    # SECOND call — same context, no restart. The fresh key should now auth.
+    r = _handle_list_playbooks(ctx, mentor="", api_key=new_key)
+    assert r.get("error") is None, r
+    assert r["mentor"] == "pepe"
 
     # Verify the cache actually caches: two more calls with the same key
-    # should result in exactly ONE parse of mentees.json (the first call
-    # warms the cache; the second hits it).
+    # should result in exactly ZERO re-parses of mentees.json (the prior
+    # call already warmed the cache; mtime hasn't changed since).
     with patch("ammp_mcp.server.load_mentees", wraps=load_mentees) as spy:
-        async with Client(server) as c:
-            await c.call_tool("ListPlaybooks", {"api_key": new_key})
-            await c.call_tool("ListPlaybooks", {"api_key": new_key})
+        _handle_list_playbooks(ctx, mentor="", api_key=new_key)
+        _handle_list_playbooks(ctx, mentor="", api_key=new_key)
         assert spy.call_count == 0, (
             f"Expected zero re-parses across two requests when mentees.json was untouched, got {spy.call_count}."
         )

@@ -163,6 +163,25 @@ def _authenticate(ctx: ServerContext, api_key: str | None) -> str:
     """
     if not ctx.settings.require_auth:
         return "anonymous"
+    # No explicit api_key supplied (the MCP tool wrappers don't ask the
+    # LLM for one) — fall back to the HTTP `Authorization: Bearer <…>`
+    # header carried by the request. FastMCP populates a request-scoped
+    # ContextVar via its RequestContextMiddleware; we read it through
+    # the public `get_http_request()` accessor. The CLI path passes
+    # api_key explicitly and skips this fallback.
+    if not api_key:
+        try:
+            from fastmcp.server.dependencies import get_http_request
+
+            request = get_http_request()
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                api_key = auth_header[len("bearer ") :].strip() or None
+        except Exception:
+            # No HTTP request in scope (e.g. stdio mode or unit tests
+            # invoking _handle_* directly without a transport). Fall
+            # through to the missing-key error below.
+            pass
     if not api_key:
         raise ValueError("api_key_required")
     mentees = _load_mentees_cached(ctx.settings.mentees_file)
@@ -1492,8 +1511,15 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     # Five of the six are AMMP §5 baseline; `ListMentors` is a server-side
     # extension over the draft (mirrors the capability JSON's mentor block).
 
+    # MCP tool wrappers below intentionally do NOT take an `api_key`
+    # parameter. Authentication flows through the HTTP transport's
+    # `Authorization: Bearer <token>` header — _authenticate() reads
+    # it from the request via fastmcp.server.dependencies.get_http_request().
+    # Exposing api_key as a tool parameter would prompt the LLM to ask
+    # the user for it on every call, defeating transparent auth.
+
     @mcp.tool
-    def ListMentors(api_key: str | None = None) -> dict[str, Any]:
+    def ListMentors() -> dict[str, Any]:
         """List the mentors this server hosts.
 
         Each entry includes slug, display name, playbook count, confidence
@@ -1501,40 +1527,35 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         this mentor is the configured default. Use the returned slugs in
         the other five operations.
         """
-        return _handle_list_mentors(ctx, api_key)
+        return _handle_list_mentors(ctx, None)
 
     @mcp.tool
-    def ListPlaybooks(mentor: str = "", api_key: str | None = None) -> dict[str, Any]:
+    def ListPlaybooks(mentor: str = "") -> dict[str, Any]:
         """Enumerate the curated playbook corpus for the given mentor."""
-        return _handle_list_playbooks(ctx, mentor, api_key)
+        return _handle_list_playbooks(ctx, mentor, None)
 
     @mcp.tool
-    def GetPlaybook(id: str, mentor: str = "", api_key: str | None = None) -> dict[str, Any]:
+    def GetPlaybook(id: str, mentor: str = "") -> dict[str, Any]:
         """Retrieve one playbook with the full body of every work instruction inside it."""
-        return _handle_get_playbook(ctx, id, mentor, api_key)
+        return _handle_get_playbook(ctx, id, mentor, None)
 
     @mcp.tool
-    def GetWorkInstruction(playbook_id: str, id: str, mentor: str = "", api_key: str | None = None) -> dict[str, Any]:
+    def GetWorkInstruction(playbook_id: str, id: str, mentor: str = "") -> dict[str, Any]:
         """Retrieve one specific work instruction from a playbook.
 
         Server-side extension over AMMP-01: lets a mentee fetch a single
         instruction body when it already knows ``(playbook_id, id)``,
         without round-tripping the whole playbook.
         """
-        return _handle_get_work_instruction(ctx, playbook_id, id, mentor, api_key)
+        return _handle_get_work_instruction(ctx, playbook_id, id, mentor, None)
 
     @mcp.tool
-    def SearchPlaybooks(query: str, mentor: str = "", limit: int = 5, api_key: str | None = None) -> dict[str, Any]:
+    def SearchPlaybooks(query: str, mentor: str = "", limit: int = 5) -> dict[str, Any]:
         """Substring-search the mentor's corpus at work-instruction granularity. Returns ranked matches."""
-        return _handle_search_playbooks(ctx, query, mentor, limit, api_key)
+        return _handle_search_playbooks(ctx, query, mentor, limit, None)
 
     @mcp.tool
-    async def AskMentor(
-        question: str,
-        mentor: str = "",
-        context: str = "",
-        api_key: str | None = None,
-    ) -> dict[str, Any]:
+    async def AskMentor(question: str, mentor: str = "", context: str = "") -> dict[str, Any]:
         """Ask the mentor a free-form question.
 
         The mentor synthesises an answer from its playbook corpus +
@@ -1545,14 +1566,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         addition to the mentee being free to call ``EscalateToHuman``
         directly.
         """
-        return await _handle_ask_mentor(ctx, question, mentor, context, api_key)
+        return await _handle_ask_mentor(ctx, question, mentor, context, None)
 
     @mcp.tool
     async def EscalateToHumanMentor(
         question: str,
         mentor: str = "",
         context: str = "",
-        api_key: str | None = None,
         ctx_mcp: Context | None = None,
     ) -> dict[str, Any]:
         """Forward a B.h-approved question to A.h (the human behind A.a).
@@ -1573,7 +1593,6 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 the question should reach. Empty falls through to the
                 configured default mentor.
             context: Optional context to attach for A.h.
-            api_key: B.a's Bearer key. Required when ``require_auth``.
             ctx_mcp: FastMCP-injected context for progress notifications.
 
         Returns:
@@ -1592,14 +1611,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 except Exception as e:
                     logger.debug("report_progress failed (non-fatal): %s", e)
 
-        return await _handle_escalate_to_human_mentor(ctx, question, mentor, context, api_key, progress=_report)
+        return await _handle_escalate_to_human_mentor(ctx, question, mentor, context, None, progress=_report)
 
     @mcp.tool
     def EscalateToHuman(
         situation: str,
         mentor: str = "",
         why_stuck: str = "",
-        api_key: str | None = None,
     ) -> dict[str, Any]:
         """Mentee-triggered escalation to the mentee's own operator.
 
@@ -1607,7 +1625,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         operator. The mentor does not page or message anyone — that's
         the Human-Gated Escalation Invariant (AMMP §3.4).
         """
-        return _handle_escalate_to_human(ctx, situation, mentor, why_stuck, api_key)
+        return _handle_escalate_to_human(ctx, situation, mentor, why_stuck, None)
 
     # Routes register under an optional mount prefix so this server can
     # share `mcp.helmguild.com` with other MCP servers later (e.g. an
