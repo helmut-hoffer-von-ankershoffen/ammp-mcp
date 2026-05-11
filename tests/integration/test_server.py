@@ -195,6 +195,15 @@ async def test_landing_page_route(server) -> None:
     # "Authorization: Bearer ammp-…" placeholders are dead-ends.
     assert "Requesting access" in body
     assert "ammp mentee add" in body
+    # The "Request a token" CTA must be a mailto: with pre-filled subject
+    # and body (URL-encoded). Visitors who click it land in their mail
+    # client with the slug/runtime/delivery template ready.
+    assert "mailto:helmuthva@gmail.com" in body
+    assert "subject=" in body and "body=" in body
+    # Copy-to-clipboard buttons on every integration card. The vanilla-JS
+    # handler is inline at the foot of <body>.
+    assert 'button class="btn copy"' in body or 'class="btn copy"' in body
+    assert "navigator.clipboard.writeText" in body
 
 
 async def test_capability_route(server) -> None:

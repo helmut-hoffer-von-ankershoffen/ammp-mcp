@@ -511,11 +511,14 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
 def _render_landing(ctx: ServerContext) -> str:
     """Render the operator-facing landing page served at ``GET /``.
 
-    Self-contained HTML (inline CSS, no external assets). Lists the
-    live mentors from ``ctx`` so a visitor immediately sees what this
-    deployment exposes; then walks through how to connect as a mentee
-    from each of the supported runtimes (Claude.ai, Claude Cowork,
-    Claude Code, OpenClaw, Hermes) plus the bash-plus-CLI path.
+    Self-contained HTML (inline CSS + JS, no external assets). Lists
+    the live mentors from ``ctx`` so a visitor immediately sees what
+    this deployment exposes; then walks through how to connect as a
+    mentee from each of the supported runtimes (Claude.ai, Claude
+    Cowork, Claude Code, OpenClaw, Hermes) plus the bash-plus-CLI path.
+    URLs have a Copy-to-clipboard button (clipboard.writeText, vanilla
+    JS). The "Request a token" button is a `mailto:` with URL-encoded
+    subject + body so the visitor's mail client opens pre-filled.
 
     Args:
         ctx: The boot-time server context — used for the live mentor
@@ -524,7 +527,25 @@ def _render_landing(ctx: ServerContext) -> str:
     Returns:
         A complete HTML document as a string, ready for ``HTMLResponse``.
     """
+    from urllib.parse import quote as _q
+
     base = ctx.settings.public_url.rstrip("/")
+    mcp_url = f"{base}/mcp/"
+    claude_code_cmd = f'claude mcp add --scope user ammp-pepe {mcp_url} --header "Authorization: Bearer ammp-…"'
+
+    # Pre-fill the operator's inbox with the three things the access flow
+    # needs. The visitor edits the placeholders in the body.
+    mailto_subject = "ammp-mcp — mentee token request"
+    mailto_body = (
+        "Hi Helmut,\n\n"
+        f"I'd like to connect a mentee to {base}.\n\n"
+        "  Mentee slug      : <kebab-case, e.g. claude-cowork-sandra>\n"
+        "  Runtime          : <claude-ai | claude-cowork | claude-code | openclaw | hermes>\n"
+        "  Delivery channel : <Signal / iMessage / Telegram + number>\n\n"
+        "Thanks!\n"
+    )
+    mailto = f"mailto:helmuthva@gmail.com?subject={_q(mailto_subject)}&body={_q(mailto_body)}"
+
     mentor_rows = "".join(
         f'<li><span class="slug">{slug}</span> <span class="name">{m.name}</span>'
         f'<span class="count">{len(load_corpus(m.playbook_dir))} playbook(s)</span></li>'
@@ -577,6 +598,17 @@ pre{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:6px;
 .mentor-list .count{{color:var(--ink-soft);font-size:.85em;margin-left:auto}}
 footer{{color:var(--ink-soft);font-size:.82rem;margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--rule)}}
 footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
+button{{font:inherit}}
+.btn{{display:inline-flex;align-items:center;gap:.4rem;padding:.35rem .75rem;margin:.5rem .5rem 0 0;border:1px solid var(--accent);border-radius:5px;background:transparent;color:var(--accent);font-family:var(--sans);font-size:.85rem;cursor:pointer;text-decoration:none}}
+.btn:hover{{background:var(--accent);color:var(--bg)}}
+.btn.copy{{font-family:var(--mono);font-size:.78rem;padding:.25rem .55rem;margin-left:.5rem;vertical-align:middle}}
+.btn.copy[data-copied="1"]{{border-color:#3a8a3a;color:#3a8a3a;background:transparent}}
+.btn.primary{{background:var(--accent);color:var(--bg);border-color:var(--accent)}}
+.btn.primary:hover{{background:var(--accent-hover);border-color:var(--accent-hover)}}
+.url-row{{font-family:var(--mono);font-size:.85rem;margin:.4rem 0}}
+.url-row .label{{color:var(--ink-soft);display:inline-block;min-width:5.5rem}}
+.url-row code{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:4px;padding:.1rem .4rem;font-size:.92em}}
+@media (prefers-color-scheme: dark) {{ .url-row code{{background:rgba(255,255,255,.04)}} }}
 </style>
 </head>
 <body>
@@ -593,7 +625,10 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 
 <h2>Requesting access</h2>
 <p>Every mentee call carries a per-mentee Bearer token. There is no self-service mint endpoint — gatekept by design (AMMP's allowlist is what makes <em>multi-mentee</em> a privacy posture, not a wishful default).</p>
-<p><strong>If you want to connect:</strong> email the operator (<a href="mailto:helmuthva@gmail.com">helmuthva@gmail.com</a>) with three things — the mentee <code>slug</code> you want (kebab-case, e.g. <code>claude-cowork-sandra</code>), the runtime you'll connect from (one of <code>claude-ai</code>, <code>claude-cowork</code>, <code>claude-code</code>, <code>openclaw</code>, <code>hermes</code>), and a Signal / iMessage number to receive the token on. The operator mints + sends it; the token is shown to them <strong>once</strong> and never re-derivable.</p>
+<p>
+  <a class="btn primary" href="{mailto}">📧 Request a token</a>
+</p>
+<p><strong>If you want to connect:</strong> the button opens your mail client pre-filled with the three pieces of info the operator needs — the mentee <code>slug</code> you want (kebab-case, e.g. <code>claude-cowork-sandra</code>), the runtime you'll connect from (<code>claude-ai</code>, <code>claude-cowork</code>, <code>claude-code</code>, <code>openclaw</code>, or <code>hermes</code>), and a secure channel (Signal / iMessage / Telegram) to receive the token on. The operator mints + sends it; the token is shown to them <strong>once</strong> and never re-derivable.</p>
 <p><strong>If you are the operator:</strong> on the host where ammp-mcp runs, mint a mentee and copy the plaintext token straight into a secure channel (Signal, 1Password share, encrypted email — never plain email / Slack / SMS). The token format is <code>ammp-&lt;32 url-safe bytes&gt;</code>; only its SHA-256 lands on disk.</p>
 <pre>$ ammp mentee add claude-cowork-sandra \\
     --operator human:sandra --runtime claude-cowork
@@ -607,36 +642,35 @@ API KEY for the first mentee — copy now, you will not see it again:
 <div class="integration">
 <h3>Claude.ai <span class="meta">runtime: <code>claude-ai</code></span></h3>
 <p class="lead">Settings → Connectors → Custom. Paste the MCP URL and Bearer token.</p>
-<pre>URL:     {base}/mcp/
-Header:  Authorization: Bearer ammp-…</pre>
+<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
+<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
 </div>
 
 <div class="integration">
 <h3>Claude Cowork <span class="meta">runtime: <code>claude-cowork</code></span></h3>
-<p class="lead">Add as a custom MCP connector. The Bearer key is per-mentee — request one from the operator.</p>
-<pre>URL:     {base}/mcp/
-Header:  Authorization: Bearer ammp-…</pre>
+<p class="lead">Add as a custom MCP connector. The Bearer key is per-mentee — request one above.</p>
+<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
+<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
 </div>
 
 <div class="integration">
 <h3>Claude Code <span class="meta">runtime: <code>claude-code</code></span></h3>
-<p class="lead">One CLI call registers the server at user scope so every cwd sees it.</p>
-<pre>claude mcp add --scope user ammp-pepe {base}/mcp/ \\
-  --header "Authorization: Bearer ammp-…"</pre>
+<p class="lead">One CLI call registers the server at user scope so every cwd sees it. Swap <code>ammp-…</code> for the token you received.</p>
+<div class="url-row"><code>{claude_code_cmd}</code> <button class="btn copy" data-copy='{claude_code_cmd}'>Copy</button></div>
 </div>
 
 <div class="integration">
 <h3>OpenClaw <span class="meta">runtime: <code>openclaw</code></span></h3>
 <p class="lead">OpenClaw natively speaks MCP. Add the server via your runtime's connector UI or its config file with the same URL + Bearer header.</p>
-<pre>URL:     {base}/mcp/
-Header:  Authorization: Bearer ammp-…</pre>
+<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
+<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
 </div>
 
 <div class="integration">
 <h3>Hermes <span class="meta">runtime: <code>hermes</code></span></h3>
 <p class="lead">Hermes connects to MCP servers through its standard tool-server registry. Point it at the same URL + Bearer; no Hermes-specific handshake.</p>
-<pre>URL:     {base}/mcp/
-Header:  Authorization: Bearer ammp-…</pre>
+<div class="url-row"><span class="label">URL:</span> <code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy</button></div>
+<div class="url-row"><span class="label">Header:</span> <code>Authorization: Bearer ammp-…</code></div>
 </div>
 
 <h2>Or use via CLI</h2>
@@ -657,6 +691,27 @@ ammp mentor escalate "two playbooks contradict" --mentor pepe \\
 </footer>
 
 </main>
+
+<script>
+// Tiny copy-to-clipboard handler. Falls back gracefully on browsers that
+// don't allow async clipboard access (rare, mostly old Safari over HTTP).
+document.querySelectorAll('button.btn.copy').forEach(function(b) {{
+  b.addEventListener('click', async function() {{
+    try {{
+      await navigator.clipboard.writeText(b.dataset.copy);
+      var prev = b.textContent;
+      b.textContent = 'Copied ✓';
+      b.setAttribute('data-copied', '1');
+      setTimeout(function() {{
+        b.textContent = prev;
+        b.removeAttribute('data-copied');
+      }}, 1500);
+    }} catch (e) {{
+      b.textContent = 'Press ⌘C';
+    }}
+  }});
+}});
+</script>
 </body>
 </html>"""
 
