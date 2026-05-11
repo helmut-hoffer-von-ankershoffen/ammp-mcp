@@ -15,10 +15,12 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from fastmcp import Context, FastMCP
+from fastmcp.server.tasks import TaskConfig
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
 
@@ -1598,7 +1600,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         """
         return await _handle_ask_mentor(ctx, question, mentor, context, None)
 
-    @mcp.tool
+    @mcp.tool(
+        task=TaskConfig(mode="optional", poll_interval=timedelta(seconds=10)),
+    )
     async def EscalateToHumanMentor(
         question: str,
         mentor: str = "",

@@ -638,6 +638,28 @@ async def test_escalate_to_human_mentor_emits_progress_heartbeats_while_waiting(
     assert progresses[-1] == 1.0
 
 
+async def test_escalate_to_human_mentor_advertises_task_mode(server) -> None:
+    """`EscalateToHumanMentor` opts into MCP background tasks (mode=optional).
+
+    Clients that understand the MCP task primitive can run the call
+    in the background — server returns a task id immediately, client
+    polls until A.h replies (the wait can be hours and survives a
+    flaky transport). Clients that don't understand tasks still get
+    the synchronous heartbeat-buffered path. Pinned so a regression
+    that drops the decorator surfaces here rather than as a silent
+    UX regression in production.
+    """
+    tool = await server.get_tool("EscalateToHumanMentor")
+    assert tool.task_config is not None, "EscalateToHumanMentor must opt into MCP background tasks"
+    assert tool.task_config.mode == "optional"
+    # Short-running tools should NOT advertise the task primitive — it
+    # adds protocol overhead with no benefit when the answer is one
+    # synthesis round-trip away.
+    for sync_name in ("ListMentors", "ListPlaybooks", "GetPlaybook", "AskMentor", "SearchPlaybooks"):
+        t = await server.get_tool(sync_name)
+        assert t.task_config.mode == "forbidden", f"{sync_name} should not opt into background tasks"
+
+
 async def test_escalate_to_human_mentor_no_human_mentor_configured(settings: Settings) -> None:
     """Mentor without `human_mentor` set returns no_human_mentor in-band error."""
     from ammp_mcp.server import _handle_escalate_to_human_mentor, build_context
