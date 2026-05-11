@@ -187,3 +187,8 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
 ]
+
+[dependency-groups]
+dev = [
+    "pip-licenses>=5.5.5",
+]
