@@ -9,7 +9,7 @@ without a docstring.
 
 Run locally with:
 
-    uv run python scripts/check_docstrings.py
+    uv run python tools/check_docstrings.py
 
 Wired into pre-commit and CI alongside ruff + mypy + pydoclint.
 """

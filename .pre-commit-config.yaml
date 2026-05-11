@@ -33,7 +33,7 @@ repos:
     hooks:
       - id: docstring-coverage
         name: Every function in src/ has a docstring
-        entry: uv run python scripts/check_docstrings.py
+        entry: uv run python tools/check_docstrings.py
         language: system
         pass_filenames: false
         files: ^src/ammp_mcp/.*\.py$

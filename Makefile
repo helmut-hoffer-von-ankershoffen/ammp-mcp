@@ -53,7 +53,7 @@ lint: ## Run the full CI lint gate (ruff + format + mypy + docstring coverage + 
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run mypy src/ammp_mcp
-	uv run python scripts/check_docstrings.py
+	uv run python tools/check_docstrings.py
 	uv run pydoclint src/ammp_mcp
 
 lint_fix: ## Auto-fix ruff lint + format issues (no other checks).
@@ -104,7 +104,7 @@ audit_vulnerabilities: ## pip-audit + fail-on-any-vulnerability (writes reports/
 		--format json \
 		--output reports/vulnerabilities.json
 	uv run --with pip-audit -- pip-audit --skip-editable --format columns || true
-	uv run python scripts/audit_vulnerabilities.py
+	uv run python tools/audit_vulnerabilities.py
 
 audit_licenses: ## pip-licenses + license allow-list enforcement (writes reports/licenses.{json,csv}).
 	mkdir -p reports
@@ -116,7 +116,7 @@ audit_licenses: ## pip-licenses + license allow-list enforcement (writes reports
 	uv run --with pip-licenses -- pip-licenses \
 		--format=csv \
 		--output-file=reports/licenses.csv
-	uv run python scripts/audit_licenses.py
+	uv run python tools/audit_licenses.py
 
 audit_sbom: ## Generate a CycloneDX SBOM at reports/sbom.json.
 	mkdir -p reports
@@ -130,10 +130,10 @@ docs_walk: ## Run the Haiku-driven docs walker (needs AMMP_ANTHROPIC_API_KEY).
 	uv run pytest -m e2e tests/e2e/test_docs_walk.py -v --no-cov
 
 cli_reference: ## Regenerate docs/CLI_REFERENCE.md from the live Typer surface.
-	uv run python scripts/generate_cli_reference.py
+	uv run python tools/generate_cli_reference.py
 
 attributions: ## Regenerate ATTRIBUTIONS.md from the resolved dep tree.
-	uv run python scripts/generate_attributions.py
+	uv run python tools/generate_attributions.py
 
 ##@ Server convenience
 

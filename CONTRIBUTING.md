@@ -51,7 +51,7 @@ Until those are configured, CI still passes; the badges and PyPI publish step de
 After bumping any dependency:
 
 ```bash
-uv run python scripts/generate_attributions.py
+uv run python tools/generate_attributions.py
 git add ATTRIBUTIONS.md
 git commit -m "Refresh ATTRIBUTIONS.md after dep bump"
 ```

@@ -2,7 +2,7 @@
 """Regenerate ``docs/CLI_REFERENCE.md`` from the live Typer app.
 
 Usage:
-    python scripts/generate_cli_reference.py
+    python tools/generate_cli_reference.py
 
 Wraps ``typer ammp_mcp.cli utils docs --name ammp`` so the regen path is
 single-step and discoverable. The committed file should stay in sync with

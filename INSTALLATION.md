@@ -182,13 +182,13 @@ uv run ruff check . && uv run mypy src && uv run pytest -q
 After CLI changes, regenerate the reference:
 
 ```bash
-uv run python scripts/generate_cli_reference.py
+uv run python tools/generate_cli_reference.py
 ```
 
 After dependency bumps, regenerate attributions:
 
 ```bash
-uv run python scripts/generate_attributions.py
+uv run python tools/generate_attributions.py
 ```
 
 CI runs the same three commands (`ruff`, `mypy`, `pytest`) on a 4-Python matrix plus an audit / CodeQL / SonarCloud pass. Push to `main` is gated on all of them.

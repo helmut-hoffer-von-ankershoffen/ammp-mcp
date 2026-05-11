@@ -315,7 +315,7 @@ Out of scope (for now):
 
 `ammp-mcp` is **MIT-licensed** — see [`LICENSE`](LICENSE).
 
-Attributions for the open-source projects this server depends on are in [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md). Regenerate after dependency bumps with `python scripts/generate_attributions.py`.
+Attributions for the open-source projects this server depends on are in [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md). Regenerate after dependency bumps with `python tools/generate_attributions.py`.
 
 ## Security
 

@@ -104,7 +104,7 @@ Each domain folder has its own `CLAUDE.md` with module-specific public API and t
 Live, generated copy in `docs/CLI_REFERENCE.md`. Regenerate after CLI changes:
 
 ```sh
-uv run python scripts/generate_cli_reference.py
+uv run python tools/generate_cli_reference.py
 ```
 
 (The script wraps `typer ammp_mcp.cli utils docs`.)
@@ -142,7 +142,7 @@ git -c user.email=helmuthva@gmail.com -c user.name='Helmut Hoffer von Ankershoff
 
 ## Pre-push hook auto-fixes
 
-`pre-commit install --hook-type pre-push` runs ruff + EOF-fixer + trailing-whitespace on push. When it auto-modifies a file, push fails and the tree is dirty. **Always create a new commit** (`git add <fixed> && git commit -m "...: pre-commit hygiene pass"`); never `--amend` (it rewrites prior history). The attribution generator right-strips each line and collapses trailing blanks (`scripts/generate_attributions.py:render`) so regens stay hook-clean.
+`pre-commit install --hook-type pre-push` runs ruff + EOF-fixer + trailing-whitespace on push. When it auto-modifies a file, push fails and the tree is dirty. **Always create a new commit** (`git add <fixed> && git commit -m "...: pre-commit hygiene pass"`); never `--amend` (it rewrites prior history). The attribution generator right-strips each line and collapses trailing blanks (`tools/generate_attributions.py:render`) so regens stay hook-clean.
 
 ## What lives elsewhere
 

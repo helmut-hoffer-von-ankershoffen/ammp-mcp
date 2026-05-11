@@ -116,7 +116,7 @@ ignore = [
     "D203",   # incompatible with D211 — prefer D211 (no blank line before class docstring)
     "D212",   # incompatible with D213 — prefer D213 (multi-line summary on second line)
     "D107",   # __init__ docstrings: we follow Google's "class docstring OR __init__ docstring,
-              # not both" convention; pydoclint + scripts/check_docstrings.py enforce that the
+              # not both" convention; pydoclint + tools/check_docstrings.py enforce that the
               # class docstring covers __init__ args. D107 would force a redundant duplicate.
 ]
 
@@ -130,7 +130,7 @@ convention = "google"
 # Tests and scripts: relax docstring requirements (per-test docstrings
 # add noise; test names already document intent).
 "tests/**/*.py" = ["ARG", "B011", "D"]
-"scripts/**/*.py" = ["D100", "D103"]
+"tools/**/*.py" = ["D100", "D103"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -159,7 +159,7 @@ warn_required_dynamic_aliases = true
 #
 # Verifies that every docstring's Args / Returns / Raises sections match
 # the function signature. Pydoclint does NOT check that a docstring
-# exists at all — that's `scripts/check_docstrings.py`. The two run
+# exists at all — that's `tools/check_docstrings.py`. The two run
 # together in CI + pre-commit.
 
 [tool.pydoclint]
