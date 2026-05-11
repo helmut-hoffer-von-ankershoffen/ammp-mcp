@@ -6,6 +6,7 @@ Subject-then-action layout (mirrors `git remote list`, `kubectl get pods`):
     ammp mentee list / add / remove / rotate-key / check-key
     ammp playbook list / show / search
     ammp instruction list / show
+    ammp escalation list / show / answer / cancel
     ammp system setup / status / health / usage / capability / serve
 
 Top-level shortcuts for the most common system verbs:
@@ -23,6 +24,7 @@ from __future__ import annotations
 import typer
 
 from ._cli_utils import wire_help_on_no_args
+from .escalation._cli import escalation_app
 from .mentee._cli import mentee_app
 from .mentor._cli import mentor_app
 from .playbook._cli import instruction_app, playbook_app
@@ -46,6 +48,7 @@ app.add_typer(mentor_app)
 app.add_typer(mentee_app)
 app.add_typer(playbook_app)
 app.add_typer(instruction_app)
+app.add_typer(escalation_app)
 app.add_typer(system_app)
 
 # Top-level aliases for the most common system verbs. Canonical home

@@ -22,7 +22,9 @@ $ ammp [OPTIONS] COMMAND [ARGS]...
 * `capability`: Alias for `ammp system capability`.
 * `mentor`: Inspect registered mentors; ask one a...
 * `mentee`: Manage the mentee allowlist (add / remove...
-* `playbook`: Inspect and read the playbook corpus of a...
+* `playbook`: Inspect and read a mentor&#x27;s playbooks...
+* `instruction`: Inspect and read individual work...
+* `escalation`: Inspect and manage mentor-mediated...
 * `system`: Operate the install as a whole (setup,...
 
 ## `ammp serve`
@@ -329,7 +331,7 @@ $ ammp mentee check-key [OPTIONS] API_KEY
 
 ## `ammp playbook`
 
-Inspect and read the playbook corpus of a mentor.
+Inspect and read a mentor&#x27;s playbooks (areas of practice).
 
 **Usage**:
 
@@ -343,13 +345,13 @@ $ ammp playbook [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `list`: List the playbook corpus for a mentor.
-* `show`: Print one playbook body to stdout (CLI...
-* `search`: Substring-search a mentor&#x27;s playbook...
+* `list`: List the playbooks (areas of practice) for...
+* `show`: Print one playbook&#x27;s metadata + its...
+* `search`: Substring-search a mentor&#x27;s corpus (CLI...
 
 ### `ammp playbook list`
 
-List the playbook corpus for a mentor.
+List the playbooks (areas of practice) for a mentor.
 
 **Usage**:
 
@@ -364,7 +366,7 @@ $ ammp playbook list [OPTIONS]
 
 ### `ammp playbook show`
 
-Print one playbook body to stdout (CLI parity with AMMP ``GetPlaybook``).
+Print one playbook&#x27;s metadata + its work-instruction list.
 
 **Usage**:
 
@@ -374,7 +376,7 @@ $ ammp playbook show [OPTIONS] PLAYBOOK_ID
 
 **Arguments**:
 
-* `PLAYBOOK_ID`: Playbook id (filename stem).  [required]
+* `PLAYBOOK_ID`: Playbook id (directory name).  [required]
 
 **Options**:
 
@@ -383,10 +385,11 @@ $ ammp playbook show [OPTIONS] PLAYBOOK_ID
 
 ### `ammp playbook search`
 
-Substring-search a mentor&#x27;s playbook corpus (CLI parity with AMMP ``SearchPlaybooks``).
+Substring-search a mentor&#x27;s corpus (CLI parity with AMMP ``SearchPlaybooks``).
 
-Calls the same handler the MCP server uses. Returns ranked matches with
-surrounding snippet context. The hash-only audit log records the call.
+Calls the same handler the MCP server uses. Search runs at
+work-instruction granularity; each match names its parent playbook.
+The hash-only audit log records the call.
 
 **Usage**:
 
@@ -396,13 +399,165 @@ $ ammp playbook search [OPTIONS] QUERY
 
 **Arguments**:
 
-* `QUERY`: Substring to search for across the mentor&#x27;s playbook corpus.  [required]
+* `QUERY`: Substring to search for across the mentor&#x27;s work-instruction corpus.  [required]
 
 **Options**:
 
 * `-m, --mentor TEXT`: Mentor slug. Empty → server default.
 * `-n, --limit INTEGER RANGE`: Maximum number of matches to return.  [default: 5; 1&lt;=x&lt;=50]
 * `--json`: Emit raw JSON (machine-readable) instead of a Rich table.
+* `--help`: Show this message and exit.
+
+## `ammp instruction`
+
+Inspect and read individual work instructions inside a mentor&#x27;s playbooks.
+
+**Usage**:
+
+```console
+$ ammp instruction [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: List the work instructions inside a playbook.
+* `show`: Print one work instruction body to stdout...
+
+### `ammp instruction list`
+
+List the work instructions inside a playbook.
+
+**Usage**:
+
+```console
+$ ammp instruction list [OPTIONS]
+```
+
+**Options**:
+
+* `-p, --playbook TEXT`: Playbook id (directory name).  [required]
+* `--mentor TEXT`: Mentor slug. Empty → server default.
+* `--help`: Show this message and exit.
+
+### `ammp instruction show`
+
+Print one work instruction body to stdout (CLI parity with ``GetWorkInstruction``).
+
+**Usage**:
+
+```console
+$ ammp instruction show [OPTIONS] INSTRUCTION_ID
+```
+
+**Arguments**:
+
+* `INSTRUCTION_ID`: Work instruction id (filename stem).  [required]
+
+**Options**:
+
+* `-p, --playbook TEXT`: Playbook id (directory name).  [required]
+* `--mentor TEXT`: Mentor slug.
+* `--help`: Show this message and exit.
+
+## `ammp escalation`
+
+Inspect and manage mentor-mediated escalations.
+
+**Usage**:
+
+```console
+$ ammp escalation [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: List escalations recorded by this server.
+* `show`: Print one escalation in detail.
+* `answer`: Manually inject A.h&#x27;s answer Z onto a...
+* `cancel`: Mark an escalation cancelled (e.g.
+
+### `ammp escalation list`
+
+List escalations recorded by this server.
+
+**Usage**:
+
+```console
+$ ammp escalation list [OPTIONS]
+```
+
+**Options**:
+
+* `--status TEXT`: Filter by status: pending | delivered | answered | cancelled | expired. Empty → all.
+* `--json`: Emit raw JSON instead of a Rich table.
+* `--help`: Show this message and exit.
+
+### `ammp escalation show`
+
+Print one escalation in detail.
+
+**Usage**:
+
+```console
+$ ammp escalation show [OPTIONS] ESCALATION_ID
+```
+
+**Arguments**:
+
+* `ESCALATION_ID`: Full or short (8-hex) escalation id.  [required]
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+### `ammp escalation answer`
+
+Manually inject A.h&#x27;s answer Z onto a pending escalation.
+
+Updates the persistent store; does NOT resolve any in-flight
+broker waiter in the running server. Use this when the delivery
+adapter is log-only, or for post-hoc records.
+
+**Usage**:
+
+```console
+$ ammp escalation answer [OPTIONS] ESCALATION_ID ANSWER
+```
+
+**Arguments**:
+
+* `ESCALATION_ID`: Escalation id (full or short).  [required]
+* `ANSWER`: Answer text Z from A.h, to record on the escalation.  [required]
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+### `ammp escalation cancel`
+
+Mark an escalation cancelled (e.g. B.a gave up, A.h unreachable).
+
+**Usage**:
+
+```console
+$ ammp escalation cancel [OPTIONS] ESCALATION_ID
+```
+
+**Arguments**:
+
+* `ESCALATION_ID`: Escalation id (full or short).  [required]
+
+**Options**:
+
+* `--reason TEXT`: Free-form note recorded on the escalation.  [default: operator_cancelled]
 * `--help`: Show this message and exit.
 
 ## `ammp system`

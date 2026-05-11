@@ -97,7 +97,50 @@ The wizard is idempotent; re-run any time.
 
 ## Edit Pepe's playbooks (this deployment specifically)
 
-Pepe's mentor lives at `~/Obsidian/vaults/AI Agents Memory/Pepe Arturo/Mentorship/ammp-corpus/pepe/` — `AMMP_MENTORS_ROOT` in the LaunchAgent points there. Edit any `playbooks/*.md` and the change is visible on the next `GetPlaybook` / `ListPlaybooks` / `AskMentor` call (no restart). Editing `pepe/mentor.json` itself needs a restart.
+Pepe's mentor lives at `~/Obsidian/vaults/AI Agents Memory/Pepe Arturo/Mentorship/ammp-corpus/pepe/` — `AMMP_MENTORS_ROOT` in the LaunchAgent points there. The corpus is a two-level hierarchy:
+
+```
+pepe/
+├── mentor.json                 # name, description, human_mentor, persona, backend
+├── avatar.jpg                  # 256-512px square (served at /mentors/pepe/avatar)
+└── playbooks/
+    ├── <playbook-slug>/
+    │   ├── playbook.json       # name, description (area of practice)
+    │   └── <instruction>.md    # one work instruction per file
+    └── ...
+```
+
+Edit any `playbooks/<slug>/<instruction>.md` (or add/remove `.md` files) and the change is visible on the next `GetPlaybook` / `ListPlaybooks` / `AskMentor` call — no restart. Adding/removing a whole playbook subdirectory likewise needs no restart. Editing `pepe/mentor.json` or any `playbook.json` (name/description metadata) needs a restart.
+
+---
+
+## Mentor-mediated escalation (B.a → A.h via A.a)
+
+When `AskMentor` returns low-confidence and the mentor has a `human_mentor` configured (Helmut, in Pepe's case), the response carries an `escalation_to_human_mentor_draft`. The mentee (B.a) is expected to:
+
+1. Show the draft to its own operator (B.h) and get approval (possibly with edits to X).
+2. Call the new `EscalateToHumanMentor(question=X, mentor=…)` tool. This is **long-running** — the call blocks until A.h replies (24h default timeout), emitting MCP `notifications/progress` along the way.
+
+Server side: the question is persisted to `<AMMP_DIR>/escalations.jsonl`, handed to the configured delivery adapter, then the handler awaits A.h's reply on an in-memory `asyncio.Event`. When A.h replies, the event fires and the tool returns the answer to B.a.
+
+Delivery adapters (`AMMP_ESCALATION_ADAPTER`):
+
+* `log` (default) — outbound writes to the server log; **no inbound**. Use this until Telegram is wired. Resolve manually with `ammp escalation answer <id> "..."`.
+* `telegram` — outbound via Telegram Bot API `sendMessage` to a configured chat id; inbound via long-polled `getUpdates`. A.h replies in Telegram (reply-to-message), the bot routes the reply back to the waiting tool call. Requires `AMMP_ESCALATION_TELEGRAM_BOT_TOKEN` + `AMMP_ESCALATION_TELEGRAM_CHAT_ID`.
+
+Operator surface:
+
+```bash
+ammp escalation list                    # all escalations + status
+ammp escalation list --status pending   # filter
+ammp escalation show <id-prefix>        # full record (question + answer)
+ammp escalation answer <id> "..."       # manually inject A.h's reply (log adapter)
+ammp escalation cancel <id>             # mark cancelled
+```
+
+`answer` / `cancel` update the persistent store but **do not wake** an in-flight broker waiter in the running server — those resolve only via the live delivery adapter's inbound path. For manual injection while a B.a call is blocking, restart the server (the boot path marks orphan pending escalations as `expired`, so B.a will see the timeout) or wait for the configured timeout.
+
+Per AMMP §3.4, the cross-compartment forward is only legitimate when B.h has approved it. ammp-mcp does not enforce that gate — B.a is responsible for getting consent before invoking the tool.
 
 ---
 
