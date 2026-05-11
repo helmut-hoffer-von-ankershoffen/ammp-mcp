@@ -914,8 +914,38 @@ def _render_landing(ctx: ServerContext) -> str:
     Returns:
         A complete HTML document as a string, ready for ``HTMLResponse``.
     """
+    import re as _re
     from html import escape as _h
     from urllib.parse import quote as _q
+
+    # Inline-markdown renderer — handles `**bold**`, `*italic*`, and
+    # `` `code` `` in summary lines so playbook / work-instruction
+    # markdown doesn't show raw asterisks on the page. HTML-escape
+    # first; the conversion only ever inserts the small set of tags
+    # below, never anything attacker-controlled.
+    _re_bold = _re.compile(r"\*\*([^*\n]+?)\*\*")
+    _re_italic = _re.compile(r"(?<![*\w])\*([^*\n]+?)\*(?!\w)")
+    _re_code = _re.compile(r"`([^`\n]+?)`")
+
+    def _md_inline(text: str) -> str:
+        """Render a one-line markdown snippet to safe HTML.
+
+        Applies HTML-escape, then a small regex pass for ``**bold**``,
+        ``*italic*`` and `` `code` `` — the only inline forms that
+        appear in the summary lines we surface on the landing.
+
+        Args:
+            text: The raw text from a playbook description or work
+                instruction summary.
+
+        Returns:
+            HTML-safe rendered string.
+        """
+        escaped = _h(text)
+        escaped = _re_code.sub(r"<code>\1</code>", escaped)
+        escaped = _re_bold.sub(r"<strong>\1</strong>", escaped)
+        escaped = _re_italic.sub(r"<em>\1</em>", escaped)
+        return escaped
 
     base = ctx.settings.public_url.rstrip("/")
     mcp_url = f"{base}/mcp/"
@@ -953,24 +983,35 @@ def _render_landing(ctx: ServerContext) -> str:
             human_html = ""
         # Playbook → work-instruction nested rendering. Each playbook is
         # an area of practice; each instruction is one craft rule.
+        # Instructions are collapsed inside a <details> by default —
+        # one mentor with three playbooks of 5-12 instructions each
+        # would otherwise dominate the page.
         if playbooks:
             pb_html_parts: list[str] = []
             for pb in playbooks:
                 if pb.instructions:
                     instr_items = "".join(
                         f"<li><span class='wi-title'>{_h(wi.title)}</span>"
-                        + (f"<span class='wi-desc'>{_h(wi.summary)}</span>" if wi.summary else "")
+                        + (f"<span class='wi-desc'>{_md_inline(wi.summary)}</span>" if wi.summary else "")
                         + "</li>"
                         for wi in pb.instructions
                     )
+                    n = len(pb.instructions)
+                    label = f"{n} work instruction{'s' if n != 1 else ''}"
+                    instructions_block = (
+                        f"<details class='instructions-details'>"
+                        f"<summary>{label}</summary>"
+                        f"<ul class='instructions'>{instr_items}</ul>"
+                        "</details>"
+                    )
                 else:
-                    instr_items = "<li class='empty'>No work instructions yet.</li>"
-                pb_desc = f"<p class='pb-desc'>{_h(pb.description)}</p>" if pb.description else ""
+                    instructions_block = "<p class='empty'>No work instructions yet.</p>"
+                pb_desc = f"<p class='pb-desc'>{_md_inline(pb.description)}</p>" if pb.description else ""
                 pb_html_parts.append(
                     "<section class='playbook'>"
                     f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span></h4>"
                     f"{pb_desc}"
-                    f"<ul class='instructions'>{instr_items}</ul>"
+                    f"{instructions_block}"
                     "</section>"
                 )
             playbook_section = "".join(pb_html_parts)
@@ -1042,11 +1083,19 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .pb-name{{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .15rem;color:var(--ink);display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
 .pb-id{{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);font-weight:400}}
 .pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
-.instructions{{margin:.25rem 0 0;padding:0 0 0 1.1rem;color:var(--ink-soft);list-style:disc}}
-.instructions li{{margin:.2rem 0;color:var(--ink);font-size:.92rem}}
+.instructions-details{{margin:.4rem 0 0}}
+.instructions-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}
+.instructions-details > summary::-webkit-details-marker{{display:none}}
+.instructions-details > summary::before{{content:"▸";display:inline-block;width:.9rem;color:var(--ink-soft);transition:transform .15s ease}}
+.instructions-details[open] > summary::before{{transform:rotate(90deg)}}
+.instructions-details > summary:hover{{color:var(--accent-hover)}}
+.instructions{{margin:.5rem 0 0;padding:0 0 0 1.4rem;color:var(--ink-soft);list-style:disc}}
+.instructions li{{margin:.3rem 0;color:var(--ink);font-size:.92rem}}
 .instructions li::marker{{color:var(--ink-soft)}}
 .instructions .wi-title{{color:var(--ink);font-weight:500}}
-.instructions .wi-desc{{display:block;color:var(--ink-soft);font-size:.85rem;line-height:1.4;margin-top:.05rem}}
+.instructions .wi-desc{{display:block;color:var(--ink-soft);font-size:.85rem;line-height:1.45;margin-top:.05rem}}
+.instructions .wi-desc code{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:3px;padding:.05rem .3rem;font-size:.92em}}
+@media (prefers-color-scheme: dark) {{ .instructions .wi-desc code{{background:rgba(255,255,255,.04)}} }}
 .instructions li.empty{{color:var(--ink-soft);font-style:italic;list-style:none;margin-left:-1.1rem}}
 .empty{{color:var(--ink-soft);font-style:italic}}
 .runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
