@@ -44,6 +44,22 @@ def test_list_mentors(runner: CliRunner) -> None:
     assert "strict" in r.output
 
 
+def test_list_mentors_json_matches_wire_envelope(runner: CliRunner) -> None:
+    """`ammp mentor list --json` returns the same shape as the MCP `ListMentors` tool."""
+    r = runner.invoke(app, ["mentor", "list", "--json"])
+    assert r.exit_code == 0, r.output
+    payload = json.loads(r.output)
+    assert payload["track"] == "mentoring"
+    assert payload["default_mentor"] == "pepe"
+    by_slug = {m["slug"]: m for m in payload["mentors"]}
+    assert set(by_slug) == {"pepe", "strict", "stubmentor"}
+    assert by_slug["pepe"]["is_default"] is True
+    assert by_slug["pepe"]["playbook_count"] == 2  # fixture's pepe has 2 playbooks
+    # Wire envelope has no operator-facing fields like `playbook_dir`.
+    for m in payload["mentors"]:
+        assert "playbook_dir" not in m
+
+
 def test_list_playbooks_default(runner: CliRunner) -> None:
     r = runner.invoke(app, ["playbook", "list"])
     assert r.exit_code == 0, r.output

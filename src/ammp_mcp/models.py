@@ -32,6 +32,43 @@ class ListPlaybooksResponse(BaseModel):
     playbooks: list[PlaybookSummary]
 
 
+class MentorSummary(BaseModel):
+    """One mentor in a ``ListMentors`` result list.
+
+    Mirrors the per-mentor block in the capability JSON
+    (``/.well-known/agent.json``) so a mentee that has already discovered
+    the server through capability fetch sees an identical shape over the
+    MCP wire — and vice versa.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    name: str
+    playbook_count: int
+    confidence_threshold: float = Field(ge=0.0, le=1.0)
+    backend: str
+    backend_live: bool
+    is_default: bool = False
+
+
+class ListMentorsResponse(BaseModel):
+    """Response envelope for the ``ListMentors`` AMMP-extension operation.
+
+    Server-side extension beyond the AMMP-01 draft's five Mentoring-track
+    operations: lets a mentee enumerate the mentors this server hosts so
+    it can pick a slug for the other five ops without first reading the
+    capability JSON over an out-of-band HTTP GET.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    track: str = "mentoring"
+    count: int
+    default_mentor: str
+    mentors: list[MentorSummary]
+
+
 class GetPlaybookResponse(BaseModel):
     """Response envelope for the ``GetPlaybook`` AMMP operation."""
 

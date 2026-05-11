@@ -32,7 +32,7 @@ In another shell, confirm the server advertises its capability:
 curl -s http://127.0.0.1:8765/.well-known/agent.json | python -m json.tool
 ```
 
-You should see a JSON document naming the loaded mentors, advertising the AMMP draft version, and listing the five Mentoring-track operations.
+You should see a JSON document naming the loaded mentors, advertising the AMMP draft version, and listing the six MCP operations (`ListMentors` + the five AMMP §5 Mentoring-track operations).
 
 ---
 
@@ -63,7 +63,7 @@ claude mcp add --scope user ammp-pepe http://127.0.0.1:8765/mcp/ \
 claude mcp list | grep ammp-pepe
 ```
 
-Then from inside Claude Code, the five AMMP operations (`ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) are available as MCP tools. Try:
+Then from inside Claude Code, the six MCP tools (`ListMentors`, `ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) are available. Try:
 
 > *Use the AskMentor tool against mentor `example`: "how do you stay grounded under ambiguity?"*
 

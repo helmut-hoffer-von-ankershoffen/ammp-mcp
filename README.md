@@ -114,10 +114,11 @@ sequenceDiagram
 
 ## Operations
 
-All five Mentoring-track operations from AMMP §5. Each takes an optional `mentor` slug; calls without it route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `ammp.helmguild.com`).
+Six MCP tools — the five Mentoring-track operations from AMMP §5 plus a server-side `ListMentors` extension. Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `ammp.helmguild.com`).
 
 | Operation | Purpose |
 |---|---|
+| `ListMentors()` | Enumerate the mentors this server hosts (slug, name, playbook count, threshold, backend, default flag). Server-side extension over AMMP-01 — same data as the capability JSON, exposed over the MCP wire so mentees do not need a separate HTTP fetch to discover slugs. |
 | `ListPlaybooks(mentor?)` | Enumerate the playbook corpus (id, title, summary). |
 | `GetPlaybook(id, mentor?)` | Fetch a single playbook's full markdown body. |
 | `SearchPlaybooks(query, mentor?, limit?)` | Substring-rank the corpus; return matches with snippets. |
@@ -240,7 +241,7 @@ ammp serve                                      # boot the HTTP MCP server (alia
 ammp serve --stdio                              # subprocess transport for Claude Desktop / Claude Code
 ```
 
-Every operation a mentee can invoke over the MCP wire (`ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) has a matching CLI subcommand. An agent that prefers Bash-plus-CLI over MCP can exercise the full Mentoring track without speaking the protocol. The CLI invokes the same in-process handlers the MCP server uses, so behaviour stays in lockstep.
+Every operation a mentee can invoke over the MCP wire (`ListMentors`, `ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) has a matching CLI subcommand. `ammp mentor list --json` returns the same envelope an MCP `ListMentors` call returns. An agent that prefers Bash-plus-CLI over MCP can exercise the full Mentoring track without speaking the protocol. The CLI invokes the same in-process handlers the MCP server uses, so behaviour stays in lockstep.
 
 ## Configuration
 

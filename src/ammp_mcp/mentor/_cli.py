@@ -75,9 +75,33 @@ def _render_response(payload: dict[str, object], *, as_json: bool, fallback_labe
 
 
 @mentor_app.command("list")
-def mentor_list() -> None:
-    """List registered mentors and their corpus sizes."""
+def mentor_list(
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help=(
+            "Emit the same JSON envelope an MCP `ListMentors` call returns. "
+            "Useful for scripting or for agents that prefer Bash+CLI to MCP."
+        ),
+    ),
+) -> None:
+    """List registered mentors and their corpus sizes.
+
+    CLI parity with the MCP ``ListMentors`` extension. ``--json`` returns
+    the wire envelope; default rendering is a Rich table with the
+    additional ``playbook_dir`` column (operator-facing, not part of the
+    wire shape).
+    """
     s = get_settings()
+    if as_json:
+        from ..server import _handle_list_mentors, build_context
+
+        local_settings = s.model_copy(update={"require_auth": False})
+        ctx = build_context(local_settings)
+        payload = _handle_list_mentors(ctx, api_key=None)
+        typer.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+
     mentors = load_mentors(s.mentors_root)
     if not mentors:
         console.print(f"[yellow]No mentors found under {s.mentors_root}[/yellow]")

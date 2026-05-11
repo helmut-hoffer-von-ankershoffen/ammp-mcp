@@ -1,10 +1,12 @@
 """FastMCP server exposing AMMP's Mentoring track.
 
-Five operations: ListPlaybooks, GetPlaybook, SearchPlaybooks, AskMentor,
-EscalateToHuman. Multi-mentor: each call takes a `mentor: str` slug
-and the server routes to the right corpus. Multi-mentee: when
-`require_auth` is enabled, requests must carry a Bearer API key matching
-an entry in the mentee allowlist.
+Six operations: the AMMP §5 baseline (ListPlaybooks, GetPlaybook,
+SearchPlaybooks, AskMentor, EscalateToHuman) plus a server-side
+extension (ListMentors) so mentees can enumerate available mentors over
+the same wire they use for everything else. Multi-mentor: each call
+takes a `mentor: str` slug and the server routes to the right corpus.
+Multi-mentee: when `require_auth` is enabled, requests must carry a
+Bearer API key matching an entry in the mentee allowlist.
 """
 
 from __future__ import annotations
@@ -26,7 +28,9 @@ from .models import (
     AskMentorResponse,
     EscalateToHumanResponse,
     GetPlaybookResponse,
+    ListMentorsResponse,
     ListPlaybooksResponse,
+    MentorSummary,
     PlaybookSummary,
     SearchMatch,
     SearchPlaybooksResponse,
@@ -78,6 +82,41 @@ def _resolve_mentor(ctx: ServerContext, slug: str) -> Mentor | None:
 
 
 # ─── Tool handlers (pure functions; testable without FastMCP) ─────────────
+
+
+def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, Any]:
+    """Enumerate all mentors hosted by this server.
+
+    Server-side extension beyond AMMP-01's five operations. The same
+    per-mentor data is also published in the capability JSON, but
+    surfacing it as an MCP tool lets a mentee discover mentors over the
+    same wire it uses for the other five ops.
+    """
+    try:
+        mentee_slug = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+    log_event(ctx.settings.audit_log_path, "ListMentors", mentee=mentee_slug)
+    summaries: list[MentorSummary] = []
+    for slug, m in ctx.mentors.items():
+        corpus = load_corpus(m.playbook_dir)
+        backend = ctx.backends.get(slug)
+        summaries.append(
+            MentorSummary(
+                slug=slug,
+                name=m.name,
+                playbook_count=len(corpus),
+                confidence_threshold=m.confidence_threshold,
+                backend=backend.mode_label if backend else "unknown",
+                backend_live=backend.is_live if backend else False,
+                is_default=(slug == ctx.settings.default_mentor),
+            )
+        )
+    return ListMentorsResponse(
+        count=len(summaries),
+        default_mentor=ctx.settings.default_mentor,
+        mentors=summaries,
+    ).model_dump()
 
 
 def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None) -> dict[str, Any]:
@@ -307,6 +346,7 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
             "invariants": ["compartmentalisation", "human-gated-escalation"],
         },
         "operations": [
+            "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
             "SearchPlaybooks",
@@ -346,7 +386,8 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     """Build a FastMCP server bound to ``settings``.
 
     Loads mentors, the mentee allowlist, and per-mentor backends; then
-    registers the five AMMP Mentoring-track tools and the capability
+    registers the AMMP Mentoring-track tools (five from §5 plus the
+    ``ListMentors`` server-side extension) and the capability
     advertisement endpoint.
 
     Args:
@@ -378,10 +419,23 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         ),
     )
 
-    # The five MCP tool functions are deliberately PascalCase — the function
-    # name becomes the on-the-wire AMMP operation name. They are thin wrappers
+    # MCP tool functions are deliberately PascalCase — the function name
+    # becomes the on-the-wire AMMP operation name. They are thin wrappers
     # that delegate to the module-level handlers above so the cognitive
     # complexity of `create_server` stays well under SonarCloud's S3776 limit.
+    # Five of the six are AMMP §5 baseline; `ListMentors` is a server-side
+    # extension over the draft (mirrors the capability JSON's mentor block).
+
+    @mcp.tool
+    def ListMentors(api_key: str | None = None) -> dict[str, Any]:
+        """List the mentors this server hosts.
+
+        Each entry includes slug, display name, playbook count, confidence
+        threshold, backend kind, whether the backend is live, and whether
+        this mentor is the configured default. Use the returned slugs in
+        the other five operations.
+        """
+        return _handle_list_mentors(ctx, api_key)
 
     @mcp.tool
     def ListPlaybooks(mentor: str = "", api_key: str | None = None) -> dict[str, Any]:

@@ -149,6 +149,11 @@ $ ammp mentor [OPTIONS] COMMAND [ARGS]...
 
 List registered mentors and their corpus sizes.
 
+CLI parity with the MCP ``ListMentors`` extension. ``--json`` returns
+the wire envelope; default rendering is a Rich table with the
+additional ``playbook_dir`` column (operator-facing, not part of the
+wire shape).
+
 **Usage**:
 
 ```console
@@ -157,6 +162,7 @@ $ ammp mentor list [OPTIONS]
 
 **Options**:
 
+* `--json`: Emit the same JSON envelope an MCP `ListMentors` call returns. Useful for scripting or for agents that prefer Bash+CLI to MCP.
 * `--help`: Show this message and exit.
 
 ### `ammp mentor ask`

@@ -97,9 +97,11 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
         )
 
         async with _client(isolated_tree) as mentee:
-            # Step 1: housekeeping — discover what's available.
+            # Step 1: housekeeping — discover what's available. Six tools:
+            # AMMP §5 baseline plus the ListMentors server-side extension.
             tools = {t.name for t in await mentee.list_tools()}
             assert tools == {
+                "ListMentors",
                 "ListPlaybooks",
                 "GetPlaybook",
                 "SearchPlaybooks",

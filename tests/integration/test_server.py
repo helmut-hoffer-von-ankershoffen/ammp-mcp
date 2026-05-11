@@ -25,6 +25,33 @@ def server(settings: Settings):
     return create_server(settings)
 
 
+async def test_list_mentors_returns_all_mentors(server) -> None:
+    """Server-side extension over AMMP-01: a mentee can discover slugs without an out-of-band capability fetch."""
+    async with Client(server) as c:
+        result = await c.call_tool("ListMentors", {})
+    assert result.data["count"] == 3
+    assert result.data["default_mentor"] == "pepe"
+    by_slug = {m["slug"]: m for m in result.data["mentors"]}
+    assert set(by_slug) == {"pepe", "strict", "stubmentor"}
+    # Pepe is the configured default (per conftest fixture).
+    assert by_slug["pepe"]["is_default"] is True
+    assert by_slug["strict"]["is_default"] is False
+    # Pepe's confidence threshold matches the fixture's mentor.json.
+    assert by_slug["pepe"]["confidence_threshold"] == pytest.approx(0.6)
+    assert by_slug["strict"]["confidence_threshold"] == pytest.approx(0.9)
+    # Every mentor has a backend label string.
+    for m in result.data["mentors"]:
+        assert isinstance(m["backend"], str) and m["backend"]
+
+
+async def test_list_mentors_advertised_in_capability(server) -> None:
+    """`ListMentors` shows up in the capability JSON's `operations` array."""
+    async with Client(server) as c:
+        # Tool surface includes the new tool.
+        tools = await c.list_tools()
+        assert "ListMentors" in {t.name for t in tools}
+
+
 async def test_list_playbooks_default_mentor(server) -> None:
     async with Client(server) as c:
         result = await c.call_tool("ListPlaybooks", {})
@@ -187,7 +214,7 @@ async def test_tools_listed_match_ammp_operations(server) -> None:
     async with Client(server) as c:
         tools = await c.list_tools()
     names = {t.name for t in tools}
-    assert names == {"ListPlaybooks", "GetPlaybook", "SearchPlaybooks", "AskMentor", "EscalateToHuman"}
+    assert names == {"ListMentors", "ListPlaybooks", "GetPlaybook", "SearchPlaybooks", "AskMentor", "EscalateToHuman"}
 
 
 async def test_response_envelopes_match_pydantic_schema(server) -> None:

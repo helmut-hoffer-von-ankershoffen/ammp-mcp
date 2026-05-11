@@ -72,10 +72,12 @@ async def test_stdio_transport_round_trip(isolated_tree: Path) -> None:
 
     async with Client(transport) as client:
         # Handshake completes inside __aenter__. The list of tools advertised
-        # over stdio must match the HTTP wire surface — five Mentoring ops.
+        # over stdio must match the HTTP wire surface — five Mentoring §5
+        # operations plus the ListMentors server-side extension.
         tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {
+            "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
             "SearchPlaybooks",
