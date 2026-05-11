@@ -305,6 +305,98 @@ async def test_landing_page_route(server) -> None:
     assert "no-store" in r.headers.get("cache-control", "")
 
 
+async def test_landing_renders_a_prompt_per_playbook(server) -> None:
+    """Every playbook in the fixture corpus gets a `<pre class='prompt'>` block.
+
+    The prompt must reference the right mentor slug + playbook id + the
+    correct tool names a mentee would call to start the session.
+    """
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/")
+    body = r.text
+    # Pepe has 2 playbooks (intro + operator-craft) in the fixture; strict 1; stub 1 → 4 prompts.
+    assert body.count("class='prompt'") == 4 or body.count('class="prompt"') == 4
+    # Each prompt names the tools an agent should call.
+    for tool in ("ListPlaybooks", "GetPlaybook", "AskMentor"):
+        assert tool in body, f"prompt does not mention {tool!r}"
+    # The Pepe prompts mention EscalateToHumanMentor + Helmut (the
+    # configured human_mentor on Pepe in the fixture). Strict + stub
+    # have no human_mentor → no EscalateToHumanMentor step in their
+    # prompts.
+    assert "EscalateToHumanMentor" in body
+    # Per-playbook prompt-dom ids are unique and stable.
+    for pb_id in ("intro", "operator-craft"):
+        assert f"id='prompt--pepe--{pb_id}'" in body or f'id="prompt--pepe--{pb_id}"' in body
+    # Copy buttons reference the corresponding pre via data-copy-from.
+    assert "data-copy-from" in body
+    # Inline JS handler supports the new data-copy-from attribute.
+    assert "dataset.copyFrom" in body
+
+
+async def test_landing_prompts_match_actual_server_state(server) -> None:
+    """E2E sanity: every prompt's stated mentor / playbook / instruction count
+    matches what the actual MCP tools return on this server.
+
+    Parses the rendered landing HTML, extracts every prompt block, and
+    for each one drives `ListPlaybooks` + `GetPlaybook` over the live
+    in-memory FastMCP client. Asserts the prompt's claims about the
+    playbook (id, name, instruction count, mention of the tool names
+    the mentee should call) line up with the server's actual state.
+
+    This catches drift between the landing text and the corpus: if
+    someone renames a playbook or adds/removes work instructions, the
+    prompts must stay accurate or this test fails.
+    """
+    import re
+
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/")
+    body = r.text
+
+    # Each prompt block carries data-mentor / data-playbook attrs so the
+    # test can address them unambiguously (avoids hyphen-splitting issues
+    # in slugs like `operator-craft`).
+    prompt_re = re.compile(
+        r"<pre class='prompt'[^>]*data-mentor='(?P<mentor>[a-z0-9-]+)'[^>]*data-playbook='(?P<playbook>[a-z0-9-]+)'>"
+        r"(?P<text>.*?)</pre>",
+        re.DOTALL,
+    )
+    matches = list(prompt_re.finditer(body))
+    assert matches, "no prompt blocks rendered on the landing"
+
+    seen: dict[tuple[str, str], str] = {}
+    for m in matches:
+        seen[(m.group("mentor"), m.group("playbook"))] = m.group("text")
+
+    # Walk every (mentor, playbook) prompt and validate against MCP.
+    for (mentor_slug, playbook_id), prompt_text in seen.items():
+        async with Client(server) as c:
+            list_result = await c.call_tool("ListPlaybooks", {"mentor": mentor_slug})
+            get_result = await c.call_tool("GetPlaybook", {"id": playbook_id, "mentor": mentor_slug})
+        # Mentor reachable
+        assert list_result.data["mentor"] == mentor_slug, (mentor_slug, list_result.data)
+        # Playbook exists
+        assert "error" not in get_result.data, (mentor_slug, playbook_id, get_result.data)
+        assert get_result.data["id"] == playbook_id
+        actual_count = len(get_result.data["instructions"])
+        # The prompt must state the *correct* instruction count.
+        expected_count_phrase = f"{actual_count} work instruction"
+        assert expected_count_phrase in prompt_text, (
+            f"prompt for ({mentor_slug}, {playbook_id}) claims a different instruction count "
+            f"than the server returns ({actual_count}). Prompt text: {prompt_text[:200]}"
+        )
+        # Tool names the prompt tells the agent to call must be the
+        # canonical names the MCP server actually exposes.
+        for tool in ("ListPlaybooks", "GetPlaybook", "AskMentor"):
+            assert tool in prompt_text, (mentor_slug, playbook_id, tool)
+
+
 async def test_escalate_to_human_mentor_round_trips(settings: Settings) -> None:
     """B.a → A.a → A.h flow: long-running tool returns A.h's reply.
 

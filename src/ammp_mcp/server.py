@@ -892,6 +892,63 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
 # ─── Human-facing landing page ────────────────────────────────────────────
 
 
+def _build_mentor_playbook_prompt(
+    *,
+    public_url: str,
+    mentor: Mentor,
+    playbook_id: str,
+    playbook_name: str,
+    playbook_description: str,
+    instruction_count: int,
+) -> str:
+    """Render a copy-paste prompt that starts a mentoring session.
+
+    The user pastes this into their MCP-aware agent (Claude.ai /
+    Cowork / Code / OpenClaw / Hermes) after they've configured the
+    ammp-mcp server in the agent's connector settings. The prompt
+    walks the agent through the canonical first three tool calls
+    (`ListPlaybooks` → `GetPlaybook` → `AskMentor`), and adds the
+    cross-compartment escalation step when the mentor has a
+    configured ``human_mentor``.
+
+    Args:
+        public_url: The server's advertised URL (no trailing slash).
+        mentor: The :class:`Mentor` being addressed.
+        playbook_id: The playbook's directory-name slug.
+        playbook_name: The playbook's human-readable name.
+        playbook_description: The one-line description from
+            ``playbook.json``.
+        instruction_count: Number of work instructions inside this
+            playbook.
+
+    Returns:
+        A multi-line prompt string, ready to drop into a ``<pre>``.
+    """
+    url = public_url.rstrip("/")
+    n = instruction_count
+    instr_word = "work instruction" if n == 1 else "work instructions"
+    body = (
+        f'You are now operating under the mentorship of {mentor.name}\'s "{playbook_name}" playbook '
+        f"on the helmguild AMMP server at {url}.\n\n"
+        "To start:\n\n"
+        f'1. Call `ListPlaybooks` with `mentor: "{mentor.slug}"` to confirm you can reach the server.\n'
+        f'2. Call `GetPlaybook` with `id: "{playbook_id}"` and `mentor: "{mentor.slug}"` to load the playbook — '
+        f'{n} {instr_word} covering "{playbook_description}".\n'
+        "3. Internalize the instructions and apply them going forward in this conversation. "
+        f"When you hit something the playbook does not cover, call `AskMentor` on `{mentor.slug}` rather than guessing.\n"
+    )
+    if mentor.human_mentor is not None:
+        hm_name = mentor.human_mentor.name
+        body += (
+            f"4. If your confidence stays low after `AskMentor` AND my operator approves the forward, "
+            f"you may call `EscalateToHumanMentor` (long-running — it blocks until {hm_name} replies) "
+            f"to forward the question to {hm_name}, the human behind {mentor.name}. "
+            "Wait for the reply before acting.\n"
+        )
+    body += "\nAcknowledge by quoting the playbook name and the count of work instructions you loaded, then proceed."
+    return body
+
+
 def _render_landing(ctx: ServerContext) -> str:
     """Render the mentee-facing landing page served at ``GET /``.
 
@@ -1007,11 +1064,34 @@ def _render_landing(ctx: ServerContext) -> str:
                 else:
                     instructions_block = "<p class='empty'>No work instructions yet.</p>"
                 pb_desc = f"<p class='pb-desc'>{_md_inline(pb.description)}</p>" if pb.description else ""
+                # Copy-paste prompt for starting a mentoring session on
+                # this specific (mentor, playbook). User pastes into
+                # their MCP-aware agent. Sits next to the instructions
+                # disclosure as a sibling, collapsed by default.
+                prompt_text = _build_mentor_playbook_prompt(
+                    public_url=base,
+                    mentor=m,
+                    playbook_id=pb.id,
+                    playbook_name=pb.name,
+                    playbook_description=pb.description,
+                    instruction_count=len(pb.instructions),
+                )
+                prompt_dom_id = f"prompt--{_h(slug)}--{_h(pb.id)}"
+                prompt_block = (
+                    "<details class='prompt-details'>"
+                    "<summary>Prompt to start this mentoring</summary>"
+                    f"<pre class='prompt' id='{prompt_dom_id}'"
+                    f" data-mentor='{_h(slug)}' data-playbook='{_h(pb.id)}'>"
+                    f"{_h(prompt_text)}</pre>"
+                    f"<button class='btn copy' data-copy-from='#{prompt_dom_id}'>Copy prompt</button>"
+                    "</details>"
+                )
                 pb_html_parts.append(
                     "<section class='playbook'>"
                     f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span></h4>"
                     f"{pb_desc}"
                     f"{instructions_block}"
+                    f"{prompt_block}"
                     "</section>"
                 )
             playbook_section = "".join(pb_html_parts)
@@ -1083,12 +1163,14 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .pb-name{{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .15rem;color:var(--ink);display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
 .pb-id{{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);font-weight:400}}
 .pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
-.instructions-details{{margin:.4rem 0 0}}
-.instructions-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}
-.instructions-details > summary::-webkit-details-marker{{display:none}}
-.instructions-details > summary::before{{content:"▸";display:inline-block;width:.9rem;color:var(--ink-soft);transition:transform .15s ease}}
-.instructions-details[open] > summary::before{{transform:rotate(90deg)}}
-.instructions-details > summary:hover{{color:var(--accent-hover)}}
+.instructions-details,.prompt-details{{margin:.4rem 0 0}}
+.instructions-details > summary,.prompt-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}
+.instructions-details > summary::-webkit-details-marker,.prompt-details > summary::-webkit-details-marker{{display:none}}
+.instructions-details > summary::before,.prompt-details > summary::before{{content:"▸";display:inline-block;width:.9rem;color:var(--ink-soft);transition:transform .15s ease}}
+.instructions-details[open] > summary::before,.prompt-details[open] > summary::before{{transform:rotate(90deg)}}
+.instructions-details > summary:hover,.prompt-details > summary:hover{{color:var(--accent-hover)}}
+.prompt-details pre.prompt{{margin:.5rem 0 .5rem;padding:.85rem 1rem;background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:.82rem;line-height:1.5;color:var(--ink);white-space:pre-wrap;overflow-x:auto}}
+@media (prefers-color-scheme: dark) {{ .prompt-details pre.prompt{{background:rgba(255,255,255,.04)}} }}
 .instructions{{margin:.5rem 0 0;padding:0 0 0 1.4rem;color:var(--ink-soft);list-style:disc}}
 .instructions li{{margin:.3rem 0;color:var(--ink);font-size:.92rem}}
 .instructions li::marker{{color:var(--ink-soft)}}
@@ -1142,8 +1224,14 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <script>
 document.querySelectorAll('button.btn.copy').forEach(function(b) {{
   b.addEventListener('click', async function() {{
+    var text = b.dataset.copy || '';
+    if (!text && b.dataset.copyFrom) {{
+      var src = document.querySelector(b.dataset.copyFrom);
+      if (src) text = src.textContent;
+    }}
+    if (!text) return;
     try {{
-      await navigator.clipboard.writeText(b.dataset.copy);
+      await navigator.clipboard.writeText(text);
       var prev = b.textContent;
       b.textContent = 'Copied ✓';
       b.setAttribute('data-copied', '1');
