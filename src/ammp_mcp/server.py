@@ -1122,7 +1122,7 @@ def _render_landing(ctx: ServerContext) -> str:
 <meta charset="utf-8">
 <title>ammp · {host}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Ask a mentor — connect your Claude (or other MCP-aware) agent and get grounded, cited guidance from a curated playbook library.">
+<meta name="description" content="Mentor your agent — connect your Claude (or other MCP-aware) agent to a curated playbook library so it returns grounded, cited, calmer.">
 <style>
 :root {{
   --bg-hi:#F2EDE2; --bg:#ECE6D9; --bg-lo:#E2DBC8;
@@ -1198,8 +1198,8 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <body>
 <main>
 
-<h1>Ask a mentor.</h1>
-<p class="lede">Connect your Claude (or other MCP-aware) agent and get grounded, cited advice from a curated playbook library — no chatter, no kept history. Three steps, in order.</p>
+<h1>Mentor your agent.</h1>
+<p class="lede">Connect your Claude (or other MCP-aware) agent to a curated playbook library and it comes back grounded, cited, calmer. No kept history. Three steps.</p>
 
 <h2>Step 1 — Request your access token</h2>
 <p>Tokens are issued by hand — one mail, one reply. Tap below and we'll send yours back through the secure channel you specify.</p>
