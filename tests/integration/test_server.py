@@ -59,10 +59,12 @@ async def test_list_mentors_returns_all_mentors(server) -> None:
     assert pb_ids == {"intro", "operator-craft"}  # see conftest fixture
     for pb in pepe_playbooks:
         assert pb["name"]
-        # Each playbook embeds its work instructions; bodies are full.
+        # Each playbook embeds work-instruction summaries only — bodies
+        # are intentionally absent here to keep ListMentors lightweight.
+        # Mentees fetch full bodies via GetPlaybook / GetWorkInstruction.
         for wi in pb["instructions"]:
             assert wi["title"]
-            assert wi["body"]
+            assert "body" not in wi
     # mentor-level description + avatar_url are surfaced over the wire
     # so mentee clients can render a profile card without an extra HTTP
     # fetch. Pepe's fixture has both; stubmentor has neither.

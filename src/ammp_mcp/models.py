@@ -93,11 +93,12 @@ class ListPlaybooksResponse(BaseModel):
 class PlaybookEntry(BaseModel):
     """One playbook entry embedded in a ``ListMentors`` mentor summary.
 
-    Includes the full body of every work instruction so a mentee can
-    take a single ``ListMentors`` call and have everything it needs to
-    ground itself — no follow-up ``GetPlaybook`` round-trip required.
-    Mentees that only need a brief overview should still prefer
-    ``ListPlaybooks(mentor)``, which omits bodies.
+    Carries the playbook's identity + work-instruction *summaries*
+    (id/title/summary). Full instruction bodies are intentionally
+    omitted to keep the envelope small enough for transports with
+    response-size limits — fetch the body for a specific instruction
+    via ``GetWorkInstruction``, or the whole playbook via
+    ``GetPlaybook``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -105,7 +106,7 @@ class PlaybookEntry(BaseModel):
     id: str
     name: str
     description: str = ""
-    instructions: list[WorkInstructionEntry] = Field(default_factory=list)
+    instructions: list[WorkInstructionSummary] = Field(default_factory=list)
 
 
 class MentorSummary(BaseModel):
@@ -116,9 +117,10 @@ class MentorSummary(BaseModel):
     what the docs reference. ``backend_live`` indicates whether the
     runtime can actually reach the synthesis path (an Anthropic backend
     without an API key still reports kind ``"anthropic"`` but is not
-    live). ``playbooks`` embeds each playbook and every work
-    instruction inside (id + title + summary + full body) so one call
-    gives the mentee everything this mentor knows.
+    live). ``playbooks`` embeds each playbook and its work-instruction
+    summaries (id + title + one-line summary). Full bodies are fetched
+    on demand via ``GetPlaybook`` / ``GetWorkInstruction`` so this
+    envelope stays small (under most MCP-transport response-size limits).
 
     ``human_mentor`` names the human who stands behind the agentic
     mentor — surfaced so escalation paths are explicit (AMMP §3.4).

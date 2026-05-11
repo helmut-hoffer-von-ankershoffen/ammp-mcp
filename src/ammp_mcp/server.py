@@ -243,14 +243,17 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
             if m.human_mentor
             else None
         )
+        # Embed work-instruction summaries only — bodies are fetched on
+        # demand via GetPlaybook / GetWorkInstruction. Without this, a
+        # corpus with a few dozen instructions inflates the response to
+        # 100+ KB which trips Claude Desktop's MCP-transport timeout.
         playbook_entries = [
             PlaybookEntry(
                 id=pb.id,
                 name=pb.name,
                 description=pb.description,
                 instructions=[
-                    WorkInstructionEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body)
-                    for wi in pb.instructions
+                    WorkInstructionSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
                 ],
             )
             for pb in corpus
