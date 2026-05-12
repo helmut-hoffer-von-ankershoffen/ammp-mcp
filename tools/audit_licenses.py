@@ -73,16 +73,23 @@ def main() -> int:
         if not lic or lic == "UNKNOWN":
             unknowns.append((r["Name"], r.get("Version", "?")))
             continue
-        parts = [p.strip() for p in lic.replace(" OR ", ";").split(";")]
-        # Multi-license: accept if any offered license is allowed AND
-        # none of the offered ones is hard-banned in isolation.
-        if any(p in ALLOWED for p in parts):
-            continue
-        # Single-license: check banned tokens only when the *whole*
-        # license string is a banned family (avoids false positive
-        # when a multi-license offering merely *includes* GPL).
-        if any(tok in lic for tok in BANNED_TOKENS) or lic.startswith("GNU General Public License"):
-            violations.append((r["Name"], lic))
+        # An SPDX expression like "Apache-2.0 AND BSD-2-Clause" requires
+        # compliance with EVERY listed license; one like "MIT OR GPL-2.0"
+        # lets us pick one. Split on AND first, then each part on OR / `;`
+        # (pip-licenses also uses `;` for multi-license offerings).
+        and_parts = [p.strip() for p in lic.split(" AND ")]
+        and_ok = True
+        for and_part in and_parts:
+            or_parts = [p.strip() for p in and_part.replace(" OR ", ";").split(";")]
+            # Each AND-conjunct must have at least one allowed OR-option
+            # AND no banned-token-only conjunct.
+            if not any(p in ALLOWED for p in or_parts):
+                and_ok = False
+                break
+            if all(tok in and_part for tok in BANNED_TOKENS) or and_part.startswith("GNU General Public License"):
+                and_ok = False
+                break
+        if and_ok:
             continue
         violations.append((r["Name"], lic))
     if unknowns:

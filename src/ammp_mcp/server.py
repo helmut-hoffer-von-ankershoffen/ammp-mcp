@@ -1472,9 +1472,15 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
         escaped = _re_italic.sub(r"<em>\1</em>", escaped)
         return escaped
 
+    from urllib.parse import urlparse as _urlparse
+
     base = ctx.settings.public_url.rstrip("/")
     mcp_url = f"{base}/mcp/"
-    host = base.replace("https://", "").replace("http://", "")
+    # Use urlparse to derive the host — string-replace with a scheme
+    # literal trips SonarQube python:S5332 (false-positive: we're
+    # stripping a prefix for display, not making an http:// request).
+    parsed = _urlparse(base)
+    host = (parsed.netloc + parsed.path).rstrip("/") or base
 
     # Pull subject + body from the per-language copy block; pre-fill
     # fields map to what `ammp mentee add` needs at the operator end

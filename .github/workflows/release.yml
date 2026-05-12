@@ -108,9 +108,70 @@ jobs:
         run: make test
 
   # -----------------------------------------------------------------------
+  gates:
+    name: Verify all required quality gates passed for this SHA
+    needs: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    steps:
+      - name: Block release when Audit / SonarCloud / CodeQL / CI on this SHA is not green
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SHA="${GITHUB_SHA}"
+          REPO="${GITHUB_REPOSITORY}"
+
+          # Each required workflow runs once per push to main; the
+          # release tag's commit is the same SHA, so we can fetch its
+          # run conclusion via the workflow-runs API and refuse to
+          # ship if any required gate isn't `success`.
+          REQUIRED=(Audit SonarCloud CodeQL CI)
+          FAIL=0
+          for NAME in "${REQUIRED[@]}"; do
+            # Poll: when a tag and a main push land near-simultaneously,
+            # the gate workflow may still be running. Wait up to ~15 min
+            # for it to finish before deciding.
+            for attempt in $(seq 1 90); do
+              CONCLUSION="$(gh api -X GET "repos/${REPO}/actions/runs" \
+                  -f "head_sha=${SHA}" -f "per_page=50" \
+                  --jq ".workflow_runs[] | select(.name==\"${NAME}\") | .conclusion" \
+                  | head -n1 || echo "")"
+              STATUS="$(gh api -X GET "repos/${REPO}/actions/runs" \
+                  -f "head_sha=${SHA}" -f "per_page=50" \
+                  --jq ".workflow_runs[] | select(.name==\"${NAME}\") | .status" \
+                  | head -n1 || echo "")"
+              # Empty conclusion + empty status = no run for this SHA yet.
+              # Empty conclusion + in_progress/queued = wait.
+              if [[ -z "$STATUS" || "$STATUS" == "in_progress" || "$STATUS" == "queued" || "$STATUS" == "waiting" || "$STATUS" == "pending" ]]; then
+                echo "[$NAME] status='$STATUS' — waiting (attempt $attempt/90)…"
+                sleep 10
+                continue
+              fi
+              break
+            done
+            if [[ "$CONCLUSION" != "success" ]]; then
+              echo "::error title=Quality gate '$NAME' did not pass::"\
+                   "Workflow '$NAME' on commit $SHA reported conclusion='$CONCLUSION' (status='$STATUS'). "\
+                   "Fix the gate on main before tagging this release."
+              FAIL=1
+            else
+              echo "[$NAME] ✓ success"
+            fi
+          done
+          if [[ "$FAIL" != "0" ]]; then
+            echo "::error::One or more required quality gates failed for $SHA. Release aborted."
+            exit 1
+          fi
+          echo "All required quality gates green for $SHA — proceeding with release."
+
+  # -----------------------------------------------------------------------
   build:
     name: Build sdist + wheel
-    needs: [preflight, test]
+    needs: [preflight, test, gates]
     runs-on: ubuntu-latest
     permissions:
       contents: read

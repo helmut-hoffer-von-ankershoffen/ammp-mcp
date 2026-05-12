@@ -5,6 +5,18 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.4.1] — 2026-05-12
+
+### Fixed
+
+- **License audit:** `tools/audit_licenses.py` now handles SPDX `AND` expressions (e.g. `Apache-2.0 AND BSD-2-Clause`). Previous splitter only handled `OR` / `;`, which let `prometheus_client` (pulled in transitively by `fastmcp[tasks]` → docket → redis) trip the Audit gate on 0.4.0. (#audit)
+- **SonarQube hotspot S5332:** `_render_landing` derived the display host via `base.replace("https://", "").replace("http://", "")` — Sonar flagged the `"http://"` literal as an insecure protocol. Rewritten to use `urllib.parse.urlparse`. False-positive removed at source. (#sonar)
+
+### Added
+
+- **Telegram adapter unit tests** — `tests/unit/test_telegram_adapter.py` covers `deliver()`, `_format_outbound()`, `_handle_update()` (delivered match, no `reply_to`, empty text, cancelled late-reply branch), and `_poll_forever()` via `httpx.MockTransport`. Coverage on `_telegram.py` jumps 21 % → 79 %, lifting Sonar's new-code coverage above the 80 % threshold. (#tests)
+- **Release-time quality-gate verification.** `release.yml` grows a `gates` job that polls the GitHub Actions runs API for the tagged SHA and refuses to proceed to `build` / `publish-pypi` / `github-release` unless `Audit`, `SonarCloud`, `CodeQL`, and `CI` all report `success`. The 0.4.0 release shipped with `Audit` + `SonarCloud` red; this prevents a repeat. (#ci)
+
 ## [0.4.0] — 2026-05-12
 
 ### Added
