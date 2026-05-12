@@ -1636,12 +1636,29 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             ``empty_question``, ``delivery_failed``, ``timeout``,
             ``cancelled``.
         """
+        # One-time per-call log so we can tell from the err.log whether
+        # the client opened the door for progress notifications. If
+        # `progressToken` is None the FastMCP `Context.report_progress`
+        # call becomes a no-op — heartbeats are emitted but never reach
+        # the wire, and the client times out at its per-tool deadline.
+        token = None
+        if ctx_mcp is not None:
+            try:
+                rc = ctx_mcp.request_context
+                token = rc.meta.progressToken if (rc and rc.meta) else None
+            except Exception:
+                token = None
+        logger.info(
+            "EscalateToHumanMentor invoked: progressToken=%s (None ⇒ progress no-op; client must send _meta.progressToken)",
+            token,
+        )
 
         async def _report(progress: float, message: str) -> None:
             """Forward progress to the MCP client when a context is attached."""
             if ctx_mcp is not None:
                 try:
                     await ctx_mcp.report_progress(progress=progress, message=message)
+                    logger.debug("report_progress emitted: progress=%.2f msg=%r", progress, message)
                 except Exception as e:
                     logger.debug("report_progress failed (non-fatal): %s", e)
 
