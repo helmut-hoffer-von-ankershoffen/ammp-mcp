@@ -12,13 +12,14 @@ name: Release
 #   3. runs the test suite once on Python 3.13 to refuse a release if main is red
 #   4. builds the sdist + wheel, smoke-tests the wheel, generates SHA256 sums
 #   5. attests build provenance via Sigstore (SLSA Level 3)
-#   6. publishes to PyPI via OIDC trusted publishing — IF the trusted publisher
-#      has been configured on https://pypi.org/manage/account/publishing/.
-#      If not configured, this job will fail-soft (continue-on-error) and the
-#      GitHub Release still ships with the dist artefacts attached.
-#   7. creates a GitHub Release with notes assembled from CHANGELOG.md +
+#   6. creates the GitHub Release with notes assembled from CHANGELOG.md +
 #      auto-generated commit/PR list, attaches dist/* + SHA256SUMS, and marks
-#      pre-release status correctly.
+#      pre-release status correctly. GitHub Release runs *before* PyPI so
+#      the artefacts are durably attached even if PyPI publishing later fails.
+#   7. publishes to PyPI via OIDC trusted publishing. Requires the Trusted
+#      Publisher to be configured on https://pypi.org/manage/account/publishing/.
+#      If misconfigured, this step (and the workflow) fails hard — fix the
+#      PyPI side, then re-run the workflow from the failed job.
 #
 # Reverting a release: delete the tag locally + on origin, delete the GH
 # Release in the UI; you cannot un-publish a PyPI version (only yank it).
@@ -208,44 +209,11 @@ jobs:
           path: dist/
 
   # -----------------------------------------------------------------------
-  publish-pypi:
-    name: Publish to PyPI (OIDC; fail-soft if not configured)
-    needs: build
-    runs-on: ubuntu-latest
-    # PyPI trusted-publishing requires a one-time configuration at
-    # https://pypi.org/manage/account/publishing/ . Until that is done,
-    # this job will fail at the publish step. We mark it continue-on-error so
-    # the GitHub Release job downstream still ships the artefacts.
-    continue-on-error: true
-    environment:
-      name: pypi
-      url: https://pypi.org/p/ammp-mcp
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: dist
-          path: dist/
-
-      - name: Strip non-distributable files from dist/
-        # PyPI publish rejects unknown files; SHA256SUMS would trip it up.
-        run: |
-          mv dist/SHA256SUMS .
-          ls -la dist/
-
-      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
-        with:
-          verify-metadata: true
-          # `verify-tag` ensures the version inside the wheel matches the git tag.
-          # Combined with the preflight check, this is belt-and-braces.
-          verify-tag: true
-
-  # -----------------------------------------------------------------------
   github-release:
     name: Publish GitHub Release
-    needs: [preflight, build]   # NOT publish-pypi: the release ships even if
-                                # PyPI publishing failed/was unconfigured
+    needs: [preflight, build]   # Runs BEFORE publish-pypi so the artefacts
+                                # are durably attached to the GH Release even
+                                # if PyPI publishing later fails.
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -308,3 +276,35 @@ jobs:
             ARGS+=(--prerelease)
           fi
           gh release create "${ARGS[@]}" dist/*
+
+  # -----------------------------------------------------------------------
+  publish-pypi:
+    name: Publish to PyPI (OIDC; HARD FAIL if not configured)
+    needs: github-release   # PyPI only after the GH Release is durable.
+    runs-on: ubuntu-latest
+    # PyPI trusted-publishing requires a one-time configuration at
+    # https://pypi.org/manage/account/publishing/ . The job hard-fails if
+    # misconfigured — fix PyPI, then re-run this job alone.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/ammp
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: dist/
+
+      - name: Strip non-distributable files from dist/
+        # PyPI publish rejects unknown files; SHA256SUMS would trip it up.
+        run: |
+          mv dist/SHA256SUMS .
+          ls -la dist/
+
+      - uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          verify-metadata: true
+          # `verify-tag` ensures the version inside the wheel matches the git tag.
+          # Combined with the preflight check, this is belt-and-braces.
+          verify-tag: true
