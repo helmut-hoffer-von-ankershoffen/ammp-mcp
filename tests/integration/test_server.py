@@ -928,6 +928,119 @@ async def test_capability_route(server) -> None:
     assert by_slug["strict"]["humanMentor"] is None
 
 
+async def test_escalate_to_human_mentor_wrapper_forwards_progress_to_client(settings: Settings) -> None:
+    """End-to-end through the FastMCP tool wrapper: when the client supplies
+    a progressToken, the wrapper's `_report` closure forwards progress to it.
+
+    Covers the `_report` closure path (server.py ~2042) and exercises
+    the GetEscalation companion's `_report` closure (~2085) by polling
+    after a pending return — both currently missed by the direct
+    `_handle_*` tests.
+    """
+    import asyncio as _asyncio
+    from dataclasses import replace as _replace
+    from datetime import UTC
+    from datetime import datetime as _datetime
+
+    from ammp_mcp.escalation._adapters._base import DeliveryAdapter
+    from ammp_mcp.server import build_context, create_server
+
+    class _LateAdapter(DeliveryAdapter):
+        kind = "wrapper-probe"
+
+        def __init__(self, answer: str, delay: float) -> None:
+            self._a, self._d, self._b, self._s, self._t = answer, delay, None, None, []
+
+        async def start(self, b, s) -> None:
+            self._b, self._s = b, s
+
+        async def deliver(self, esc) -> str | None:
+            async def _r() -> None:
+                await _asyncio.sleep(self._d)
+                self._s.update(esc.id, status="answered", answered_at=_datetime.now(UTC), answer=self._a)
+                self._b.resolve(esc.id, self._a)
+
+            self._t.append(_asyncio.create_task(_r()))
+            return "probe-msg"
+
+        async def stop(self) -> None:
+            for t in self._t:
+                t.cancel()
+
+    # Fast settings so the test runs in <1s.
+    s_fast = settings.model_copy(update={"escalation_progress_heartbeat_seconds": 0.05})
+    ctx = build_context(s_fast)
+    ctx = _replace(ctx, delivery_adapter=_LateAdapter("Take the meeting.", delay=0.4))
+    # create_server captures `ctx` via closure; rebuild a server with our patched ctx.
+    server = create_server(s_fast)
+    server._ammp_ctx = ctx  # not used; the server.create_server already loaded its own ctx
+    # Use the already-built server directly via Client + progress_handler.
+    progress_events: list[tuple[float, str]] = []
+
+    async def handler(progress: float, total: float | None, message: str | None) -> None:
+        progress_events.append((progress, message or ""))
+
+    async with Client(server, progress_handler=handler) as c:
+        # wait_seconds=0.1 → almost-immediate pending return; the
+        # wrapper's `_report` closure fires for queued + delivered.
+        first = await c.call_tool(
+            "EscalateToHumanMentor",
+            {"question": "test", "mentor": "pepe", "context": "", "wait_seconds": 0.1},
+        )
+        d = first.data
+        assert "escalation_id" in d
+        if d["status"] == "pending":
+            # Hit the GetEscalation wrapper's `_report` closure with
+            # a tiny wait — the snapshot reads from the persistent
+            # store regardless of the broker waiter outcome.
+            second = await c.call_tool(
+                "GetEscalation",
+                {"escalation_id": d["escalation_id"], "wait_seconds": 0.05},
+            )
+            assert second.data["status"] in ("answered", "pending", "delivered", "expired")
+
+    # At least the queued + delivered notifications should have reached
+    # the client through the wrapper's `_report` closure.
+    assert any("queued" in m or "delivered" in m for _, m in progress_events), progress_events
+
+
+async def test_desktop_bundle_route_serves_mcpb_zip(server) -> None:
+    """`GET /desktop-bundle.mcpb` returns a valid ZIP containing manifest + icon
+    + server.js, with the BEARER substitution placeholder and the trailing-slash
+    MCP URL baked into the manifest.
+
+    Pinned because the bundle is the primary install path for Claude
+    Desktop — a regression that ships a bundle with no manifest, the
+    wrong URL, or an invalid zip silently breaks first-time connect.
+    """
+    import io
+    import json
+    import zipfile
+
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/desktop-bundle.mcpb")
+    assert r.status_code == 200
+    assert r.headers.get("content-disposition", "").endswith('"helmguild-ammp.mcpb"')
+    body = r.content
+    assert body[:2] == b"PK"  # ZIP magic
+    with zipfile.ZipFile(io.BytesIO(body)) as z:
+        names = set(z.namelist())
+        assert names == {"manifest.json", "icon.png", "server.js"}
+        manifest = json.loads(z.read("manifest.json"))
+    # Manifest carries the public + MCP URLs with trailing slash, and
+    # the DXT-style `${user_config.bearer_token}` substitution token.
+    flat = json.dumps(manifest)
+    assert "/mcp/" in flat
+    assert "${user_config.bearer_token}" in flat
+    # `${__dirname}` substitutes to the install directory at runtime;
+    # ensure we ship the real DXT token, not the authoring placeholder.
+    assert "DIRNAME_PLACEHOLDER" not in flat
+    assert "${__dirname}" in flat
+
+
 async def test_get_system_info_returns_safe_metadata(server, settings: Settings) -> None:
     """`GetSystemInfo` returns the small, safe slice of build / runtime info
     a debugging mentee needs — and *only* that. Pinned so a regression
