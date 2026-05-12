@@ -114,6 +114,11 @@ class Mentor(BaseModel):
         max_length=400,
         description="One-line mentee-facing introduction. Surfaced on the landing page and in ListMentors responses. Distinct from `persona`, which is the LLM system prompt.",
     )
+    profile_url: str | None = Field(
+        default=None,
+        max_length=400,
+        description="Optional URL of a longer mentee-facing profile (e.g. the mentor's page on the brand site). When set, the landing wraps the mentor name in a link to this URL. When the URL points at `https://www.helmguild.com/<path>/`, the DE landing automatically swaps in the `/de/` variant.",
+    )
     human_mentor: HumanMentor | None = Field(
         default=None,
         description="The human behind the agentic mentor. Published so mentees know where escalation ultimately lands.",

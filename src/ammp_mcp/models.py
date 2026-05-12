@@ -131,6 +131,10 @@ class MentorSummary(BaseModel):
     slug: str
     name: str
     description: str | None = None
+    profile_url: str | None = Field(
+        default=None,
+        description="Optional URL of a longer mentee-facing profile page. Mirrors `Mentor.profile_url` so MCP clients can render a 'View full profile' link without reading the capability JSON.",
+    )
     avatar_url: str | None = Field(
         default=None,
         description="Public URL of the mentor's avatar image, or null when no `avatar.*` file is present in the mentor directory.",

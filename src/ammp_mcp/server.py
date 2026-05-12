@@ -266,6 +266,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
                 slug=slug,
                 name=m.name,
                 description=m.description,
+                profile_url=m.profile_url,
                 avatar_url=avatar_url,
                 human_mentor=human_mentor,
                 playbook_count=len(corpus),
@@ -1501,12 +1502,22 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
             playbook_section = "".join(pb_html_parts)
         else:
             playbook_section = f"<p class='empty'>{c['mentor_no_playbooks']}</p>"
+        # When the mentor advertises a longer profile page, hyperlink
+        # its name. For helmguild.com URLs on the DE landing, swap in
+        # the localised `/de/` variant so German visitors land on the
+        # matching page.
+        name_html = _h(m.name)
+        if m.profile_url:
+            pu = m.profile_url
+            if lang == "de" and pu.startswith("https://www.helmguild.com/") and "/de/" not in pu:
+                pu = pu.replace("https://www.helmguild.com/", "https://www.helmguild.com/de/", 1)
+            name_html = f"<a class='mentor-profile' href='{_h(pu)}'>{_h(m.name)}</a>"
         mentor_blocks_parts.append(
             "<section class='mentor'>"
             "<div class='mentor-head'>"
             f"{avatar_html}"
             "<div class='mentor-id'>"
-            f"<h3>{_h(m.name)} <span class='slug'>{_h(slug)}</span></h3>"
+            f"<h3>{name_html} <span class='slug'>{_h(slug)}</span></h3>"
             f"{description_html}"
             f"{human_html}"
             "</div>"

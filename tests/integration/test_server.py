@@ -344,6 +344,9 @@ async def test_landing_page_route(server) -> None:
     assert 'class="lang-pill"' in body
     # EN landing marks EN as current and links to ./de/.
     assert 'hreflang="de"' in body and "./de/" in body
+    # Pepe's `profile_url` (set in the fixture) turns the mentor name
+    # into a link to the longer profile page on the brand site.
+    assert "class='mentor-profile' href='https://www.helmguild.com/pepe-arturo-ai/'" in body
 
 
 async def test_landing_page_de_route_serves_german(server) -> None:
@@ -383,6 +386,12 @@ async def test_landing_page_de_route_serves_german(server) -> None:
     assert "Sicherer Zustellkanal" in decoded
     # MCP tool registration command stays in English (it's a literal CLI invocation).
     assert "claude mcp add" in body
+    # Mentor profile link auto-swaps to the /de/ variant on the DE landing.
+    assert "class='mentor-profile' href='https://www.helmguild.com/de/pepe-arturo-ai/'" in body
+    # The bare (EN) profile URL should NOT appear as a mentor-profile href
+    # on the DE page — only its /de/ variant. (It may still appear in
+    # alternate-link tags or footer, which is fine.)
+    assert "class='mentor-profile' href='https://www.helmguild.com/pepe-arturo-ai/'" not in body
 
 
 async def test_mount_path_prefix_relocates_all_routes(settings: Settings) -> None:

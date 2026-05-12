@@ -68,6 +68,7 @@ def isolated_tree(tmp_path: Path) -> Path:
             {
                 "name": "Pepe Arturo",
                 "description": "Calm, grounded mentor for resilient agent work.",
+                "profile_url": "https://www.helmguild.com/pepe-arturo-ai/",
                 "human_mentor": {
                     "name": "Helmut Hoffer von Ankershoffen",
                     "url": "https://helmut.hoffer-von-ankershoffen.me/",
