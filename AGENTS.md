@@ -137,6 +137,32 @@ uv run python tools/generate_cli_reference.py
 - **CodeQL** — semantic analysis (currently 0 open alerts; 1 dismissed false-positive on `py/weak-sensitive-data-hashing` — see `mentee/_service.py:hash_api_key`).
 - **SonarCloud** — quality gate OK, A/A/A, ≥86 % coverage.
 
+**Releases are blocked on red gates.** Never tag a release on a commit whose required workflows or external gates (Audit / CodeQL / SonarCloud) are not green. Fix the root cause, push, wait for green, *then* tag. The release workflow itself also fails on any sub-step failure — see "Release pipeline" below.
+
+## Release pipeline
+
+PyPI package name is **`ammp`**, *not* `ammp-mcp` (the repo is named after the protocol implementation; the PyPI distribution is named after the protocol). Wheel name resolves to `ammp-<version>-py3-none-any.whl`. Console-script entry point stays `ammp` (Typer root app).
+
+Release order is fixed:
+
+1. **GitHub release** is created first — tag pushed, release notes generated, artefacts uploaded.
+2. **PyPI release** runs *only after* the GitHub release has succeeded. The workflow gates the PyPI publish step on the GitHub release step's success.
+
+The release workflow fails as a whole if either the GitHub release or the PyPI publish fails — you cannot end up with a tag on GitHub but no PyPI artefact, or with a PyPI artefact and a broken GitHub release. PyPI badge in the README points at `https://pypi.org/project/ammp/`.
+
+## Protocol additions — sweep all surfaces
+
+Adding a new MCP tool / operation (e.g. `EscalateToHumanMentor`, `GetEscalation`, `GetSystemInfo`) is *not done* until all of these are updated in the same change set:
+
+1. The code + tests.
+2. The IETF draft (`draft-ammp-NN`) in `helmut-hoffer-von-ankershoffen/helmguild.com` — list the new op alongside existing ones with the same level of detail. The draft URL is referenced from this repo but the file lives in the helmguild.com repo; cross-repo edits are part of the change.
+3. The repo `README.md` — enumerate the new op in the tools / operations section.
+4. The CLI surface — `ammp <subject> <action>` parity with sibling ops (e.g. `ammp escalation list/show/answer/cancel`).
+5. This `AGENTS.md` (the tool inventory in "What this is").
+6. `CLI_REFERENCE.md` — regenerated via `uv run python tools/generate_cli_reference.py`.
+
+Server-side extensions over the AMMP-01 baseline must be labelled as such in both the README and the RFC's "Extensions" section so operators reading the spec can tell baseline ops from vendor extensions.
+
 ## Tests
 
 ```
