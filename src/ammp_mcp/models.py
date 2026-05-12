@@ -403,16 +403,28 @@ class GetSystemInfoResponse(BaseModel):
 
     name: str = Field(description="Software identifier, e.g. `ammp-mcp`.")
     version: str = Field(description="Software version, e.g. `0.4.0` — matches the GitHub release tag.")
-    ammp_draft: str = Field(description="AMMP IETF Internet-Draft revision this server claims compliance with, e.g. `draft-ammp-01`.")
-    python_version: str = Field(description="Runtime Python version, e.g. `3.13.13` — useful when debugging client / server compat.")
+    ammp_draft: str = Field(
+        description="AMMP IETF Internet-Draft revision this server claims compliance with, e.g. `draft-ammp-01`."
+    )
+    python_version: str = Field(
+        description="Runtime Python version, e.g. `3.13.13` — useful when debugging client / server compat."
+    )
     platform: str = Field(description="OS platform identifier (`sys.platform`), e.g. `darwin` or `linux`.")
     started_at: str = Field(description="ISO 8601 UTC timestamp at which the server context was built (boot time).")
-    uptime_seconds: float = Field(ge=0.0, description="Whole-second uptime since `started_at`. Recomputed on each call.")
+    uptime_seconds: float = Field(
+        ge=0.0, description="Whole-second uptime since `started_at`. Recomputed on each call."
+    )
     mentor_count: int = Field(ge=0, description="Number of mentors loaded into this server.")
     mentee_count: int = Field(ge=0, description="Number of mentees in the allowlist.")
-    default_mentor: str = Field(description="Slug of the configured default mentor — the one calls fall through to when `mentor` is empty.")
-    escalation_adapter: str = Field(description="Active escalation delivery adapter kind: `log`, `telegram`, or future adapter names.")
-    mount_path: str = Field(description="HTTP mount prefix this server lives under, e.g. `/ammp`. Empty string when mounted at root.")
+    default_mentor: str = Field(
+        description="Slug of the configured default mentor — the one calls fall through to when `mentor` is empty."
+    )
+    escalation_adapter: str = Field(
+        description="Active escalation delivery adapter kind: `log`, `telegram`, or future adapter names."
+    )
+    mount_path: str = Field(
+        description="HTTP mount prefix this server lives under, e.g. `/ammp`. Empty string when mounted at root."
+    )
     public_url: str = Field(description="Public URL the server advertises itself at (from `AMMP_PUBLIC_URL`).")
 
 
