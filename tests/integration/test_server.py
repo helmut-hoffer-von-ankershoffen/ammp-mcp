@@ -337,6 +337,52 @@ async def test_landing_page_route(server) -> None:
     # Cache-Control: no-store prevents browsers (and Cloudflare) from
     # serving a stale landing across deploys.
     assert "no-store" in r.headers.get("cache-control", "")
+    # Chrome: banner linking back to helmguild.com + EN · DE language pill.
+    assert 'class="helmguild-banner"' in body
+    assert "https://www.helmguild.com/" in body
+    assert "back to helmguild.com" in body
+    assert 'class="lang-pill"' in body
+    # EN landing marks EN as current and links to ./de/.
+    assert 'hreflang="de"' in body and "./de/" in body
+
+
+async def test_landing_page_de_route_serves_german(server) -> None:
+    """`GET /de/` returns the German mirror of the landing page.
+
+    Same structure, translated chrome. Mentor names + playbook content
+    stay in English (corpus is content, not chrome) — same lockstep
+    convention as helmguild.com.
+    """
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/de/")
+    assert r.status_code == 200, r.text
+    body = r.text
+    assert '<html lang="de">' in body
+    # Translated headings + chrome.
+    assert "Schritt 1 — Zugangs-Token anfordern" in body
+    assert "Schritt 2 — MCP-Verbindung deines Agenten einrichten" in body
+    assert "Schritt 3 — Verbindung prüfen" in body
+    assert "Schritt 4 — Mentor auswählen und Session starten" in body
+    assert "Datenschutz" in body
+    assert "Zugang anfordern" in body
+    assert "zurück zu helmguild.com" in body
+    # Lang pill — DE is current; back-to-EN link present.
+    assert 'class="lang-pill"' in body
+    assert "../" in body and 'hreflang="en"' in body
+    # Mailto body switched to German prompts.
+    import urllib.parse as _up
+
+    mailto_start = body.index("mailto:helmuthva")
+    mailto_end = body.index('"', mailto_start)
+    decoded = _up.unquote(body[mailto_start:mailto_end])
+    assert "Mein Name" in decoded
+    assert "Mein Agent" in decoded
+    assert "Sicherer Zustellkanal" in decoded
+    # MCP tool registration command stays in English (it's a literal CLI invocation).
+    assert "claude mcp add" in body
 
 
 async def test_mount_path_prefix_relocates_all_routes(settings: Settings) -> None:

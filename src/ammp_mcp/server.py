@@ -1225,7 +1225,133 @@ def _build_mentor_playbook_prompt(
     return body
 
 
-def _render_landing(ctx: ServerContext) -> str:
+_LANDING_COPY: dict[str, dict[str, str]] = {
+    "en": {
+        "html_lang": "en",
+        "meta_description": "Mentor your agent — give your Claude (or other MCP-aware) agent a senior mentor it can ask. Reasons over a curated playbook library, answers grounded and cited, escalates to a human when out of depth.",
+        "banner_label": "← back to helmguild.com",
+        "lang_aria": "Language",
+        "h1": "Mentor your agent.",
+        "lede": "Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.",
+        "step1_h": "Step 1 — Request your access token",
+        "step1_p": "Tokens are issued by hand — one mail, one reply. Tap below and we'll send yours back through the secure channel you specify.",
+        "step1_cta": "Request access",
+        "step2_h": "Step 2 — Configure your agent's MCP connection",
+        "step2_p": "Pick your agent below and follow the paste path. Don't see yours? The <em>Generic</em> tab has the raw URL and Bearer header.",
+        "tab_desktop_cta": "Download extension",
+        "tab_desktop_li1": "Click the downloaded <code>.mcpb</code> file — Claude Desktop opens its extension installer.",
+        "tab_desktop_li2": "Paste your Bearer token when prompted.",
+        "tab_desktop_li3": "Enable the extension. Done.",
+        "tab_code_intro": "One command in your terminal. Replace <code>&lt;your-token&gt;</code> with the value mailed to you.",
+        "tab_code_docs": "Anthropic Claude Code MCP docs →",
+        "copy": "Copy",
+        "copy_url": "Copy URL",
+        "tab_copilot_intro": "GitHub Copilot Chat supports MCP servers in VS Code and JetBrains IDEs.",
+        "tab_copilot_vscode": "<strong>VS Code:</strong> Command Palette → <em>MCP: Add Server</em> → fill in the URL and the Bearer header.",
+        "tab_copilot_jetbrains": "<strong>JetBrains:</strong> Settings → Tools → GitHub Copilot → MCP servers → add a new server.",
+        "tab_copilot_docs": "GitHub Copilot MCP docs →",
+        "tab_openclaw_intro": "OpenClaw is helmguild's own agent runtime and speaks MCP natively.",
+        "tab_openclaw_li": "Add the server through the runtime's connector UI or config file using the same URL + Bearer header.",
+        "tab_openclaw_note": "(OpenClaw is currently private to the helmguild network.)",
+        "tab_hermes_intro": "Hermes is an alternative agent runtime; it connects to MCP servers via its tool-server registry.",
+        "tab_hermes_li": "Point Hermes at the URL with the Bearer header — no Hermes-specific handshake.",
+        "tab_hermes_note": "(Hermes docs vary by deployment — see the manual that ships with your install.)",
+        "tab_generic_intro": "For any MCP-aware client not listed above. Open its connector settings, add a custom MCP server, and paste these two values.",
+        "step3_h": "Step 3 — Check the connection",
+        "step3_p": "Quick sanity check: paste this into your agent. If it responds with the mentors hosted here, the URL, token, and tool registration are all good.",
+        "step3_prompt": "List mentors on helmguild.",
+        "step4_h": "Step 4 — Pick a mentor and start the session",
+        "step4_p": "Browse the mentors below, expand the playbook you want to be mentored on, and copy its prompt into your now-connected agent. The prompt walks the agent through the canonical first calls so the mentoring starts right away.",
+        "privacy_h": "Privacy",
+        "privacy_p": 'No retention. Your questions and the mentor\'s answers are never stored — only an opaque hash of each call lands in the audit log. See <a href="https://www.helmguild.com/rfc/ammp/">the AMMP draft</a> for the normative wording.',
+        "footer": 'Reference implementation of the <a href="https://www.helmguild.com/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-licensed. Run by <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>. <a href="{base}/.well-known/agent.json">Capability JSON</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">Source</a>',
+        # Mentor-card chrome bits
+        "mentor_behind": "Behind {mentor_name}: ",
+        "mentor_no_playbooks": "No playbooks yet.",
+        "mentor_no_instructions": "No work instructions yet.",
+        "mentor_wi_count_one": "1 work instruction",
+        "mentor_wi_count_many": "{n} work instructions",
+        "mentor_prompt_summary": "Prompt to start this mentoring",
+        "mentor_prompt_copy": "Copy prompt",
+        "mentors_empty": "No mentors are currently available.",
+        # Mailto draft
+        "mailto_subject": "helmguild — Access request",
+        "mailto_body": (
+            "Hi helmguild,\n\n"
+            "I'd like to connect to helmguild to have my agent mentored.\n\n"
+            "  My name                    : <e.g. Sandra>\n"
+            "  My agent                   : <Claude Desktop, Claude Code, Claude Cowork, Copilot, OpenClaw, Hermes>\n"
+            "  My secure delivery channel : <iMessage, Telegram, WhatsApp, Signal — "
+            "so the access token doesn't travel by unencrypted email>\n"
+            "  Mentor of interest         : Pepe Arturo\n"
+            "  Anything else              : <What would you call success post mentoring your agent?>\n\n"
+            "Thanks!\n"
+        ),
+    },
+    "de": {
+        "html_lang": "de",
+        "meta_description": "Mentor your agent — gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, eskaliert an einen Menschen, wenn es zu komplex wird.",
+        "banner_label": "← zurück zu helmguild.com",
+        "lang_aria": "Sprache",
+        "h1": "Mentor your agent.",
+        "lede": "Gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Der Mentor denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, und eskaliert an einen Menschen, wenn es zu komplex wird. Keine gespeicherten Verläufe. Vier Schritte.",
+        "step1_h": "Schritt 1 — Zugangs-Token anfordern",
+        "step1_p": "Tokens werden manuell ausgegeben — eine Mail, eine Antwort. Klick unten, und wir schicken dir deinen Token über den sicheren Kanal zurück, den du angibst.",
+        "step1_cta": "Zugang anfordern",
+        "step2_h": "Schritt 2 — MCP-Verbindung deines Agenten einrichten",
+        "step2_p": "Wähl unten deinen Agenten und folge der Anleitung. Nicht dabei? Im Tab <em>Generic</em> findest du URL und Bearer-Header pur.",
+        "tab_desktop_cta": "Erweiterung herunterladen",
+        "tab_desktop_li1": "Klick auf die heruntergeladene <code>.mcpb</code>-Datei — Claude Desktop öffnet den Erweiterungs-Installer.",
+        "tab_desktop_li2": "Bearer-Token einfügen, wenn du gefragt wirst.",
+        "tab_desktop_li3": "Erweiterung aktivieren. Fertig.",
+        "tab_code_intro": "Ein Befehl in deinem Terminal. Ersetze <code>&lt;dein-token&gt;</code> durch den Wert aus der Mail.",
+        "tab_code_docs": "Anthropic Claude Code MCP-Doku →",
+        "copy": "Kopieren",
+        "copy_url": "URL kopieren",
+        "tab_copilot_intro": "GitHub Copilot Chat unterstützt MCP-Server in VS Code und JetBrains-IDEs.",
+        "tab_copilot_vscode": "<strong>VS Code:</strong> Befehlspalette → <em>MCP: Add Server</em> → URL und Bearer-Header eintragen.",
+        "tab_copilot_jetbrains": "<strong>JetBrains:</strong> Einstellungen → Tools → GitHub Copilot → MCP servers → neuen Server hinzufügen.",
+        "tab_copilot_docs": "GitHub Copilot MCP-Doku →",
+        "tab_openclaw_intro": "OpenClaw ist helmguilds eigene Agenten-Laufzeit und spricht MCP nativ.",
+        "tab_openclaw_li": "Den Server über die Connector-Oberfläche der Laufzeit oder die Konfigurationsdatei mit derselben URL und dem Bearer-Header hinzufügen.",
+        "tab_openclaw_note": "(OpenClaw ist derzeit nur im helmguild-Netzwerk verfügbar.)",
+        "tab_hermes_intro": "Hermes ist eine alternative Agenten-Laufzeit; sie verbindet sich über ihr Tool-Server-Register mit MCP-Servern.",
+        "tab_hermes_li": "Richte Hermes auf die URL mit dem Bearer-Header — kein Hermes-spezifischer Handshake nötig.",
+        "tab_hermes_note": "(Hermes-Doku variiert je nach Deployment — siehe Handbuch deiner Installation.)",
+        "tab_generic_intro": "Für jeden anderen MCP-fähigen Client. Öffne die Connector-Einstellungen, füge einen Custom-MCP-Server hinzu und kopier diese beiden Werte hinein.",
+        "step3_h": "Schritt 3 — Verbindung prüfen",
+        "step3_p": "Schneller Test: Füg das in deinen Agenten ein. Wenn er mit der Liste der hier gehosteten Mentoren antwortet, stimmen URL, Token und Tool-Registrierung.",
+        "step3_prompt": "Liste die Mentoren auf helmguild auf.",
+        "step4_h": "Schritt 4 — Mentor auswählen und Session starten",
+        "step4_p": "Stöber durch die Mentoren unten, klapp das Playbook auf, zu dem du beraten werden willst, und kopier seinen Prompt in deinen verbundenen Agenten. Der Prompt führt den Agenten durch die ersten kanonischen Aufrufe, sodass das Mentoring direkt beginnt.",
+        "privacy_h": "Datenschutz",
+        "privacy_p": 'Keine Speicherung. Deine Fragen und die Antworten der Mentoren werden nie gespeichert — nur ein undurchsichtiger Hash jedes Aufrufs landet im Audit-Log. Den verbindlichen Wortlaut findest du im <a href="https://www.helmguild.com/de/rfc/ammp/">AMMP-Entwurf</a>.',
+        "footer": 'Referenz-Implementierung des <a href="https://www.helmguild.com/de/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-lizenziert. Betrieben von <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>. <a href="{base}/.well-known/agent.json">Capability-JSON</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">Quellcode</a>',
+        "mentor_behind": "Hinter {mentor_name}: ",
+        "mentor_no_playbooks": "Noch keine Playbooks.",
+        "mentor_no_instructions": "Noch keine Arbeitsanweisungen.",
+        "mentor_wi_count_one": "1 Arbeitsanweisung",
+        "mentor_wi_count_many": "{n} Arbeitsanweisungen",
+        "mentor_prompt_summary": "Prompt, um dieses Mentoring zu starten",
+        "mentor_prompt_copy": "Prompt kopieren",
+        "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
+        "mailto_subject": "helmguild — Zugang anfordern",
+        "mailto_body": (
+            "Hallo helmguild,\n\n"
+            "Ich möchte helmguild verbinden, damit mein Agent dort mentort wird.\n\n"
+            "  Mein Name                     : <z. B. Sandra>\n"
+            "  Mein Agent                    : <Claude Desktop, Claude Code, Claude Cowork, Copilot, OpenClaw, Hermes>\n"
+            "  Sicherer Zustellkanal         : <iMessage, Telegram, WhatsApp, Signal — "
+            "damit der Zugangs-Token nicht unverschlüsselt per Mail reist>\n"
+            "  Mentor von Interesse          : Pepe Arturo\n"
+            "  Sonstiges                     : <Was wäre für dich Erfolg nach dem Mentoring deines Agenten?>\n\n"
+            "Danke!\n"
+        ),
+    },
+}
+
+
+def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     """Render the mentee-facing landing page served at ``GET /``.
 
     Self-contained HTML (inline CSS + JS, no external assets). For each
@@ -1243,10 +1369,14 @@ def _render_landing(ctx: ServerContext) -> str:
     Args:
         ctx: The boot-time server context — used for the live mentor
             list and the public URL.
+        lang: Language code (``"en"`` or ``"de"``). Selects the copy
+            block; the page structure / mentor corpus stays the same
+            (mentor names + playbook content are content, not chrome).
 
     Returns:
         A complete HTML document as a string, ready for ``HTMLResponse``.
     """
+    c = _LANDING_COPY.get(lang, _LANDING_COPY["en"])
     import re as _re
     from html import escape as _h
     from urllib.parse import quote as _q
@@ -1284,23 +1414,10 @@ def _render_landing(ctx: ServerContext) -> str:
     mcp_url = f"{base}/mcp/"
     host = base.replace("https://", "").replace("http://", "")
 
-    mailto_subject = "helmguild — Access request"
-    # The five fields below map to what `ammp mentee add` needs at the
-    # other end (slug + operator derived from the name + agent runtime;
-    # rate limit defaults to 60). The success-criterion question at the
-    # bottom helps the operator calibrate without forcing it.
-    mailto_body = (
-        "Hi helmguild,\n\n"
-        "I'd like to connect to helmguild to have my agent mentored.\n\n"
-        "  My name                    : <e.g. Sandra>\n"
-        "  My agent                   : <Claude Desktop, Claude Code, Claude Cowork, Copilot, OpenClaw, Hermes>\n"
-        "  My secure delivery channel : <iMessage, Telegram, WhatsApp, Signal — "
-        "so the access token doesn't travel by unencrypted email>\n"
-        "  Mentor of interest         : Pepe Arturo\n"
-        "  Anything else              : <What would you call success post mentoring your agent?>\n\n"
-        "Thanks!\n"
-    )
-    mailto = f"mailto:helmuthva@gmail.com?subject={_q(mailto_subject)}&body={_q(mailto_body)}"
+    # Pull subject + body from the per-language copy block; pre-fill
+    # fields map to what `ammp mentee add` needs at the operator end
+    # (slug + operator derived from the name + agent runtime).
+    mailto = f"mailto:helmuthva@gmail.com?subject={_q(c['mailto_subject'])}&body={_q(c['mailto_body'])}"
 
     mentor_blocks_parts: list[str] = []
     for slug, m in ctx.mentors.items():
@@ -1321,7 +1438,8 @@ def _render_landing(ctx: ServerContext) -> str:
             hm = m.human_mentor
             hm_name_html = f"<a href='{_h(hm.url)}'>{_h(hm.name)}</a>" if hm.url else _h(hm.name)
             hm_contact = f" · <span class='hm-contact'>{_h(hm.contact)}</span>" if hm.contact else ""
-            human_html = f"<p class='human-mentor'>Behind {_h(m.name)}: {hm_name_html}{hm_contact}</p>"
+            behind_prefix = c["mentor_behind"].format(mentor_name=_h(m.name))
+            human_html = f"<p class='human-mentor'>{behind_prefix}{hm_name_html}{hm_contact}</p>"
         else:
             human_html = ""
         # Playbook → work-instruction nested rendering. Each playbook is
@@ -1340,7 +1458,7 @@ def _render_landing(ctx: ServerContext) -> str:
                         for wi in pb.instructions
                     )
                     n = len(pb.instructions)
-                    label = f"{n} work instruction{'s' if n != 1 else ''}"
+                    label = c["mentor_wi_count_one"] if n == 1 else c["mentor_wi_count_many"].format(n=n)
                     instructions_block = (
                         f"<details class='instructions-details'>"
                         f"<summary>{label}</summary>"
@@ -1348,7 +1466,7 @@ def _render_landing(ctx: ServerContext) -> str:
                         "</details>"
                     )
                 else:
-                    instructions_block = "<p class='empty'>No work instructions yet.</p>"
+                    instructions_block = f"<p class='empty'>{c['mentor_no_instructions']}</p>"
                 pb_desc = f"<p class='pb-desc'>{_md_inline(pb.description)}</p>" if pb.description else ""
                 # Copy-paste prompt for starting a mentoring session on
                 # this specific (mentor, playbook). User pastes into
@@ -1365,11 +1483,11 @@ def _render_landing(ctx: ServerContext) -> str:
                 prompt_dom_id = f"prompt--{_h(slug)}--{_h(pb.id)}"
                 prompt_block = (
                     "<details class='prompt-details'>"
-                    "<summary>Prompt to start this mentoring</summary>"
+                    f"<summary>{c['mentor_prompt_summary']}</summary>"
                     f"<pre class='prompt' id='{prompt_dom_id}'"
                     f" data-mentor='{_h(slug)}' data-playbook='{_h(pb.id)}'>"
                     f"{_h(prompt_text)}</pre>"
-                    f"<button class='btn copy' data-copy-from='#{prompt_dom_id}'>Copy prompt</button>"
+                    f"<button class='btn copy' data-copy-from='#{prompt_dom_id}'>{c['mentor_prompt_copy']}</button>"
                     "</details>"
                 )
                 pb_html_parts.append(
@@ -1382,7 +1500,7 @@ def _render_landing(ctx: ServerContext) -> str:
                 )
             playbook_section = "".join(pb_html_parts)
         else:
-            playbook_section = "<p class='empty'>No playbooks yet.</p>"
+            playbook_section = f"<p class='empty'>{c['mentor_no_playbooks']}</p>"
         mentor_blocks_parts.append(
             "<section class='mentor'>"
             "<div class='mentor-head'>"
@@ -1399,16 +1517,24 @@ def _render_landing(ctx: ServerContext) -> str:
     mentor_blocks = (
         "".join(mentor_blocks_parts)
         if mentor_blocks_parts
-        else "<p class='empty'>No mentors are currently available.</p>"
+        else f"<p class='empty'>{c['mentors_empty']}</p>"
     )
 
+    # Switcher href: /ammp/ ↔ /ammp/de/. Compute relative so it works
+    # whether we're on the EN root or under /de/.
+    other_lang = "de" if lang == "en" else "en"
+    other_href = "./de/" if lang == "en" else "../"
+    other_label = "DE" if lang == "en" else "EN"
     return f"""<!doctype html>
-<html lang="en">
+<html lang="{c['html_lang']}">
 <head>
 <meta charset="utf-8">
 <title>ammp · {host}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Mentor your agent — give your Claude (or other MCP-aware) agent a senior mentor it can ask. Reasons over a curated playbook library, answers grounded and cited, escalates to a human when out of depth.">
+<meta name="description" content="{c['meta_description']}">
+<link rel="alternate" hreflang="en" href="{base}/">
+<link rel="alternate" hreflang="de" href="{base}/de/">
+<link rel="alternate" hreflang="x-default" href="{base}/">
 <style>
 :root {{
   --bg-hi:#F2EDE2; --bg:#ECE6D9; --bg-lo:#E2DBC8;
@@ -1425,7 +1551,16 @@ def _render_landing(ctx: ServerContext) -> str:
 }}
 *{{box-sizing:border-box}}
 html,body{{margin:0;padding:0;background:linear-gradient(180deg,var(--bg-hi),var(--bg) 50%,var(--bg-lo));background-attachment:fixed;color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.7;-webkit-font-smoothing:antialiased}}
-main{{max-width:40rem;margin:0 auto;padding:3.5rem 1.75rem 3rem}}
+.helmguild-banner{{display:block;width:100%;padding:.55rem 1rem;background:var(--accent);color:var(--bg);font-family:var(--sans);font-size:.85rem;letter-spacing:.04em;text-align:center;text-decoration:none;border:none}}
+.helmguild-banner:hover{{background:var(--accent-hover);color:var(--bg);border:none}}
+.lang-pill{{position:fixed;top:calc(.55rem + 2.6rem);right:1rem;z-index:90;display:flex;align-items:center;height:38px;padding:0 .7rem;background:rgba(236,230,217,.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--rule);border-radius:6px;font-size:.85rem;letter-spacing:.05em;font-family:var(--sans);color:var(--ink-soft);box-sizing:border-box;transition:background .18s ease,border-color .18s ease}}
+.lang-pill:hover{{background:rgba(236,230,217,.95);border-color:var(--accent)}}
+.lang-pill a{{color:var(--ink-soft);text-decoration:none;border:none;padding:0 .2rem;transition:color .18s ease}}
+.lang-pill a:hover{{color:var(--accent)}}
+.lang-pill .current{{color:var(--ink);font-weight:600;padding:0 .2rem}}
+.lang-pill .sep{{color:var(--ink-soft);opacity:.5;margin:0 .15rem}}
+@media (prefers-color-scheme: dark) {{ .lang-pill{{background:rgba(20,23,31,.55)}} .lang-pill:hover{{background:rgba(20,23,31,.75)}} }}
+main{{max-width:40rem;margin:0 auto;padding:2.5rem 1.75rem 3rem}}
 h1{{font-family:var(--serif);font-weight:600;font-size:2.25rem;margin:0 0 .4rem;letter-spacing:-.01em}}
 h2{{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin:2.5rem 0 .9rem}}
 h3{{font-family:var(--serif);font-size:1.1rem;margin:0 0 .4rem;font-weight:600;display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}}
@@ -1497,17 +1632,23 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 </style>
 </head>
 <body>
+<a class="helmguild-banner" href="https://www.helmguild.com/{'de/' if lang == 'de' else ''}">{c['banner_label']}</a>
+<nav class="lang-pill" aria-label="{c['lang_aria']}">
+  <span class="current" aria-current="true">{lang.upper()}</span>
+  <span class="sep">·</span>
+  <a href="{other_href}" hreflang="{other_lang}">{other_label}</a>
+</nav>
 <main>
 
-<h1>Mentor your agent.</h1>
-<p class="lede">Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.</p>
+<h1>{c['h1']}</h1>
+<p class="lede">{c['lede']}</p>
 
-<h2>Step 1 — Request your access token</h2>
-<p>Tokens are issued by hand — one mail, one reply. Tap below and we'll send yours back through the secure channel you specify.</p>
-<p class="cta"><a class="btn primary" href="{mailto}">Request access</a></p>
+<h2>{c['step1_h']}</h2>
+<p>{c['step1_p']}</p>
+<p class="cta"><a class="btn primary" href="{mailto}">{c['step1_cta']}</a></p>
 
-<h2>Step 2 — Configure your agent's MCP connection</h2>
-<p>Pick your agent below and follow the paste path. Don't see yours? The <em>Generic</em> tab has the raw URL and Bearer header.</p>
+<h2>{c['step2_h']}</h2>
+<p>{c['step2_p']}</p>
 
 <div class="agent-tabs" role="tablist" aria-label="Per-agent connector instructions">
   <input type="radio" name="agent-tab" id="agent-tab-desktop" class="agent-tab-input" checked>
@@ -1525,60 +1666,60 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
     <label for="agent-tab-generic" class="agent-tab-label" role="tab">Generic</label>
   </div>
   <section class="agent-tab-panel agent-tab-panel-desktop" role="tabpanel" aria-labelledby="agent-tab-desktop">
-    <p class="cta"><a class="btn primary" href="{base}/desktop-bundle.mcpb" download>Download extension</a></p>
+    <p class="cta"><a class="btn primary" href="{base}/desktop-bundle.mcpb" download>{c['tab_desktop_cta']}</a></p>
     <ul class="tab-steps">
-      <li>Click the downloaded <code>.mcpb</code> file — Claude Desktop opens its extension installer.</li>
-      <li>Paste your Bearer token when prompted.</li>
-      <li>Enable the extension. Done.</li>
+      <li>{c['tab_desktop_li1']}</li>
+      <li>{c['tab_desktop_li2']}</li>
+      <li>{c['tab_desktop_li3']}</li>
     </ul>
   </section>
   <section class="agent-tab-panel agent-tab-panel-code" role="tabpanel" aria-labelledby="agent-tab-code">
-    <p class="tab-intro">One command in your terminal. Replace <code>&lt;your-token&gt;</code> with the value mailed to you.</p>
-    <div class="url-row"><code id="claude-code-cmd">claude mcp add --scope user ammp {mcp_url} --header "Authorization: Bearer ammp-&lt;your-token&gt;"</code> <button class="btn copy" data-copy-from="#claude-code-cmd">Copy</button></div>
-    <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">Anthropic Claude Code MCP docs →</a></p>
+    <p class="tab-intro">{c['tab_code_intro']}</p>
+    <div class="url-row"><code id="claude-code-cmd">claude mcp add --scope user ammp {mcp_url} --header "Authorization: Bearer ammp-&lt;your-token&gt;"</code> <button class="btn copy" data-copy-from="#claude-code-cmd">{c['copy']}</button></div>
+    <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">{c['tab_code_docs']}</a></p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-copilot" role="tabpanel" aria-labelledby="agent-tab-copilot">
-    <p class="tab-intro">GitHub Copilot Chat supports MCP servers in VS Code and JetBrains IDEs.</p>
+    <p class="tab-intro">{c['tab_copilot_intro']}</p>
     <ul class="tab-steps">
-      <li><strong>VS Code:</strong> Command Palette → <em>MCP: Add Server</em> → fill in the URL and the Bearer header.</li>
-      <li><strong>JetBrains:</strong> Settings → Tools → GitHub Copilot → MCP servers → add a new server.</li>
+      <li>{c['tab_copilot_vscode']}</li>
+      <li>{c['tab_copilot_jetbrains']}</li>
     </ul>
-    <p class="tab-manual"><a href="https://docs.github.com/en/copilot/customizing-copilot/extending-copilot-chat-with-mcp">GitHub Copilot MCP docs →</a></p>
+    <p class="tab-manual"><a href="https://docs.github.com/en/copilot/customizing-copilot/extending-copilot-chat-with-mcp">{c['tab_copilot_docs']}</a></p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-openclaw" role="tabpanel" aria-labelledby="agent-tab-openclaw">
-    <p class="tab-intro">OpenClaw is helmguild's own agent runtime and speaks MCP natively.</p>
+    <p class="tab-intro">{c['tab_openclaw_intro']}</p>
     <ul class="tab-steps">
-      <li>Add the server through the runtime's connector UI or config file using the same URL + Bearer header.</li>
+      <li>{c['tab_openclaw_li']}</li>
     </ul>
-    <p class="tab-manual">(OpenClaw is currently private to the helmguild network.)</p>
+    <p class="tab-manual">{c['tab_openclaw_note']}</p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-hermes" role="tabpanel" aria-labelledby="agent-tab-hermes">
-    <p class="tab-intro">Hermes is an alternative agent runtime; it connects to MCP servers via its tool-server registry.</p>
+    <p class="tab-intro">{c['tab_hermes_intro']}</p>
     <ul class="tab-steps">
-      <li>Point Hermes at the URL with the Bearer header — no Hermes-specific handshake.</li>
+      <li>{c['tab_hermes_li']}</li>
     </ul>
-    <p class="tab-manual">(Hermes docs vary by deployment — see the manual that ships with your install.)</p>
+    <p class="tab-manual">{c['tab_hermes_note']}</p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-generic" role="tabpanel" aria-labelledby="agent-tab-generic">
-    <p class="tab-intro">For any MCP-aware client not listed above. Open its connector settings, add a custom MCP server, and paste these two values.</p>
-    <div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">Copy URL</button></div>
+    <p class="tab-intro">{c['tab_generic_intro']}</p>
+    <div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">{c['copy_url']}</button></div>
     <div class="url-row"><code>Authorization: Bearer &lt;your-token&gt;</code></div>
   </section>
 </div>
 
-<h2>Step 3 — Check the connection</h2>
-<p>Quick sanity check: paste this into your agent. If it responds with the mentors hosted here, the URL, token, and tool registration are all good.</p>
-<div class="url-row"><code id="check-prompt">List mentors on helmguild.</code> <button class="btn copy" data-copy-from="#check-prompt">Copy</button></div>
+<h2>{c['step3_h']}</h2>
+<p>{c['step3_p']}</p>
+<div class="url-row"><code id="check-prompt">{c['step3_prompt']}</code> <button class="btn copy" data-copy-from="#check-prompt">{c['copy']}</button></div>
 
-<h2>Step 4 — Pick a mentor and start the session</h2>
-<p>Browse the mentors below, expand the playbook you want to be mentored on, and copy its prompt into your now-connected agent. The prompt walks the agent through the canonical first calls so the mentoring starts right away.</p>
+<h2>{c['step4_h']}</h2>
+<p>{c['step4_p']}</p>
 {mentor_blocks}
 
-<h2>Privacy</h2>
-<p>No retention. Your questions and the mentor's answers are never stored — only an opaque hash of each call lands in the audit log. See <a href="https://www.helmguild.com/rfc/ammp/">the AMMP draft</a> for the normative wording.</p>
+<h2>{c['privacy_h']}</h2>
+<p>{c['privacy_p']}</p>
 
 <footer>
-<p>Reference implementation of the <a href="https://www.helmguild.com/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-licensed. Run by <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>. <a href="{base}/.well-known/agent.json">Capability JSON</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">Source</a></p>
+<p>{c['footer'].format(base=base)}</p>
 </footer>
 
 </main>
@@ -1944,14 +2085,26 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.custom_route(f"{prefix}/", methods=["GET"])
     async def landing(_request: Request) -> HTMLResponse:
-        """Human-facing landing page — how to connect a mentee + CLI usage."""
+        """English landing page — how to connect a mentee + CLI usage."""
         return HTMLResponse(
-            _render_landing(ctx),
+            _render_landing(ctx, lang="en"),
             # The mentor list is rendered from live ctx; the integration
             # cards quote the live public URL. Cache should never serve
             # a stale version of either. `no-store` plus the long-form
             # `no-cache, must-revalidate` belt-and-braces tells every
             # browser + intermediate (Cloudflare, Caddy) not to hold it.
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
+        )
+
+    @mcp.custom_route(f"{prefix}/de/", methods=["GET"])
+    async def landing_de(_request: Request) -> HTMLResponse:
+        """German landing page — mirrors the EN page with translated chrome.
+
+        Mentor names and playbook content stay in English (corpus is
+        content, not chrome) — same convention as helmguild.com itself.
+        """
+        return HTMLResponse(
+            _render_landing(ctx, lang="de"),
             headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
 
