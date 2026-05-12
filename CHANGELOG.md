@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.5.0] — 2026-05-12
+
+### Changed
+
+- **PyPI distribution renamed: `ammp-mcp` → `ammp`.** The package is now installable as `uvx ammp` / `pip install ammp` once published. The reference implementation is *one* concrete realisation of AMMP, and the bare protocol name on PyPI reads cleaner than the binding-suffixed name. The GitHub repo (`helmut-hoffer-von-ankershoffen/ammp-mcp`), import module (`ammp_mcp`), CLI entrypoint (`ammp`), and on-the-wire server name (`ammp-mcp`) are unchanged — only the PyPI distribution metadata flips. (#packaging)
+
+### Operator note
+
+Before the next tag actually lands on PyPI, the **`ammp` package needs a Trusted Publisher entry** on `pypi.org/manage/account/publishing/` for this GitHub repo + `release.yml` workflow. The previous trusted-publisher config (if any) was scoped to the old `ammp-mcp` name and won't authenticate the upload. Until that's configured, the release workflow's `publish-pypi` step fails-soft (continue-on-error) and the GitHub release still ships dist artefacts.
+
 ## [0.4.1] — 2026-05-12
 
 ### Fixed

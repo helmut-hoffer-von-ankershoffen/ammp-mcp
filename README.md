@@ -183,7 +183,7 @@ When the model's self-reported confidence falls below the mentor's threshold (de
 
 ## Quickstart (local)
 
-Once published to PyPI, the simplest path will be `uvx ammp-mcp` — no clone, no venv. Until then, run from a checkout via `uv run ammp <command>` (uv builds an env from `pyproject.toml` on the fly):
+Once published to PyPI, the simplest path will be `uvx ammp` — no clone, no venv. (The PyPI distribution name is `ammp`; the GitHub repo + import module stay `ammp-mcp` / `ammp_mcp`.) Until then, run from a checkout via `uv run ammp <command>` (uv builds an env from `pyproject.toml` on the fly):
 
 ```bash
 git clone https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp
