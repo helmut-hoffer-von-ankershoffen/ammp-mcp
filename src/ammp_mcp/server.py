@@ -1515,9 +1515,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
             "</section>"
         )
     mentor_blocks = (
-        "".join(mentor_blocks_parts)
-        if mentor_blocks_parts
-        else f"<p class='empty'>{c['mentors_empty']}</p>"
+        "".join(mentor_blocks_parts) if mentor_blocks_parts else f"<p class='empty'>{c['mentors_empty']}</p>"
     )
 
     # Switcher href: /ammp/ ↔ /ammp/de/. Compute relative so it works
@@ -1526,12 +1524,12 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     other_href = "./de/" if lang == "en" else "../"
     other_label = "DE" if lang == "en" else "EN"
     return f"""<!doctype html>
-<html lang="{c['html_lang']}">
+<html lang="{c["html_lang"]}">
 <head>
 <meta charset="utf-8">
 <title>ammp · {host}</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="{c['meta_description']}">
+<meta name="description" content="{c["meta_description"]}">
 <link rel="alternate" hreflang="en" href="{base}/">
 <link rel="alternate" hreflang="de" href="{base}/de/">
 <link rel="alternate" hreflang="x-default" href="{base}/">
@@ -1632,23 +1630,23 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 </style>
 </head>
 <body>
-<a class="helmguild-banner" href="https://www.helmguild.com/{'de/' if lang == 'de' else ''}">{c['banner_label']}</a>
-<nav class="lang-pill" aria-label="{c['lang_aria']}">
+<a class="helmguild-banner" href="https://www.helmguild.com/{"de/" if lang == "de" else ""}">{c["banner_label"]}</a>
+<nav class="lang-pill" aria-label="{c["lang_aria"]}">
   <span class="current" aria-current="true">{lang.upper()}</span>
   <span class="sep">·</span>
   <a href="{other_href}" hreflang="{other_lang}">{other_label}</a>
 </nav>
 <main>
 
-<h1>{c['h1']}</h1>
-<p class="lede">{c['lede']}</p>
+<h1>{c["h1"]}</h1>
+<p class="lede">{c["lede"]}</p>
 
-<h2>{c['step1_h']}</h2>
-<p>{c['step1_p']}</p>
-<p class="cta"><a class="btn primary" href="{mailto}">{c['step1_cta']}</a></p>
+<h2>{c["step1_h"]}</h2>
+<p>{c["step1_p"]}</p>
+<p class="cta"><a class="btn primary" href="{mailto}">{c["step1_cta"]}</a></p>
 
-<h2>{c['step2_h']}</h2>
-<p>{c['step2_p']}</p>
+<h2>{c["step2_h"]}</h2>
+<p>{c["step2_p"]}</p>
 
 <div class="agent-tabs" role="tablist" aria-label="Per-agent connector instructions">
   <input type="radio" name="agent-tab" id="agent-tab-desktop" class="agent-tab-input" checked>
@@ -1666,60 +1664,60 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
     <label for="agent-tab-generic" class="agent-tab-label" role="tab">Generic</label>
   </div>
   <section class="agent-tab-panel agent-tab-panel-desktop" role="tabpanel" aria-labelledby="agent-tab-desktop">
-    <p class="cta"><a class="btn primary" href="{base}/desktop-bundle.mcpb" download>{c['tab_desktop_cta']}</a></p>
+    <p class="cta"><a class="btn primary" href="{base}/desktop-bundle.mcpb" download>{c["tab_desktop_cta"]}</a></p>
     <ul class="tab-steps">
-      <li>{c['tab_desktop_li1']}</li>
-      <li>{c['tab_desktop_li2']}</li>
-      <li>{c['tab_desktop_li3']}</li>
+      <li>{c["tab_desktop_li1"]}</li>
+      <li>{c["tab_desktop_li2"]}</li>
+      <li>{c["tab_desktop_li3"]}</li>
     </ul>
   </section>
   <section class="agent-tab-panel agent-tab-panel-code" role="tabpanel" aria-labelledby="agent-tab-code">
-    <p class="tab-intro">{c['tab_code_intro']}</p>
-    <div class="url-row"><code id="claude-code-cmd">claude mcp add --scope user ammp {mcp_url} --header "Authorization: Bearer ammp-&lt;your-token&gt;"</code> <button class="btn copy" data-copy-from="#claude-code-cmd">{c['copy']}</button></div>
-    <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">{c['tab_code_docs']}</a></p>
+    <p class="tab-intro">{c["tab_code_intro"]}</p>
+    <div class="url-row"><code id="claude-code-cmd">claude mcp add --scope user ammp {mcp_url} --header "Authorization: Bearer ammp-&lt;your-token&gt;"</code> <button class="btn copy" data-copy-from="#claude-code-cmd">{c["copy"]}</button></div>
+    <p class="tab-manual"><a href="https://docs.anthropic.com/en/docs/claude-code/mcp">{c["tab_code_docs"]}</a></p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-copilot" role="tabpanel" aria-labelledby="agent-tab-copilot">
-    <p class="tab-intro">{c['tab_copilot_intro']}</p>
+    <p class="tab-intro">{c["tab_copilot_intro"]}</p>
     <ul class="tab-steps">
-      <li>{c['tab_copilot_vscode']}</li>
-      <li>{c['tab_copilot_jetbrains']}</li>
+      <li>{c["tab_copilot_vscode"]}</li>
+      <li>{c["tab_copilot_jetbrains"]}</li>
     </ul>
-    <p class="tab-manual"><a href="https://docs.github.com/en/copilot/customizing-copilot/extending-copilot-chat-with-mcp">{c['tab_copilot_docs']}</a></p>
+    <p class="tab-manual"><a href="https://docs.github.com/en/copilot/customizing-copilot/extending-copilot-chat-with-mcp">{c["tab_copilot_docs"]}</a></p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-openclaw" role="tabpanel" aria-labelledby="agent-tab-openclaw">
-    <p class="tab-intro">{c['tab_openclaw_intro']}</p>
+    <p class="tab-intro">{c["tab_openclaw_intro"]}</p>
     <ul class="tab-steps">
-      <li>{c['tab_openclaw_li']}</li>
+      <li>{c["tab_openclaw_li"]}</li>
     </ul>
-    <p class="tab-manual">{c['tab_openclaw_note']}</p>
+    <p class="tab-manual">{c["tab_openclaw_note"]}</p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-hermes" role="tabpanel" aria-labelledby="agent-tab-hermes">
-    <p class="tab-intro">{c['tab_hermes_intro']}</p>
+    <p class="tab-intro">{c["tab_hermes_intro"]}</p>
     <ul class="tab-steps">
-      <li>{c['tab_hermes_li']}</li>
+      <li>{c["tab_hermes_li"]}</li>
     </ul>
-    <p class="tab-manual">{c['tab_hermes_note']}</p>
+    <p class="tab-manual">{c["tab_hermes_note"]}</p>
   </section>
   <section class="agent-tab-panel agent-tab-panel-generic" role="tabpanel" aria-labelledby="agent-tab-generic">
-    <p class="tab-intro">{c['tab_generic_intro']}</p>
-    <div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">{c['copy_url']}</button></div>
+    <p class="tab-intro">{c["tab_generic_intro"]}</p>
+    <div class="url-row"><code>{mcp_url}</code> <button class="btn copy" data-copy="{mcp_url}">{c["copy_url"]}</button></div>
     <div class="url-row"><code>Authorization: Bearer &lt;your-token&gt;</code></div>
   </section>
 </div>
 
-<h2>{c['step3_h']}</h2>
-<p>{c['step3_p']}</p>
-<div class="url-row"><code id="check-prompt">{c['step3_prompt']}</code> <button class="btn copy" data-copy-from="#check-prompt">{c['copy']}</button></div>
+<h2>{c["step3_h"]}</h2>
+<p>{c["step3_p"]}</p>
+<div class="url-row"><code id="check-prompt">{c["step3_prompt"]}</code> <button class="btn copy" data-copy-from="#check-prompt">{c["copy"]}</button></div>
 
-<h2>{c['step4_h']}</h2>
-<p>{c['step4_p']}</p>
+<h2>{c["step4_h"]}</h2>
+<p>{c["step4_p"]}</p>
 {mentor_blocks}
 
-<h2>{c['privacy_h']}</h2>
-<p>{c['privacy_p']}</p>
+<h2>{c["privacy_h"]}</h2>
+<p>{c["privacy_p"]}</p>
 
 <footer>
-<p>{c['footer'].format(base=base)}</p>
+<p>{c["footer"].format(base=base)}</p>
 </footer>
 
 </main>
