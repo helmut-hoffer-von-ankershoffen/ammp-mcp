@@ -826,11 +826,9 @@ async def _handle_escalate_to_human_mentor(
         A JSON-serialisable dict — :class:`EscalateToHumanMentorResponse`
         with ``status="answered"`` or ``status="pending"``, or an
         in-band error envelope on auth failure, unknown mentor, no
-        human mentor configured, or delivery failure.
-
-    Raises:
-        asyncio.CancelledError: Re-raised when the MCP client sends
-            ``$/cancelRequest`` while the handler is mid-wait.
+        human mentor configured, or delivery failure. The
+        ``$/cancelRequest`` path propagates ``CancelledError`` via the
+        inner waiter helper.
     """
     try:
         mentee_slug = _authenticate(ctx, api_key)
