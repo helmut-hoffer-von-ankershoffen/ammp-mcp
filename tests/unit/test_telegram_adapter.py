@@ -208,9 +208,7 @@ def test_handle_update_drops_when_reply_message_id_missing() -> None:
     adapter = TelegramDeliveryAdapter(bot_token="TKN", chat_id="42")
     adapter._store = MagicMock()
     adapter._broker = MagicMock()
-    adapter._handle_update(
-        {"update_id": 1, "message": {"text": "x", "reply_to_message": {}}}
-    )
+    adapter._handle_update({"update_id": 1, "message": {"text": "x", "reply_to_message": {}}})
     adapter._store.update.assert_not_called()
 
 
