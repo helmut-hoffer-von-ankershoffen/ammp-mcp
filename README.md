@@ -1,5 +1,6 @@
 # ammp-mcp
 
+[![PyPI: ammp](https://img.shields.io/pypi/v/ammp?label=pypi%3A%20ammp)](https://pypi.org/project/ammp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://img.shields.io/github/actions/workflow/status/helmut-hoffer-von-ankershoffen/ammp-mcp/ci.yml?branch=main&label=CI)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/ci.yml)
 [![Audit](https://img.shields.io/github/actions/workflow/status/helmut-hoffer-von-ankershoffen/ammp-mcp/audit.yml?branch=main&label=Audit)](https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp/actions/workflows/audit.yml)
