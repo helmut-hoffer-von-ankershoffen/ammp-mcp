@@ -1872,9 +1872,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 except Exception as e:
                     logger.debug("report_progress failed (non-fatal): %s", e)
 
-        return await _handle_get_escalation(
-            ctx, escalation_id, None, wait_seconds=wait_seconds, progress=_report
-        )
+        return await _handle_get_escalation(ctx, escalation_id, None, wait_seconds=wait_seconds, progress=_report)
 
     @mcp.tool
     def EscalateToHuman(
