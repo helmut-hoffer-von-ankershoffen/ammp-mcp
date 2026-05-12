@@ -194,6 +194,88 @@ def test_handle_update_logs_late_reply_for_cancelled_escalation() -> None:
     adapter._broker.resolve.assert_not_called()
 
 
+def test_handle_update_drops_when_message_is_not_a_dict() -> None:
+    """Non-dict `message` payload → no-op (defensive parse)."""
+    adapter = TelegramDeliveryAdapter(bot_token="TKN", chat_id="42")
+    adapter._store = MagicMock()
+    adapter._broker = MagicMock()
+    adapter._handle_update({"update_id": 1, "message": "string-not-dict"})
+    adapter._store.update.assert_not_called()
+
+
+def test_handle_update_drops_when_reply_message_id_missing() -> None:
+    """`reply_to_message` present but missing `message_id` → no-op."""
+    adapter = TelegramDeliveryAdapter(bot_token="TKN", chat_id="42")
+    adapter._store = MagicMock()
+    adapter._broker = MagicMock()
+    adapter._handle_update(
+        {"update_id": 1, "message": {"text": "x", "reply_to_message": {}}}
+    )
+    adapter._store.update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stop_cancels_listener_and_closes_client() -> None:
+    """`stop()` sets the event, cancels the listener task, and closes the client."""
+    adapter = TelegramDeliveryAdapter(bot_token="TKN", chat_id="42")
+
+    # Hand-fabricate the lifecycle state stop() unwinds.
+    async def _send(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True, "result": []})
+
+    adapter._client = httpx.AsyncClient(transport=httpx.MockTransport(_send))
+    adapter._broker = MagicMock()
+    adapter._store = MagicMock()
+    adapter._store.list_by_status.return_value = []
+
+    async def _idle() -> None:
+        await asyncio.sleep(60)  # well past the test; will be cancelled by stop()
+
+    adapter._listener_task = asyncio.create_task(_idle())
+    await adapter.stop()
+    assert adapter._stopped.is_set()
+    assert adapter._client is None
+    assert adapter._listener_task.cancelled() or adapter._listener_task.done()
+
+
+@pytest.mark.asyncio
+async def test_poll_loop_recovers_from_http_error() -> None:
+    """A transient httpx error logs a warning and continues — doesn't crash."""
+    adapter = TelegramDeliveryAdapter(bot_token="TKN", chat_id="42", poll_seconds=1)
+    adapter._broker = MagicMock()
+    adapter._store = MagicMock()
+    adapter._store.list_by_status.return_value = []
+
+    state = {"calls": 0}
+
+    async def _send(_request: httpx.Request) -> httpx.Response:
+        state["calls"] += 1
+        if state["calls"] == 1:
+            raise httpx.ReadError("flaky network")
+        # Second call returns ok=False (covers the rejected branch),
+        # then signal stop.
+        adapter._stopped.set()
+        return httpx.Response(200, json={"ok": False, "description": "rate-limited"})
+
+    adapter._client = httpx.AsyncClient(transport=httpx.MockTransport(_send))
+    # Override the sleep so retries don't actually wait 2s.
+    import ammp_mcp.escalation._adapters._telegram as _mod
+
+    real_sleep = _mod.asyncio.sleep
+
+    async def _fast_sleep(_seconds):
+        await real_sleep(0)
+
+    _mod.asyncio.sleep = _fast_sleep  # type: ignore[attr-defined]
+    try:
+        await asyncio.wait_for(adapter._poll_forever(), timeout=2.0)
+    finally:
+        _mod.asyncio.sleep = real_sleep  # type: ignore[attr-defined]
+        await adapter._client.aclose()
+    # Both error branches got exercised (httpx error then ok=false).
+    assert state["calls"] >= 2
+
+
 @pytest.mark.asyncio
 async def test_poll_loop_consumes_getupdates_and_advances_offset() -> None:
     """The listener calls getUpdates, advances the offset, and feeds each update
