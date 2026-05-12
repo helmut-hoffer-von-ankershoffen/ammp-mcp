@@ -31,6 +31,7 @@ class HumanMentorSummary(BaseModel):
 
     name: str
     url: str | None = None
+    profile_url: str | None = None
     contact: str | None = None
 
 

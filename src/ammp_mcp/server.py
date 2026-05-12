@@ -242,7 +242,12 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
         # it however they like (display, profile card, none at all).
         avatar_url = f"{ctx.settings.public_url.rstrip('/')}/mentors/{slug}/avatar" if m.avatar_path() else None
         human_mentor = (
-            HumanMentorSummary(name=m.human_mentor.name, url=m.human_mentor.url, contact=m.human_mentor.contact)
+            HumanMentorSummary(
+                name=m.human_mentor.name,
+                url=m.human_mentor.url,
+                profile_url=m.human_mentor.profile_url,
+                contact=m.human_mentor.contact,
+            )
             if m.human_mentor
             else None
         )
@@ -616,7 +621,9 @@ async def _handle_ask_mentor(
         hm = m.human_mentor
         escalation_draft = EscalationToHumanMentorDraft(
             question=q,
-            human_mentor=HumanMentorSummary(name=hm.name, url=hm.url, contact=hm.contact),
+            human_mentor=HumanMentorSummary(
+                name=hm.name, url=hm.url, profile_url=hm.profile_url, contact=hm.contact
+            ),
             suggested_message_to_your_operator=(
                 f"To your operator: \"My mentor isn't confident enough to answer this on its own. "
                 f"They've offered to forward a B.h-approved version of the question to their human mentor, "
@@ -1437,7 +1444,13 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
         # the escalation destination explicit per AMMP §3.4.
         if m.human_mentor is not None:
             hm = m.human_mentor
-            hm_name_html = f"<a href='{_h(hm.url)}'>{_h(hm.name)}</a>" if hm.url else _h(hm.name)
+            # Prefer the helmguild profile URL when set, fall back to
+            # the personal bio link. Auto-swap to /de/ on the DE landing
+            # for helmguild.com URLs, same as mentor.profile_url.
+            hm_link = hm.profile_url or hm.url
+            if hm_link and lang == "de" and hm_link.startswith("https://www.helmguild.com/") and "/de/" not in hm_link:
+                hm_link = hm_link.replace("https://www.helmguild.com/", "https://www.helmguild.com/de/", 1)
+            hm_name_html = f"<a href='{_h(hm_link)}'>{_h(hm.name)}</a>" if hm_link else _h(hm.name)
             hm_contact = f" · <span class='hm-contact'>{_h(hm.contact)}</span>" if hm.contact else ""
             behind_prefix = c["mentor_behind"].format(mentor_name=_h(m.name))
             human_html = f"<p class='human-mentor'>{behind_prefix}{hm_name_html}{hm_contact}</p>"

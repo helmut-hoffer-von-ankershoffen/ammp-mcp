@@ -86,6 +86,12 @@ class HumanMentor(BaseModel):
         name: Display name, e.g. ``"Helmut Hoffer von Ankershoffen"``.
         url: Optional public bio / personal site, e.g.
             ``"https://helmut.hoffer-von-ankershoffen.me/"``.
+        profile_url: Optional URL of the human's longer profile page on
+            the brand site, e.g. ``"https://www.helmguild.com/helmut-hoffer-von-ankershoffen/"``.
+            When set, the landing wraps the human's name in a link to
+            this URL (in preference to ``url``); when the URL points at
+            ``https://www.helmguild.com/<path>/``, the DE landing
+            automatically swaps in the ``/de/`` variant.
         contact: Optional free-form contact channel description,
             e.g. ``"helmuthva@gmail.com"`` or
             ``"Telegram: @helmuthva"``. The mentor never publishes
@@ -96,6 +102,7 @@ class HumanMentor(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     url: str | None = Field(default=None, max_length=400)
+    profile_url: str | None = Field(default=None, max_length=400)
     contact: str | None = Field(default=None, max_length=200)
 
 

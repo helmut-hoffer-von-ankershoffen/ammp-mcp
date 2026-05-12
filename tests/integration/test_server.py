@@ -78,6 +78,7 @@ async def test_list_mentors_returns_all_mentors(server) -> None:
     assert by_slug["pepe"]["human_mentor"] == {
         "name": "Helmut Hoffer von Ankershoffen",
         "url": "https://helmut.hoffer-von-ankershoffen.me/",
+        "profile_url": "https://www.helmguild.com/helmut-hoffer-von-ankershoffen/",
         "contact": "helmuthva@gmail.com",
     }
     assert by_slug["strict"]["human_mentor"] is None
@@ -347,6 +348,9 @@ async def test_landing_page_route(server) -> None:
     # Pepe's `profile_url` (set in the fixture) turns the mentor name
     # into a link to the longer profile page on the brand site.
     assert "class='mentor-profile' href='https://www.helmguild.com/pepe-arturo-ai/'" in body
+    # Helmut's `human_mentor.profile_url` swaps the "Behind Pepe" link
+    # from the personal bio site to the helmguild profile page.
+    assert "href='https://www.helmguild.com/helmut-hoffer-von-ankershoffen/'" in body
 
 
 async def test_landing_page_de_route_serves_german(server) -> None:
@@ -388,6 +392,8 @@ async def test_landing_page_de_route_serves_german(server) -> None:
     assert "claude mcp add" in body
     # Mentor profile link auto-swaps to the /de/ variant on the DE landing.
     assert "class='mentor-profile' href='https://www.helmguild.com/de/pepe-arturo-ai/'" in body
+    # The human-mentor profile link follows the same /de/ swap rule.
+    assert "href='https://www.helmguild.com/de/helmut-hoffer-von-ankershoffen/'" in body
     # The bare (EN) profile URL should NOT appear as a mentor-profile href
     # on the DE page — only its /de/ variant. (It may still appear in
     # alternate-link tags or footer, which is fine.)

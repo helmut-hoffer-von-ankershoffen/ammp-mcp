@@ -72,6 +72,7 @@ def isolated_tree(tmp_path: Path) -> Path:
                 "human_mentor": {
                     "name": "Helmut Hoffer von Ankershoffen",
                     "url": "https://helmut.hoffer-von-ankershoffen.me/",
+                    "profile_url": "https://www.helmguild.com/helmut-hoffer-von-ankershoffen/",
                     "contact": "helmuthva@gmail.com",
                 },
                 "persona": "calm operator",
