@@ -621,9 +621,7 @@ async def _handle_ask_mentor(
         hm = m.human_mentor
         escalation_draft = EscalationToHumanMentorDraft(
             question=q,
-            human_mentor=HumanMentorSummary(
-                name=hm.name, url=hm.url, profile_url=hm.profile_url, contact=hm.contact
-            ),
+            human_mentor=HumanMentorSummary(name=hm.name, url=hm.url, profile_url=hm.profile_url, contact=hm.contact),
             suggested_message_to_your_operator=(
                 f"To your operator: \"My mentor isn't confident enough to answer this on its own. "
                 f"They've offered to forward a B.h-approved version of the question to their human mentor, "
