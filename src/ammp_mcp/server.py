@@ -954,10 +954,6 @@ async def _handle_get_escalation(
     Returns:
         :class:`GetEscalationResponse` envelope dict, or an in-band
         ``auth_failed``/``unknown_escalation`` error.
-
-    Raises:
-        asyncio.CancelledError: Re-raised when the MCP client sends
-            ``$/cancelRequest`` while mid-wait.
     """
     try:
         _ = _authenticate(ctx, api_key)
