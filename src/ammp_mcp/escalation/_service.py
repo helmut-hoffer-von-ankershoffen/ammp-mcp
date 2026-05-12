@@ -242,6 +242,26 @@ class EscalationBroker:
             waiter.event.set()
         return True
 
+    def release(self, escalation_id: str) -> bool:
+        """Drop the waiter without setting an answer or cancel reason.
+
+        Used by the sync-or-pending flow: when ``EscalateToHumanMentor``
+        returns ``status="pending"`` to the mentee, the original waiter
+        is no longer attached to a live MCP call — releasing it frees
+        the slot so a later ``GetEscalation`` can arm a fresh waiter
+        for the same id.
+
+        Args:
+            escalation_id: Id of the escalation to release.
+
+        Returns:
+            ``True`` when a waiter was found and dropped, ``False``
+            when none was registered (already resolved / cancelled /
+            never opened).
+        """
+        with self._lock:
+            return self._waiters.pop(escalation_id, None) is not None
+
     def has_waiter(self, escalation_id: str) -> bool:
         """True if a waiter is currently registered for this id."""
         with self._lock:

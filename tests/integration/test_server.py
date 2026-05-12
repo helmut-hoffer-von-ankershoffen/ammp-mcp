@@ -660,6 +660,100 @@ async def test_escalate_to_human_mentor_advertises_task_mode(server) -> None:
         assert t.task_config.mode == "forbidden", f"{sync_name} should not opt into background tasks"
 
 
+async def test_escalate_to_human_mentor_returns_pending_then_get_escalation_resolves(settings: Settings) -> None:
+    """The sync-or-pending contract: EscalateToHumanMentor returns
+    quickly with status=pending when A.h doesn't reply within
+    wait_seconds; GetEscalation later retrieves the answer.
+
+    This is the production reliability path — MCP client per-tool
+    timeouts vary, so we don't bet on a long sync block. Pinned to
+    catch a regression that silently re-introduces the old
+    block-for-the-full-timeout behavior.
+    """
+    import asyncio as _asyncio
+    from dataclasses import replace as _replace
+    from datetime import UTC, datetime
+
+    from ammp_mcp.escalation._adapters._base import DeliveryAdapter
+    from ammp_mcp.server import _handle_escalate_to_human_mentor, _handle_get_escalation, build_context
+
+    class _LateAdapter(DeliveryAdapter):
+        """A.h replies only after the first wait_seconds budget has elapsed."""
+
+        kind = "late-test"
+
+        def __init__(self, *, answer: str, delay_seconds: float) -> None:
+            self._answer = answer
+            self._delay = delay_seconds
+            self._broker = None
+            self._store = None
+            self._tasks: list[_asyncio.Task[None]] = []
+
+        async def start(self, broker, store) -> None:
+            self._broker = broker
+            self._store = store
+
+        async def deliver(self, escalation) -> str | None:
+            async def _resolve() -> None:
+                await _asyncio.sleep(self._delay)
+                # Update the row + resolve any pending waiter; the broker
+                # cleans up gone waiters silently so this is safe even
+                # when the first call returned pending without one.
+                self._store.update(escalation.id, status="answered", answered_at=datetime.now(UTC), answer=self._answer)
+                self._broker.resolve(escalation.id, self._answer)
+
+            self._tasks.append(_asyncio.create_task(_resolve()))
+            return "late-msg-1"
+
+        async def stop(self) -> None:
+            for t in self._tasks:
+                t.cancel()
+
+    ctx = build_context(settings)
+    # A.h replies after 120ms — wait_seconds=0.05 returns pending,
+    # then a follow-up GetEscalation(wait_seconds=0.2) catches it.
+    ctx = _replace(ctx, delivery_adapter=_LateAdapter(answer="Take Wednesday off.", delay_seconds=0.12))
+    await ctx.delivery_adapter.start(ctx.escalation_broker, ctx.escalation_store)
+    try:
+        first = await _handle_escalate_to_human_mentor(
+            ctx,
+            question="Should I take a day off?",
+            mentor="pepe",
+            context="",
+            api_key=None,
+            wait_seconds=0.05,
+        )
+        assert "error" not in first, first
+        assert first["status"] == "pending", first
+        assert first["answer"] is None
+        assert first["escalation_id"]
+        esc_id = first["escalation_id"]
+        assert first["suggested_message_to_your_operator"], first
+
+        # The mentee comes back and polls. With wait_seconds=0.2 we'll
+        # block briefly and pick up the answer.
+        second = await _handle_get_escalation(ctx, esc_id, api_key=None, wait_seconds=0.2)
+        assert "error" not in second, second
+        assert second["status"] == "answered"
+        assert second["answer"] == "Take Wednesday off."
+        assert second["answered_at"]
+    finally:
+        await ctx.delivery_adapter.stop()
+
+
+async def test_get_escalation_unknown_id_returns_error(settings: Settings) -> None:
+    """Polling with a typoed id returns `unknown_escalation` in-band."""
+    from ammp_mcp.server import _handle_get_escalation, build_context
+
+    ctx = build_context(settings)
+    await ctx.delivery_adapter.start(ctx.escalation_broker, ctx.escalation_store)
+    try:
+        out = await _handle_get_escalation(ctx, "no-such-id-1234", api_key=None)
+    finally:
+        await ctx.delivery_adapter.stop()
+    assert out.get("error") == "unknown_escalation"
+
+
 async def test_escalate_to_human_mentor_no_human_mentor_configured(settings: Settings) -> None:
     """Mentor without `human_mentor` set returns no_human_mentor in-band error."""
     from ammp_mcp.server import _handle_escalate_to_human_mentor, build_context
@@ -939,6 +1033,7 @@ async def test_tools_listed_match_ammp_operations(server) -> None:
         "AskMentor",
         "EscalateToHuman",
         "EscalateToHumanMentor",
+        "GetEscalation",
     }
 
 

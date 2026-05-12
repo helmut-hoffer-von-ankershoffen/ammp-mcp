@@ -37,6 +37,7 @@ from .models import (
     EscalateToHumanMentorResponse,
     EscalateToHumanResponse,
     EscalationToHumanMentorDraft,
+    GetEscalationResponse,
     GetPlaybookResponse,
     GetWorkInstructionResponse,
     HumanMentorSummary,
@@ -695,15 +696,87 @@ def _handle_escalate_to_human(
     ).model_dump()
 
 
+async def _wait_for_escalation_answer(
+    ctx: ServerContext,
+    esc_id: str,
+    waiter: Any,
+    human_mentor_name: str,
+    wait_seconds: float,
+    progress: Callable[[float, str], Awaitable[None]] | None,
+    base_progress: float = 0.5,
+) -> tuple[str, str | None]:
+    """Block up to ``wait_seconds`` for the broker waiter to resolve.
+
+    Shared by ``EscalateToHumanMentor`` (post-delivery wait) and
+    ``GetEscalation`` (poll-with-wait). Caps the wait at
+    ``wait_seconds`` rather than the full escalation timeout so the
+    MCP client's per-tool deadline isn't exceeded — the escalation
+    itself stays in ``delivered`` state and can be polled again.
+
+    Args:
+        ctx: Per-request server context.
+        esc_id: Escalation id (used to revert state on cancellation).
+        waiter: Broker waiter object with an ``event`` and ``answer`` slot.
+        human_mentor_name: For the progress message text.
+        wait_seconds: Max seconds to block. 0 returns immediately.
+        progress: Optional MCP progress callback.
+        base_progress: Lower bound of the progress range (0..1) used
+            for heartbeat pings during this wait.
+
+    Returns:
+        ``(outcome, answer_or_reason)`` where ``outcome`` is one of
+        ``"answered" | "pending"``. On ``"answered"``, the second
+        element is the answer text. On ``"pending"``, it's ``None``.
+
+    Raises:
+        asyncio.CancelledError: Re-raised when the MCP client sends
+            ``$/cancelRequest``; the escalation is marked
+            ``cancelled`` before propagating.
+    """
+    if wait_seconds <= 0 or waiter.event.is_set():
+        if waiter.event.is_set() and waiter.answer is not None:
+            return ("answered", waiter.answer)
+        return ("pending", None)
+
+    heartbeat = ctx.settings.escalation_progress_heartbeat_seconds
+    loop = asyncio.get_running_loop()
+    started_at = loop.time()
+    deadline = started_at + wait_seconds
+    try:
+        while not waiter.event.is_set():
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                break
+            chunk = min(heartbeat, remaining)
+            try:
+                await asyncio.wait_for(waiter.event.wait(), timeout=chunk)
+            except TimeoutError:
+                if waiter.event.is_set():
+                    break
+                if progress is not None:
+                    elapsed = int(loop.time() - started_at)
+                    p = base_progress + min(0.4, elapsed / max(wait_seconds, 1.0) * 0.4)
+                    await progress(p, f"still awaiting {human_mentor_name}'s reply ({elapsed}s elapsed)")
+    except asyncio.CancelledError:
+        ctx.escalation_store.update(esc_id, status="cancelled", cancel_reason="mcp_cancelled")
+        ctx.escalation_broker.cancel(esc_id, "mcp_cancelled")
+        raise
+
+    if waiter.event.is_set() and waiter.answer is not None:
+        return ("answered", waiter.answer)
+    return ("pending", None)
+
+
 async def _handle_escalate_to_human_mentor(
     ctx: ServerContext,
     question: str,
     mentor: str,
     context: str,
     api_key: str | None,
+    wait_seconds: float = 25.0,
     progress: Callable[[float, str], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
-    """Long-running: forward a B.h-approved question to A.h, return A.h's reply.
+    """Forward a B.h-approved question to A.h. Sync-or-pending semantics.
 
     The flow (B.a is the calling mentee, B.h is its operator, A.a is
     this server's mentor, A.h is the human behind A.a):
@@ -713,18 +786,27 @@ async def _handle_escalate_to_human_mentor(
     2. The handler persists an :class:`Escalation`, opens a waiter on
        the in-memory broker, and hands X to the configured delivery
        adapter (Telegram bot, OpenClaw bridge, or log-only).
-    3. The handler emits ``notifications/progress`` updates as the
-       delivery transitions ``pending → delivered → answered`` and
-       awaits the broker's event.
-    4. When A.h replies, the adapter calls
-       :meth:`EscalationBroker.resolve`; the waiter wakes, and the
-       handler returns A.h's reply Z to B.a synchronously.
+    3. The handler waits **up to** ``wait_seconds`` for A.h to reply.
+       If A.h replies in time, the response carries ``status="answered"``
+       and the answer text. If not, it returns
+       ``status="pending"`` with the ``escalation_id`` — B.a can poll
+       :func:`_handle_get_escalation` later to retrieve A.h's answer.
+    4. The escalation row stays in ``delivered`` state when the call
+       returns pending, so the broker continues to relay any inbound
+       reply to whichever next poll arms a waiter.
 
-    Cancellation: if B.a's MCP client sends ``$/cancelRequest``, the
-    awaiting task is cancelled; the handler marks the escalation
-    ``cancelled`` and propagates the cancellation back up. Adapter
-    inbound replies arriving after cancellation are silently
-    dropped (no waiter to resolve; the late reply is logged).
+    Why the sync-or-pending design: MCP clients vary in how long they
+    hold a tool call open. Claude Desktop's per-tool deadline (~60s)
+    is not always reset by ``notifications/progress``, so a long
+    block-and-wait is unreliable. Short blocking (default 25s) buys
+    one-shot UX for fast humans without betting on the client.
+
+    Cancellation: if B.a's MCP client sends ``$/cancelRequest``
+    *during the wait*, the escalation is marked ``cancelled`` and the
+    cancellation propagates. Once the call returns pending, the
+    escalation is no longer tied to the original call — the human
+    can still reply via the delivery adapter and the answer is
+    retrievable via ``GetEscalation``.
 
     Args:
         ctx: The per-request server context.
@@ -734,21 +816,21 @@ async def _handle_escalate_to_human_mentor(
             default mentor.
         context: Optional context attached for A.h.
         api_key: B.a's Bearer key. Required when ``require_auth``.
+        wait_seconds: Max seconds to block waiting for A.h's reply
+            before returning pending. ``0`` = fire-and-forget. The
+            default (25 s) sits below typical MCP per-tool timeouts.
         progress: Optional callback for MCP progress notifications.
             Called with ``(0..1 progress, "human readable")``.
 
     Returns:
-        A JSON-serialisable dict — either an
-        :class:`EscalateToHumanMentorResponse` envelope on success, or
-        an in-band error envelope on auth failure, unknown mentor, no
-        human mentor configured, delivery failure, timeout, or
-        cancellation.
+        A JSON-serialisable dict — :class:`EscalateToHumanMentorResponse`
+        with ``status="answered"`` or ``status="pending"``, or an
+        in-band error envelope on auth failure, unknown mentor, no
+        human mentor configured, or delivery failure.
 
     Raises:
         asyncio.CancelledError: Re-raised when the MCP client sends
-            ``$/cancelRequest``. The escalation is marked ``cancelled``
-            in the store before propagating so the audit log stays
-            consistent.
+            ``$/cancelRequest`` while the handler is mid-wait.
     """
     try:
         mentee_slug = _authenticate(ctx, api_key)
@@ -794,58 +876,152 @@ async def _handle_escalate_to_human_mentor(
     if progress is not None:
         await progress(0.5, f"delivered to {m.human_mentor.name}; awaiting reply")
 
-    timeout = ctx.settings.escalation_default_timeout_seconds
-    heartbeat = ctx.settings.escalation_progress_heartbeat_seconds
-    loop = asyncio.get_running_loop()
-    started_at = loop.time()
-    deadline = started_at + timeout
-    timed_out = False
-    try:
-        while not waiter.event.is_set():
-            remaining = deadline - loop.time()
-            if remaining <= 0:
-                timed_out = True
-                break
-            chunk = min(heartbeat, remaining)
-            try:
-                await asyncio.wait_for(waiter.event.wait(), timeout=chunk)
-            except TimeoutError:
-                # Heartbeat tick — the inner timeout expired but the
-                # human hasn't replied yet. Emit a progress notification
-                # so the MCP client resets its per-tool timeout, then
-                # loop back into the wait.
-                if waiter.event.is_set():
-                    break
-                if progress is not None:
-                    elapsed = int(loop.time() - started_at)
-                    p = 0.5 + min(0.4, elapsed / max(timeout, 1.0) * 0.4)
-                    await progress(p, f"still awaiting {m.human_mentor.name}'s reply ({elapsed}s elapsed)")
-    except asyncio.CancelledError:
-        ctx.escalation_store.update(esc.id, status="cancelled", cancel_reason="mcp_cancelled")
-        ctx.escalation_broker.cancel(esc.id, "mcp_cancelled")
-        raise
+    outcome, answer = await _wait_for_escalation_answer(
+        ctx,
+        esc.id,
+        waiter,
+        m.human_mentor.name,
+        wait_seconds=wait_seconds,
+        progress=progress,
+    )
 
-    if timed_out:
-        ctx.escalation_store.update(esc.id, status="expired", cancel_reason="timeout")
-        ctx.escalation_broker.cancel(esc.id, "timeout")
-        return {"error": "timeout", "detail": f"no reply within {timeout:.0f}s", "escalation_id": esc.id}
+    if outcome == "answered":
+        final = ctx.escalation_store.get(esc.id)
+        answered_at = final.answered_at.isoformat() if final and final.answered_at else None
+        if progress is not None:
+            await progress(1.0, "human mentor replied")
+        return EscalateToHumanMentorResponse(
+            mentor=m.slug,
+            escalation_id=esc.id,
+            status="answered",
+            answer=answer,
+            answered_at=answered_at,
+        ).model_dump()
 
-    if waiter.answer is None:
-        # Cancelled or expired between deliver and wake — surface as error.
-        return {
-            "error": "cancelled",
-            "detail": waiter.cancel_reason or "no answer received",
-            "escalation_id": esc.id,
-        }
-    final = ctx.escalation_store.get(esc.id)
-    answered_at = final.answered_at.isoformat() if final and final.answered_at else ""
-    if progress is not None:
-        await progress(1.0, "human mentor replied")
+    # Pending: hand back the id so B.a can poll later. Release the
+    # broker waiter — the original MCP call is about to return, so
+    # nothing's waiting on it; a later GetEscalation will arm a fresh
+    # waiter when needed. If A.h replies in between, the Telegram
+    # adapter still writes to the EscalationStore — the persisted row
+    # is the source of truth.
+    ctx.escalation_broker.release(esc.id)
     return EscalateToHumanMentorResponse(
         mentor=m.slug,
         escalation_id=esc.id,
-        answer=waiter.answer,
-        answered_at=answered_at,
+        status="pending",
+        answer=None,
+        answered_at=None,
+        suggested_message_to_your_operator=(
+            f"I've forwarded the question to {m.human_mentor.name}. "
+            f"They'll reply asynchronously — I'll check back for an answer "
+            f"shortly (escalation id `{esc.id[:8]}…`)."
+        ),
+    ).model_dump()
+
+
+async def _handle_get_escalation(
+    ctx: ServerContext,
+    escalation_id: str,
+    api_key: str | None,
+    wait_seconds: float = 0.0,
+    progress: Callable[[float, str], Awaitable[None]] | None = None,
+) -> dict[str, Any]:
+    """Look up an escalation and optionally block briefly for its answer.
+
+    Companion to ``EscalateToHumanMentor`` for the sync-or-pending
+    flow: when an escalation came back ``pending``, the mentee calls
+    this to retrieve A.h's answer once it lands. With
+    ``wait_seconds > 0`` the handler arms a fresh broker waiter and
+    blocks for up to that many seconds — useful when the mentee
+    expects an answer imminently (e.g. polling on user prompt).
+
+    Auth: same Bearer requirement as the other tools. The handler
+    does *not* enforce that the caller is the original creator of
+    the escalation — any mentee can fetch any escalation by id. This
+    is intentional for the v1 demo; tighten with per-mentee scoping
+    once a second mentee starts using the server.
+
+    Args:
+        ctx: Per-request server context.
+        escalation_id: The id returned by ``EscalateToHumanMentor``.
+        api_key: B.a's Bearer key when ``require_auth``.
+        wait_seconds: If >0, block up to that many seconds for the
+            answer to arrive while the escalation is still
+            ``delivered``. ``0`` (default) returns the current state
+            immediately.
+        progress: Optional progress callback.
+
+    Returns:
+        :class:`GetEscalationResponse` envelope dict, or an in-band
+        ``auth_failed``/``unknown_escalation`` error.
+
+    Raises:
+        asyncio.CancelledError: Re-raised when the MCP client sends
+            ``$/cancelRequest`` while mid-wait.
+    """
+    try:
+        _ = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+
+    esc = ctx.escalation_store.get(escalation_id)
+    if esc is None:
+        return {"error": "unknown_escalation", "detail": f"no escalation with id {escalation_id!r}"}
+
+    # If the escalation already has a final state, return it directly.
+    if esc.status in ("answered", "cancelled", "expired"):
+        return GetEscalationResponse(
+            escalation_id=esc.id,
+            status=esc.status,
+            mentor=esc.mentor_slug,
+            question=esc.question,
+            answer=esc.answer,
+            answered_at=esc.answered_at.isoformat() if esc.answered_at else None,
+            cancel_reason=esc.cancel_reason,
+        ).model_dump()
+
+    # Pending (delivered or earlier). Optional short wait.
+    if wait_seconds > 0:
+        m = _resolve_mentor(ctx, esc.mentor_slug)
+        human_name = m.human_mentor.name if (m and m.human_mentor) else "the human mentor"
+        # The original EscalateToHumanMentor call released its waiter
+        # when it returned pending; we're free to arm a fresh one.
+        waiter = ctx.escalation_broker.open(esc.id)
+        try:
+            outcome, answer = await _wait_for_escalation_answer(
+                ctx,
+                esc.id,
+                waiter,
+                human_name,
+                wait_seconds=wait_seconds,
+                progress=progress,
+            )
+        finally:
+            # If we time out without an answer, release the slot so a
+            # subsequent poll can arm again. resolve()/cancel() already
+            # pop the waiter, so release() is a no-op in those cases.
+            ctx.escalation_broker.release(esc.id)
+        if outcome == "answered":
+            final = ctx.escalation_store.get(esc.id)
+            return GetEscalationResponse(
+                escalation_id=esc.id,
+                status="answered",
+                mentor=esc.mentor_slug,
+                question=esc.question,
+                answer=answer,
+                answered_at=final.answered_at.isoformat() if (final and final.answered_at) else None,
+            ).model_dump()
+
+    # Still pending — return the current snapshot.
+    refreshed = ctx.escalation_store.get(esc.id) or esc
+    return GetEscalationResponse(
+        escalation_id=refreshed.id,
+        status=refreshed.status,
+        mentor=refreshed.mentor_slug,
+        question=refreshed.question,
+        answer=refreshed.answer,
+        answered_at=refreshed.answered_at.isoformat() if refreshed.answered_at else None,
+        cancel_reason=refreshed.cancel_reason,
     ).model_dump()
 
 
@@ -1607,14 +1783,18 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         question: str,
         mentor: str = "",
         context: str = "",
+        wait_seconds: float = 25.0,
         ctx_mcp: Context | None = None,
     ) -> dict[str, Any]:
-        """Forward a B.h-approved question to A.h (the human behind A.a).
+        """Forward a B.h-approved question to A.h. Returns answered or pending.
 
-        Long-running MCP tool. The call blocks until A.h replies (or
-        the configured timeout fires, or B.a sends $/cancelRequest).
-        While waiting, the server emits ``notifications/progress``
-        updates: queued → delivered → answered.
+        Sync-or-pending: the call delivers the question, then waits
+        up to ``wait_seconds`` (default 25 s — comfortably below MCP
+        client per-tool timeouts) for A.h to reply. If A.h replies
+        in time, the response carries the answer. Otherwise the
+        response is ``{escalation_id, status: "pending", ...}`` —
+        call ``GetEscalation(escalation_id)`` later to retrieve the
+        answer when it lands.
 
         Required precondition (enforced by B.a, not by this server):
         B.h has approved forwarding the question to A.h. The
@@ -1627,42 +1807,74 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 the question should reach. Empty falls through to the
                 configured default mentor.
             context: Optional context to attach for A.h.
+            wait_seconds: Max seconds to block waiting for A.h's
+                reply. ``0`` returns immediately with
+                ``status="pending"``. Default 25 s.
             ctx_mcp: FastMCP-injected context for progress notifications.
 
         Returns:
-            On success: ``{mentor, escalation_id, answer, answered_at}``.
-            On failure: an in-band error envelope. Errors:
-            ``auth_failed``, ``unknown_mentor``, ``no_human_mentor``,
-            ``empty_question``, ``delivery_failed``, ``timeout``,
-            ``cancelled``.
+            :class:`EscalateToHumanMentorResponse` envelope dict with
+            ``status`` either ``answered`` (answer included) or
+            ``pending`` (poll ``GetEscalation`` later). On failure,
+            an in-band error envelope: ``auth_failed``,
+            ``unknown_mentor``, ``no_human_mentor``, ``empty_question``,
+            ``delivery_failed``.
         """
-        # One-time per-call log so we can tell from the err.log whether
-        # the client opened the door for progress notifications. If
-        # `progressToken` is None the FastMCP `Context.report_progress`
-        # call becomes a no-op — heartbeats are emitted but never reach
-        # the wire, and the client times out at its per-tool deadline.
-        token = None
-        if ctx_mcp is not None:
-            try:
-                rc = ctx_mcp.request_context
-                token = rc.meta.progressToken if (rc and rc.meta) else None
-            except Exception:
-                token = None
-        logger.info(
-            "EscalateToHumanMentor invoked: progressToken=%s (None ⇒ progress no-op; client must send _meta.progressToken)",
-            token,
-        )
 
         async def _report(progress: float, message: str) -> None:
             """Forward progress to the MCP client when a context is attached."""
             if ctx_mcp is not None:
                 try:
                     await ctx_mcp.report_progress(progress=progress, message=message)
-                    logger.debug("report_progress emitted: progress=%.2f msg=%r", progress, message)
                 except Exception as e:
                     logger.debug("report_progress failed (non-fatal): %s", e)
 
-        return await _handle_escalate_to_human_mentor(ctx, question, mentor, context, None, progress=_report)
+        return await _handle_escalate_to_human_mentor(
+            ctx, question, mentor, context, None, wait_seconds=wait_seconds, progress=_report
+        )
+
+    @mcp.tool
+    async def GetEscalation(
+        escalation_id: str,
+        wait_seconds: float = 0.0,
+        ctx_mcp: Context | None = None,
+    ) -> dict[str, Any]:
+        """Retrieve an escalation's current state (and optionally wait for it).
+
+        Companion to ``EscalateToHumanMentor`` for the sync-or-pending
+        flow. When ``EscalateToHumanMentor`` returned
+        ``status="pending"``, call this with the returned
+        ``escalation_id`` to fetch A.h's answer once it's landed.
+        Optionally block for up to ``wait_seconds`` if you expect
+        the answer imminently.
+
+        Args:
+            escalation_id: The id returned by a prior
+                ``EscalateToHumanMentor`` call.
+            wait_seconds: Max seconds to block waiting for the
+                answer to arrive (only meaningful while the
+                escalation is still in ``delivered``/``pending``
+                state). Default ``0`` returns the current state
+                immediately.
+            ctx_mcp: FastMCP-injected context for progress notifications.
+
+        Returns:
+            :class:`GetEscalationResponse` envelope dict with the
+            current state, or an in-band ``auth_failed`` /
+            ``unknown_escalation`` error.
+        """
+
+        async def _report(progress: float, message: str) -> None:
+            """Forward progress to the MCP client when a context is attached."""
+            if ctx_mcp is not None:
+                try:
+                    await ctx_mcp.report_progress(progress=progress, message=message)
+                except Exception as e:
+                    logger.debug("report_progress failed (non-fatal): %s", e)
+
+        return await _handle_get_escalation(
+            ctx, escalation_id, None, wait_seconds=wait_seconds, progress=_report
+        )
 
     @mcp.tool
     def EscalateToHuman(

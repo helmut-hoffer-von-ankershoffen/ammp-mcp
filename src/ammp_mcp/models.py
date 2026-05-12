@@ -299,9 +299,22 @@ class EscalateToHumanMentorResponse(BaseModel):
     """Response envelope for the ``EscalateToHumanMentor`` AMMP-extension.
 
     Server-side extension over AMMP-01: relays a B.h-approved question
-    from B.a to A.h (the human behind A.a) and returns A.h's answer Z
-    synchronously. The MCP call is long-running — the handler waits on
-    A.h's reply, emitting ``notifications/progress`` along the way.
+    from B.a to A.h (the human behind A.a). The handler delivers the
+    question, then waits up to ``wait_seconds`` for A.h's reply Z.
+
+    Two shapes:
+
+    * **answered:** ``status == "answered"``, ``answer`` populated,
+      ``answered_at`` set. The mentee can use the answer directly.
+    * **pending:** ``status == "pending"``, ``answer`` is null. A.h
+      hasn't replied within ``wait_seconds``. The mentee should call
+      ``GetEscalation(escalation_id)`` later (e.g. when the user
+      pings, or after a polite delay) to retrieve the answer.
+
+    The pending path is the production default — MCP clients vary in
+    how long they hold a single tool call open (Claude Desktop's
+    per-tool timeout is ~60 s and is not always reset by progress
+    notifications), so we don't bet on a long sync wait.
 
     Per AMMP §3.4, this cross-compartment forward is only legitimate
     when B.h has explicitly approved it. The server records the
@@ -313,9 +326,46 @@ class EscalateToHumanMentorResponse(BaseModel):
 
     mentor: str
     escalation_id: str
-    answer: str
-    answered_at: str = Field(description="ISO 8601 timestamp at which A.h's reply landed back on the server.")
+    status: str = Field(
+        description="`answered` when A.h has replied within wait_seconds; `pending` when the call returned before the reply landed (mentee should call GetEscalation later).",
+    )
+    answer: str | None = None
+    answered_at: str | None = Field(
+        default=None,
+        description="ISO 8601 timestamp at which A.h's reply landed back on the server (null while status=pending).",
+    )
+    suggested_message_to_your_operator: str | None = Field(
+        default=None,
+        description="When status=pending, first-person phrasing the mentee can use to tell B.h that the question is in flight and that GetEscalation will be polled.",
+    )
     invariant: str = "Mentor-Mediated Escalation (B.h approved)"
+
+
+class GetEscalationResponse(BaseModel):
+    """Response envelope for ``GetEscalation`` — retrieve a pending answer.
+
+    Mirrors :class:`EscalateToHumanMentorResponse` so a mentee can use
+    one of the two shapes interchangeably depending on whether the
+    answer was synchronous or polled.
+
+    ``status`` distinguishes the lifecycle states:
+
+    * ``pending``: delivered but A.h hasn't replied; poll again later.
+    * ``answered``: A.h replied; ``answer`` is set.
+    * ``cancelled``: B.a (or its operator) abandoned the call before A.h replied.
+    * ``expired``: ``escalation_default_timeout_seconds`` elapsed (default 24 h) without a reply.
+    * ``unknown``: no escalation with that id (typo, or it was never created).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    escalation_id: str
+    status: str
+    mentor: str | None = None
+    question: str | None = None
+    answer: str | None = None
+    answered_at: str | None = None
+    cancel_reason: str | None = None
 
 
 class ErrorResponse(BaseModel):
