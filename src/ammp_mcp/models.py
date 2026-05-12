@@ -373,6 +373,49 @@ class GetEscalationResponse(BaseModel):
     cancel_reason: str | None = None
 
 
+class GetSystemInfoResponse(BaseModel):
+    """Response envelope for the ``GetSystemInfo`` AMMP-extension operation.
+
+    Server-side extension over AMMP-01 — surfaces a small, safe slice
+    of build / release / runtime metadata so an MCP client can confirm
+    *which* server it just talked to during end-to-end debugging.
+
+    Everything here is already publicly observable (the version is in
+    the repo, the AMMP draft id is in the capability JSON, the
+    mentor / mentee counts are in ``ListMentors``). The envelope just
+    bundles them so a single tool call answers "what am I connected
+    to?" without an out-of-band fetch.
+
+    Deliberately omitted (privacy / security):
+
+    * any file path (``AMMP_DIR``, ``mentors_root``, audit log path)
+    * environment-variable values, Bearer tokens, bot tokens
+    * hostnames, IP addresses, or internal network details
+    * the OS user, hostname, or process PID
+    * stack traces or recent error counts
+
+    The fields here MUST stay safe to publish over an unauthenticated
+    surface — though in practice ``GetSystemInfo`` is auth-gated like
+    every other AMMP tool when ``require_auth`` is enabled.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="Software identifier, e.g. `ammp-mcp`.")
+    version: str = Field(description="Software version, e.g. `0.4.0` — matches the GitHub release tag.")
+    ammp_draft: str = Field(description="AMMP IETF Internet-Draft revision this server claims compliance with, e.g. `draft-ammp-01`.")
+    python_version: str = Field(description="Runtime Python version, e.g. `3.13.13` — useful when debugging client / server compat.")
+    platform: str = Field(description="OS platform identifier (`sys.platform`), e.g. `darwin` or `linux`.")
+    started_at: str = Field(description="ISO 8601 UTC timestamp at which the server context was built (boot time).")
+    uptime_seconds: float = Field(ge=0.0, description="Whole-second uptime since `started_at`. Recomputed on each call.")
+    mentor_count: int = Field(ge=0, description="Number of mentors loaded into this server.")
+    mentee_count: int = Field(ge=0, description="Number of mentees in the allowlist.")
+    default_mentor: str = Field(description="Slug of the configured default mentor — the one calls fall through to when `mentor` is empty.")
+    escalation_adapter: str = Field(description="Active escalation delivery adapter kind: `log`, `telegram`, or future adapter names.")
+    mount_path: str = Field(description="HTTP mount prefix this server lives under, e.g. `/ammp`. Empty string when mounted at root.")
+    public_url: str = Field(description="Public URL the server advertises itself at (from `AMMP_PUBLIC_URL`).")
+
+
 class ErrorResponse(BaseModel):
     """Graceful in-band error envelope.
 

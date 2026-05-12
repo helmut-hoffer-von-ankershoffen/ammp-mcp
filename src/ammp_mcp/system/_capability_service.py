@@ -25,6 +25,7 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
             {
                 "name": m.human_mentor.name,
                 "url": m.human_mentor.url,
+                "profileUrl": m.human_mentor.profile_url,
                 "contact": m.human_mentor.contact,
             }
             if m.human_mentor
@@ -35,6 +36,7 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
                 "slug": slug,
                 "name": m.name,
                 "description": m.description,
+                "profileUrl": m.profile_url,
                 "humanMentor": human_mentor,
                 "playbookCount": len(corpus),
                 "instructionCount": sum(len(pb.instructions) for pb in corpus),
@@ -66,5 +68,7 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
             "AskMentor",
             "EscalateToHuman",
             "EscalateToHumanMentor",
+            "GetEscalation",
+            "GetSystemInfo",
         ],
     }

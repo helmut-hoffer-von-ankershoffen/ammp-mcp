@@ -110,6 +110,7 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
                 "EscalateToHuman",
                 "EscalateToHumanMentor",
                 "GetEscalation",
+                "GetSystemInfo",
             }, tools
 
             # Step 2: consume a playbook (area of practice) — verify it

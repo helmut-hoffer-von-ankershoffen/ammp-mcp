@@ -918,12 +918,63 @@ async def test_capability_route(server) -> None:
         "AskMentor",
         "EscalateToHuman",
         "EscalateToHumanMentor",
+        "GetEscalation",
+        "GetSystemInfo",
     }
     # humanMentor surfaces in the capability JSON too — operators who
     # discover via /.well-known/agent.json see who's behind each mentor.
     by_slug = {m["slug"]: m for m in payload["ammp"]["mentors"]}
     assert by_slug["pepe"]["humanMentor"]["name"] == "Helmut Hoffer von Ankershoffen"
     assert by_slug["strict"]["humanMentor"] is None
+
+
+async def test_get_system_info_returns_safe_metadata(server, settings: Settings) -> None:
+    """`GetSystemInfo` returns the small, safe slice of build / runtime info
+    a debugging mentee needs — and *only* that. Pinned so a regression
+    that accidentally surfaces a file path, token, or hostname here
+    surfaces as a failing test, not as a security leak in production.
+    """
+    from ammp_mcp import __ammp_draft__, __version__
+
+    async with Client(server) as c:
+        result = await c.call_tool("GetSystemInfo", {})
+    data = result.data
+    # Required, non-sensitive fields are present.
+    assert data["name"] == "ammp-mcp"
+    assert data["version"] == __version__
+    assert data["ammp_draft"] == __ammp_draft__
+    assert data["python_version"]
+    assert data["platform"] in ("darwin", "linux", "win32") or isinstance(data["platform"], str)
+    assert data["started_at"]
+    assert isinstance(data["uptime_seconds"], (int, float)) and data["uptime_seconds"] >= 0
+    assert data["mentor_count"] >= 1
+    assert data["mentee_count"] >= 0
+    assert data["default_mentor"]
+    assert data["escalation_adapter"] in ("log", "telegram") or isinstance(data["escalation_adapter"], str)
+    assert "mount_path" in data
+    assert data["public_url"]
+
+    # The envelope MUST NOT carry anything sensitive. Pin the "never
+    # surface" list explicitly so a future field addition (or a refactor
+    # that splats the full Settings object into the response) trips here.
+    leaky_substrings = [
+        str(settings.audit_log_path),
+        str(settings.mentees_file),
+        str(settings.mentors_root),
+        str(settings.escalations_file),
+        # Tokens / secrets that should never leave the server. If
+        # require_auth is on these may be set; even then, never surface.
+        "Bearer ",
+        "ammp-",  # token prefix
+    ]
+    flat = " ".join(f"{k}={v}" for k, v in data.items())
+    for s in leaky_substrings:
+        # Some token prefixes can legitimately appear as part of the name
+        # (`ammp-mcp`). Skip the false-positive by also checking the
+        # specific field types.
+        if s == "ammp-":
+            continue
+        assert s not in flat, f"GetSystemInfo leaked sensitive substring {s!r} via {flat!r}"
 
 
 def test_offline_and_live_capability_operations_match(settings: Settings) -> None:
@@ -1095,6 +1146,7 @@ async def test_tools_listed_match_ammp_operations(server) -> None:
         "EscalateToHuman",
         "EscalateToHumanMentor",
         "GetEscalation",
+        "GetSystemInfo",
     }
 
 

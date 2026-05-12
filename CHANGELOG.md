@@ -5,6 +5,35 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.4.0] — 2026-05-12
+
+### Added
+
+- **`EscalateToHumanMentor`** mentor-mediated escalation tool. Forwards a B.h-approved question to the human behind a mentor (A.h) via a pluggable delivery adapter (`log` default, `telegram` for the deployed instance). Sync-or-pending: blocks up to `wait_seconds` (default 25 s — safely under typical MCP per-tool client timeouts) for A.h's reply; returns `status="answered"` with the answer if A.h replies in time, otherwise `status="pending"` with an `escalation_id` to poll later. Opts into FastMCP's task primitive (`mode=optional`) so clients that understand the MCP background-task protocol can run it as a true task. (#escalation)
+- **`GetEscalation(escalation_id, wait_seconds?)`** companion tool to retrieve a pending answer when it lands. Optional short wait arms a fresh broker waiter; without a wait, returns the current snapshot from the persistent jsonl store. (#escalation)
+- **`GetSystemInfo()`** diagnostic tool that returns a small, safe slice of build / release / runtime metadata (software name + version, AMMP draft id, Python version, OS platform, boot timestamp + uptime, mentor / mentee counts, default mentor slug, active escalation adapter kind, mount path, public URL) for end-to-end debugging. Never surfaces file paths, env-var values, hostnames, tokens, PIDs, or anything that could compromise security. (#diagnostics)
+- **Telegram delivery adapter** for `EscalateToHumanMentor`. Sends the question via Bot API `sendMessage`; long-polls `getUpdates` for the human's reply (matched by `reply_to_message.message_id`). Configured via `AMMP_ESCALATION_ADAPTER=telegram` + `AMMP_ESCALATION_TELEGRAM_BOT_TOKEN` + `AMMP_ESCALATION_TELEGRAM_CHAT_ID`. (#escalation)
+- **Progress heartbeats** on the long-running escalation path. Wraps the wait in a loop that emits `notifications/progress` every `escalation_progress_heartbeat_seconds` (default 25 s) so MCP clients that reset per-tool timeouts on progress notifications hold the call open until the human replies. (#escalation)
+- **`Mentor.profile_url`** + **`HumanMentor.profile_url`** fields. When set, the landing page wraps the mentor / human-mentor name in a link to the longer profile page. URLs on `https://www.helmguild.com/<path>/` auto-swap to the `/de/` variant on the German landing. (#landing)
+- **Bilingual landing.** `/de/` route serves the German mirror (translated chrome — lede, step headings, tab labels, mailto draft); mentor names + playbook content stay in English (corpus is content, not chrome). EN · DE language pill + helmguild.com banner at the top of every landing. (#landing)
+- **`.mcpb` desktop bundle** at `GET /desktop-bundle.mcpb` — a Claude Desktop extension built on the fly from a pure Node stdio→Streamable-HTTP MCP proxy (~100 lines, no deps). Replaces `mcp-remote` for the Bearer-token case (Claude Desktop's extension sandbox blocks `mcp-remote`'s localhost OAuth-callback bind). (#desktop)
+
+### Changed
+
+- **Auth flows via HTTP `Authorization: Bearer` header**, not a tool parameter. `_authenticate` reads the token from the request via FastMCP's request-scoped context; the LLM never sees an `api_key` argument and so never asks for one. (#auth)
+- **`ListMentors` returns work-instruction summaries**, not full bodies. Previous behaviour inflated the response to ~100 KB which tripped Claude Desktop's MCP-transport timeout on connect. Full bodies fetched on demand via `GetPlaybook` / `GetWorkInstruction`. (#listmentors)
+- **AMMP_MOUNT_PATH** lets the server live under a URL prefix (e.g. `/ammp`). The hostname `mcp.helmguild.com` is now a gateway that can host sibling MCP servers under other prefixes. (#deploy)
+
+### Fixed
+
+- **`asyncio.get_event_loop()` → `get_running_loop()`** in the escalation handler (3.10+ deprecation). (#hygiene)
+- **Late Telegram replies are logged**, not silently dropped, when an MCP call has already been cancelled / expired. Helps the operator notice that A.h actually did answer. (#escalation)
+
+### Test coverage
+
+- 185 tests pass.
+- 82 % overall coverage maintained.
+
 ## [0.3.0] — 2026-05-10
 
 ### Added

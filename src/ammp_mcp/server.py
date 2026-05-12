@@ -15,7 +15,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +39,7 @@ from .models import (
     EscalationToHumanMentorDraft,
     GetEscalationResponse,
     GetPlaybookResponse,
+    GetSystemInfoResponse,
     GetWorkInstructionResponse,
     HumanMentorSummary,
     ListMentorsResponse,
@@ -81,6 +82,7 @@ class ServerContext:
     escalation_store: EscalationStore
     escalation_broker: EscalationBroker
     delivery_adapter: DeliveryAdapter
+    started_at: datetime
 
 
 def _build_delivery_adapter(s: Settings) -> DeliveryAdapter:
@@ -1025,6 +1027,58 @@ async def _handle_get_escalation(
     ).model_dump()
 
 
+def _handle_get_system_info(ctx: ServerContext, api_key: str | None) -> dict[str, Any]:
+    """Return a small, safe slice of build / release / runtime metadata.
+
+    The fields surface "what am I connected to?" for end-to-end
+    debugging: software name + version, AMMP draft id, Python version,
+    OS platform, boot timestamp + uptime, mentor / mentee counts,
+    default mentor slug, active escalation adapter kind, mount path,
+    public URL. Everything here is already publicly observable
+    elsewhere (version in the repo, draft id in the capability JSON,
+    counts in ``ListMentors``); the tool just bundles them.
+
+    Deliberately omitted: file paths, env-var values, hostnames, PIDs,
+    Bearer tokens, anything that could compromise security or leak
+    operator state. See :class:`GetSystemInfoResponse` for the full
+    "never surface" list.
+
+    Args:
+        ctx: Per-request server context.
+        api_key: Bearer key when ``require_auth``. Auth-gated like
+            every other AMMP tool.
+
+    Returns:
+        :class:`GetSystemInfoResponse` envelope dict, or an in-band
+        ``auth_failed`` error envelope.
+    """
+    import platform as _platform
+    import sys as _sys
+
+    try:
+        _ = _authenticate(ctx, api_key)
+    except ValueError as e:
+        return {"error": "auth_failed", "detail": str(e)}
+
+    now = datetime.now(UTC)
+    uptime = (now - ctx.started_at).total_seconds()
+    return GetSystemInfoResponse(
+        name="ammp-mcp",
+        version=__version__,
+        ammp_draft=__ammp_draft__,
+        python_version=_platform.python_version(),
+        platform=_sys.platform,
+        started_at=ctx.started_at.isoformat(),
+        uptime_seconds=round(uptime, 1),
+        mentor_count=len(ctx.mentors),
+        mentee_count=len(ctx.mentees),
+        default_mentor=ctx.settings.default_mentor,
+        escalation_adapter=ctx.delivery_adapter.kind,
+        mount_path=ctx.settings.mount_path,
+        public_url=ctx.settings.public_url,
+    ).model_dump()
+
+
 # ─── Capability advertisement helper ──────────────────────────────────────
 
 
@@ -1109,6 +1163,8 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
             "AskMentor",
             "EscalateToHuman",
             "EscalateToHumanMentor",
+            "GetEscalation",
+            "GetSystemInfo",
         ],
     }
 
@@ -1807,6 +1863,7 @@ def build_context(settings: Settings | None = None) -> ServerContext:
         escalation_store=store,
         escalation_broker=broker,
         delivery_adapter=adapter,
+        started_at=datetime.now(UTC),
     )
 
 
@@ -2042,6 +2099,28 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         the Human-Gated Escalation Invariant (AMMP §3.4).
         """
         return _handle_escalate_to_human(ctx, situation, mentor, why_stuck, None)
+
+    @mcp.tool
+    def GetSystemInfo() -> dict[str, Any]:
+        """Return build / release / runtime metadata for the server.
+
+        Server-side extension over AMMP-01 for end-to-end debugging:
+        answers "what server am I connected to and is it healthy?" in
+        one tool call. The response carries:
+
+        * ``name`` + ``version`` — software identifier (e.g. `ammp-mcp 0.4.0`)
+        * ``ammp_draft`` — IETF draft revision (e.g. `draft-ammp-01`)
+        * ``python_version`` + ``platform`` — runtime info
+        * ``started_at`` + ``uptime_seconds`` — boot timestamp and current uptime
+        * ``mentor_count`` + ``mentee_count`` + ``default_mentor``
+        * ``escalation_adapter`` — `log` / `telegram` / etc.
+        * ``mount_path`` + ``public_url`` — addressing surface
+
+        Deliberately does NOT surface file paths, env-var values,
+        hostnames, PIDs, tokens, or anything that could compromise
+        security. Auth-gated like every other AMMP tool.
+        """
+        return _handle_get_system_info(ctx, None)
 
     # Routes register under an optional mount prefix so this server can
     # share `mcp.helmguild.com` with other MCP servers later (e.g. an
