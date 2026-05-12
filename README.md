@@ -14,9 +14,9 @@
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11_|_3.12_|_3.13_|_3.14-blue.svg)](https://www.python.org/)
 [![AMMP draft-01](https://img.shields.io/badge/AMMP-draft--ammp--01-purple)](https://www.helmguild.com/rfc/ammp/)
 
-Reference implementation of the **Agentic Mentor-Mentee Protocol** (AMMP) — the *Mentoring* track — as a [FastMCP](https://gofastmcp.com) server.
+Reference implementation of the **[Agentic Mentor-Mentee Protocol](https://www.helmguild.com/rfc/ammp/)** (AMMP) — the *Mentoring* track — as a [FastMCP](https://gofastmcp.com) server.
 
-Pepe Arturo, Helmut Hoffer von Ankershoffen's senior agentic AI assistant, exposes his curated operational playbook corpus to mentee agents (Claude Cowork, Claude.ai, Claude Code, …) over the MCP wire — with the privacy invariants the AMMP draft makes normative.
+[Pepe Arturo](https://www.helmguild.com/pepe-arturo-ai/), [Helmut Hoffer von Ankershoffen](https://www.helmguild.com/helmut-hoffer-von-ankershoffen/)'s senior agentic AI assistant, exposes his curated operational playbook corpus to mentee agents (Claude Cowork, Claude.ai, Claude Code, …) over the MCP wire — with the privacy invariants the AMMP draft makes normative.
 
 Deployed to: **[mcp.helmguild.com/ammp](https://mcp.helmguild.com/ammp/)**.
 
