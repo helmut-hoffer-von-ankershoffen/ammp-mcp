@@ -300,10 +300,12 @@ async def test_landing_page_route(server) -> None:
     assert "If you are the operator" not in body
     assert "rotate-key" not in body
     # Step 1's access-request flow is an embedded Google Form (replaced
-    # the earlier mailto link on 2026-05-13). The mailto: scheme must not
-    # appear anywhere on the landing.
+    # the earlier mailto link on 2026-05-13). Collapsed by default into
+    # a <details> with a button-styled <summary> labelled "Request access";
+    # the mailto: scheme must not appear anywhere on the landing.
     assert "mailto:" not in body
-    assert 'class="access-form"' in body
+    assert '<details class="access-form">' in body
+    assert '<summary class="btn primary">Request access</summary>' in body
     assert "docs.google.com/forms/" in body
     assert "1FAIpQLSfGJJCw_wd12OTYb8F4ryvtOaOb3doFShUTKSIrwFfYifSoKg" in body
     assert "<iframe" in body
@@ -370,9 +372,11 @@ async def test_landing_page_de_route_serves_german(server) -> None:
     # Lang pill — DE is current; back-to-EN link present.
     assert 'class="lang-pill"' in body
     assert "../" in body and 'hreflang="en"' in body
-    # Access-request iframe is embedded on the DE landing too (same form).
+    # Access-request iframe is embedded on the DE landing too (same form,
+    # same collapsed-by-default details/summary pattern).
     assert "mailto:" not in body
-    assert 'class="access-form"' in body
+    assert '<details class="access-form">' in body
+    assert '<summary class="btn primary">Zugang anfordern</summary>' in body
     assert "docs.google.com/forms/" in body
     assert "Zugangsanfrage-Formular" in body  # DE iframe title
     # MCP tool registration command stays in English (it's a literal CLI invocation).

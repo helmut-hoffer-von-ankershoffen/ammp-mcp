@@ -1296,7 +1296,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "h1": "Mentor your agent.",
         "lede": "Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.",
         "step1_h": "Step 1 — Request your access token",
-        "step1_p": "Tokens are issued by hand — one form, one reply. Fill in the form below and we'll send yours back through the secure channel you specify.",
+        "step1_p": "Tokens are issued by hand — one form, one reply. Open the form below and we'll send yours back through the secure channel you specify.",
+        "step1_cta": "Request access",
         "step2_h": "Step 2 — Configure your agent's MCP connection",
         "step2_p": "Pick your agent below and follow the paste path. Don't see yours? The <em>Generic</em> tab has the raw URL and Bearer header.",
         "tab_desktop_cta": "Download extension",
@@ -1346,7 +1347,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "h1": "Mentor your agent.",
         "lede": "Gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Der Mentor denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, und eskaliert an einen Menschen, wenn es zu komplex wird. Keine gespeicherten Verläufe. Vier Schritte.",
         "step1_h": "Schritt 1 — Zugangs-Token anfordern",
-        "step1_p": "Tokens werden manuell ausgegeben — ein Formular, eine Antwort. Füll das Formular unten aus, und wir schicken dir deinen Token über den sicheren Kanal zurück, den du angibst.",
+        "step1_p": "Tokens werden manuell ausgegeben — ein Formular, eine Antwort. Öffne das Formular unten, und wir schicken dir deinen Token über den sicheren Kanal zurück, den du angibst.",
+        "step1_cta": "Zugang anfordern",
         "step2_h": "Schritt 2 — MCP-Verbindung deines Agenten einrichten",
         "step2_p": "Wähl unten deinen Agenten und folge der Anleitung. Nicht dabei? Im Tab <em>Generic</em> findest du URL und Bearer-Header pur.",
         "tab_desktop_cta": "Erweiterung herunterladen",
@@ -1664,7 +1666,11 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
 .cta{{margin:1rem 0 .5rem}}
 .access-form{{margin:1.5rem 0 .5rem}}
-.access-form iframe{{display:block;width:100%;max-width:640px;height:1700px;border:1px solid var(--rule);border-radius:6px;background:var(--bg-hi)}}
+.access-form > summary{{list-style:none;cursor:pointer}}
+.access-form > summary::-webkit-details-marker{{display:none}}
+.access-form > summary::marker{{content:""}}
+.access-form > summary:focus-visible{{outline:2px solid var(--accent);outline-offset:2px}}
+.access-form iframe{{display:block;width:100%;max-width:640px;height:1700px;border:1px solid var(--rule);border-radius:6px;background:#fff;margin-top:1rem}}
 @media (max-width: 480px) {{ .access-form iframe{{height:2200px}} }}
 .agent-tabs{{margin:1.25rem 0 0}}
 .agent-tab-input{{position:absolute;opacity:0;pointer-events:none}}
@@ -1708,9 +1714,10 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 
 <h2>{c["step1_h"]}</h2>
 <p>{c["step1_p"]}</p>
-<div class="access-form">
+<details class="access-form">
+  <summary class="btn primary">{c["step1_cta"]}</summary>
   <iframe src="{access_form_url}" title="{c["form_title"]}" loading="lazy" width="640" height="1700" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
-</div>
+</details>
 
 <h2>{c["step2_h"]}</h2>
 <p>{c["step2_p"]}</p>
