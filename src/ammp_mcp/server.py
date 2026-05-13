@@ -1339,15 +1339,17 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         # Mailto draft
         "mailto_subject": "helmguild — Access request",
         "mailto_body": (
-            "Hi helmguild,\n\n"
-            "I'd like to connect to helmguild to have my agent mentored.\n\n"
-            "  My name                    : <e.g. Sandra>\n"
-            "  My agent                   : <Claude Desktop, Claude Code, Claude Cowork, Copilot, OpenClaw, Hermes>\n"
-            "  My secure delivery channel : <iMessage, Telegram, WhatsApp, Signal — "
-            "so the access token doesn't travel by unencrypted email>\n"
-            "  Mentor of interest         : Pepe Arturo\n"
-            "  Anything else              : <What would you call success post mentoring your agent?>\n\n"
-            "Thanks!\n"
+            "Hi helmguild Team,\n\n"
+            "I'd like to connect my agent to {base} as a mentee — please send me an "
+            "access token to establish a secure connection.\n\n"
+            "  My name              : <e.g. Alice>\n"
+            "  My agent runs on     : <Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes>\n"
+            "  Name of my agent     : <e.g. Alice Agent>\n"
+            "  Secure channel       : <WhatsApp / Telegram / iMessage + handle — "
+            "so the token doesn't travel by plain email>\n"
+            "  Mentor of interest   : <Pepe Arturo (default), or all of them>\n"
+            "  Message (optional)   : <free-form, 1-2 sentences — what you hope to get out of it>\n\n"
+            "Thanks\n"
         ),
     },
     "de": {
@@ -1399,15 +1401,17 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
         "mailto_subject": "helmguild — Zugang anfordern",
         "mailto_body": (
-            "Hallo helmguild,\n\n"
-            "Ich möchte helmguild verbinden, damit mein Agent dort mentort wird.\n\n"
-            "  Mein Name                     : <z. B. Sandra>\n"
-            "  Mein Agent                    : <Claude Desktop, Claude Code, Claude Cowork, Copilot, OpenClaw, Hermes>\n"
-            "  Sicherer Zustellkanal         : <iMessage, Telegram, WhatsApp, Signal — "
-            "damit der Zugangs-Token nicht unverschlüsselt per Mail reist>\n"
-            "  Mentor von Interesse          : Pepe Arturo\n"
-            "  Sonstiges                     : <Was wäre für dich Erfolg nach dem Mentoring deines Agenten?>\n\n"
-            "Danke!\n"
+            "Hallo helmguild Team,\n\n"
+            "Ich möchte meinen Agenten mit {base} als Mentee verbinden — bitte "
+            "schick mir einen Zugangs-Token, damit ich eine sichere Verbindung aufbauen kann.\n\n"
+            "  Mein Name              : <z. B. Alice>\n"
+            "  Mein Agent läuft auf   : <Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes>\n"
+            "  Name meines Agenten    : <z. B. Alice Agent>\n"
+            "  Sicherer Kanal         : <WhatsApp / Telegram / iMessage + Handle — "
+            "damit der Token nicht unverschlüsselt per Mail reist>\n"
+            "  Mentor von Interesse   : <Pepe Arturo (Standard), oder alle>\n"
+            "  Nachricht (optional)   : <frei, 1–2 Sätze — was du dir vom Mentoring erhoffst>\n\n"
+            "Danke\n"
         ),
     },
 }
@@ -1485,7 +1489,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     # Pull subject + body from the per-language copy block; pre-fill
     # fields map to what `ammp mentee add` needs at the operator end
     # (slug + operator derived from the name + agent runtime).
-    mailto = f"mailto:helmuthva@gmail.com?subject={_q(c['mailto_subject'])}&body={_q(c['mailto_body'])}"
+    mailto = f"mailto:helmuthva@gmail.com?subject={_q(c['mailto_subject'])}&body={_q(c['mailto_body'].format(base=base))}"
 
     mentor_blocks_parts: list[str] = []
     for slug, m in ctx.mentors.items():

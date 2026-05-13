@@ -314,8 +314,12 @@ async def test_landing_page_route(server) -> None:
     mailto_url = body[mailto_start:mailto_end]
     decoded = _up.unquote(mailto_url)
     assert "My name" in decoded, "mailto body must ask for the requester's name"
-    assert "My agent" in decoded, "mailto body must ask for the agent runtime"
-    assert "My secure delivery channel" in decoded, "mailto body must ask for the delivery channel"
+    assert "My agent runs on" in decoded, "mailto body must ask for the agent runtime"
+    assert "Name of my agent" in decoded, "mailto body must ask for the agent's name"
+    assert "Secure channel" in decoded, "mailto body must ask for the secure channel"
+    # The body should embed the deployment URL so the operator sees which
+    # instance the requester is connecting to without reading the headers.
+    assert "test.invalid" in decoded
     # Four-step structure, in order: request token → configure connection →
     # sanity-check with list-mentors prompt → pick a mentor.
     step1 = body.index("Step 1")
@@ -386,8 +390,9 @@ async def test_landing_page_de_route_serves_german(server) -> None:
     mailto_end = body.index('"', mailto_start)
     decoded = _up.unquote(body[mailto_start:mailto_end])
     assert "Mein Name" in decoded
-    assert "Mein Agent" in decoded
-    assert "Sicherer Zustellkanal" in decoded
+    assert "Mein Agent läuft auf" in decoded
+    assert "Name meines Agenten" in decoded
+    assert "Sicherer Kanal" in decoded
     # MCP tool registration command stays in English (it's a literal CLI invocation).
     assert "claude mcp add" in body
     # Mentor profile link auto-swaps to the /de/ variant on the DE landing.
