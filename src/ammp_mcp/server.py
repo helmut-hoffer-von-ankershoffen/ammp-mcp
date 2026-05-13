@@ -1340,15 +1340,15 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mailto_subject": "helmguild — Access request",
         "mailto_body": (
             "Hi helmguild Team,\n\n"
-            "I'd like to connect my agent to {base} as a mentee — please send me an "
+            "I'd like to connect my agent to {base} as a mentee. Please send me an "
             "access token to establish a secure connection.\n\n"
-            "  My name              : <e.g. Alice>\n"
-            "  My agent runs on     : <Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes>\n"
-            "  Name of my agent     : <e.g. Alice Agent>\n"
-            "  Secure channel       : <WhatsApp / Telegram / iMessage + handle — "
-            "so the token doesn't travel by plain email>\n"
-            "  Mentor of interest   : <Pepe Arturo (default), or all of them>\n"
-            "  Message (optional)   : <free-form, 1-2 sentences — what you hope to get out of it>\n\n"
+            "1. My name: [ E.g. Alice ]\n"
+            "2. My agent runs on: [ Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes ]\n"
+            "3. Name of my agent: [ E.g. Alice Agent ]\n"
+            "4. Secure channel: [ WhatsApp / Telegram / iMessage + handle — "
+            "so the token doesn't travel by plain email ]\n"
+            "5. Mentor of interest: [ Pepe Arturo (default), or all of them ]\n"
+            "6. Message (optional): [ Free-form, 1-2 sentences — what you hope to get out of it ]\n\n"
             "Thanks\n"
         ),
     },
@@ -1402,15 +1402,15 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mailto_subject": "helmguild — Zugang anfordern",
         "mailto_body": (
             "Hallo helmguild Team,\n\n"
-            "Ich möchte meinen Agenten mit {base} als Mentee verbinden — bitte "
+            "Ich möchte meinen Agenten mit {base} als Mentee verbinden. Bitte "
             "schick mir einen Zugangs-Token, damit ich eine sichere Verbindung aufbauen kann.\n\n"
-            "  Mein Name              : <z. B. Alice>\n"
-            "  Mein Agent läuft auf   : <Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes>\n"
-            "  Name meines Agenten    : <z. B. Alice Agent>\n"
-            "  Sicherer Kanal         : <WhatsApp / Telegram / iMessage + Handle — "
-            "damit der Token nicht unverschlüsselt per Mail reist>\n"
-            "  Mentor von Interesse   : <Pepe Arturo (Standard), oder alle>\n"
-            "  Nachricht (optional)   : <frei, 1–2 Sätze — was du dir vom Mentoring erhoffst>\n\n"
+            "1. Mein Name: [ z. B. Alice ]\n"
+            "2. Mein Agent läuft auf: [ Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes ]\n"
+            "3. Name meines Agenten: [ z. B. Alice Agent ]\n"
+            "4. Sicherer Kanal: [ WhatsApp / Telegram / iMessage + Handle — "
+            "damit der Token nicht unverschlüsselt per Mail reist ]\n"
+            "5. Mentor von Interesse: [ Pepe Arturo (Standard), oder alle ]\n"
+            "6. Nachricht (optional): [ Frei, 1–2 Sätze — was du dir vom Mentoring erhoffst ]\n\n"
             "Danke\n"
         ),
     },
