@@ -1592,6 +1592,9 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
 <link rel="alternate" hreflang="en" href="{base}/">
 <link rel="alternate" hreflang="de" href="{base}/de/">
 <link rel="alternate" hreflang="x-default" href="{base}/">
+<link rel="icon" type="image/svg+xml" href="{base}/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="{base}/favicon-32.png">
+<link rel="apple-touch-icon" href="{base}/apple-touch-icon.png">
 <style>
 :root {{
   --bg-hi:#F2EDE2; --bg:#ECE6D9; --bg-lo:#E2DBC8;
@@ -2166,6 +2169,39 @@ def create_server(settings: Settings | None = None) -> FastMCP:
                 # short window so a public_url change is visible quickly.
                 "Cache-Control": "public, max-age=300",
             },
+        )
+
+    @mcp.custom_route(f"{prefix}/favicon.svg", methods=["GET"])
+    async def favicon_svg(_request: Request) -> Response:
+        """Serve the helmguild compass SVG favicon — same as www.helmguild.com."""
+        from ._data import favicon_path as _favicon_path
+
+        return FileResponse(
+            _favicon_path() / "favicon.svg",
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @mcp.custom_route(f"{prefix}/favicon-32.png", methods=["GET"])
+    async def favicon_png(_request: Request) -> Response:
+        """Serve the 32×32 PNG favicon for browsers that don't load SVG."""
+        from ._data import favicon_path as _favicon_path
+
+        return FileResponse(
+            _favicon_path() / "favicon-32.png",
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @mcp.custom_route(f"{prefix}/apple-touch-icon.png", methods=["GET"])
+    async def apple_touch_icon(_request: Request) -> Response:
+        """Serve the iOS home-screen icon."""
+        from ._data import favicon_path as _favicon_path
+
+        return FileResponse(
+            _favicon_path() / "apple-touch-icon.png",
+            media_type="image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     @mcp.custom_route(f"{prefix}/", methods=["GET"])

@@ -21,6 +21,21 @@ def example_mentor_path() -> Path:
     return Path(str(resources.files(__package__).joinpath("example_mentor")))
 
 
+def favicon_path() -> Path:
+    """Path to the shipped favicon directory (the helmguild compass).
+
+    Contains ``favicon.svg``, ``favicon-32.png`` and
+    ``apple-touch-icon.png`` — copies of the same files served from
+    ``www.helmguild.com``. Served by ``ammp serve`` so deployments
+    under ``mcp.helmguild.com`` show the brand favicon in browser tabs
+    without hot-linking to the marketing site.
+
+    Returns:
+        Filesystem path to ``src/ammp_mcp/_data/favicon/``.
+    """
+    return Path(str(resources.files(__package__).joinpath("favicon")))
+
+
 def desktop_bundle_path() -> Path:
     """Path to the Claude Desktop bundle template directory.
 
