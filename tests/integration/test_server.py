@@ -299,27 +299,15 @@ async def test_landing_page_route(server) -> None:
     assert "ammp mentee add" not in body
     assert "If you are the operator" not in body
     assert "rotate-key" not in body
-    # The "Request access" CTA is a mailto: with pre-filled subject + body.
-    assert "mailto:helmuthva@gmail.com" in body
-    assert "subject=" in body and "body=" in body
-    # Mailto body must elicit the inputs that map to `ammp mentee add`
-    # at the operator's end: name (→ slug + operator), runtime, and a
-    # secure delivery channel for the plaintext token. Field names are
-    # URL-encoded by `urllib.parse.quote`, so check for the
-    # percent-encoded forms or readable substrings that survive encoding.
-    import urllib.parse as _up
-
-    mailto_start = body.index("mailto:helmuthva")
-    mailto_end = body.index("'", mailto_start) if "'" in body[mailto_start:] else body.index('"', mailto_start)
-    mailto_url = body[mailto_start:mailto_end]
-    decoded = _up.unquote(mailto_url)
-    assert "My name" in decoded, "mailto body must ask for the requester's name"
-    assert "My agent runs on" in decoded, "mailto body must ask for the agent runtime"
-    assert "Name of my agent" in decoded, "mailto body must ask for the agent's name"
-    assert "Secure channel" in decoded, "mailto body must ask for the secure channel"
-    # The body should embed the deployment URL so the operator sees which
-    # instance the requester is connecting to without reading the headers.
-    assert "test.invalid" in decoded
+    # Step 1's access-request flow is an embedded Google Form (replaced
+    # the earlier mailto link on 2026-05-13). The mailto: scheme must not
+    # appear anywhere on the landing.
+    assert "mailto:" not in body
+    assert 'class="access-form"' in body
+    assert "docs.google.com/forms/" in body
+    assert "1FAIpQLSfGJJCw_wd12OTYb8F4ryvtOaOb3doFShUTKSIrwFfYifSoKg" in body
+    assert "<iframe" in body
+    assert 'loading="lazy"' in body
     # Four-step structure, in order: request token → configure connection →
     # sanity-check with list-mentors prompt → pick a mentor.
     step1 = body.index("Step 1")
@@ -378,21 +366,15 @@ async def test_landing_page_de_route_serves_german(server) -> None:
     assert "Schritt 3 — Verbindung prüfen" in body
     assert "Schritt 4 — Mentor auswählen und Session starten" in body
     assert "Datenschutz" in body
-    assert "Zugang anfordern" in body
     assert "zurück zu helmguild.com" in body
     # Lang pill — DE is current; back-to-EN link present.
     assert 'class="lang-pill"' in body
     assert "../" in body and 'hreflang="en"' in body
-    # Mailto body switched to German prompts.
-    import urllib.parse as _up
-
-    mailto_start = body.index("mailto:helmuthva")
-    mailto_end = body.index('"', mailto_start)
-    decoded = _up.unquote(body[mailto_start:mailto_end])
-    assert "Mein Name" in decoded
-    assert "Mein Agent läuft auf" in decoded
-    assert "Name meines Agenten" in decoded
-    assert "Sicherer Kanal" in decoded
+    # Access-request iframe is embedded on the DE landing too (same form).
+    assert "mailto:" not in body
+    assert 'class="access-form"' in body
+    assert "docs.google.com/forms/" in body
+    assert "Zugangsanfrage-Formular" in body  # DE iframe title
     # MCP tool registration command stays in English (it's a literal CLI invocation).
     assert "claude mcp add" in body
     # Mentor profile link auto-swaps to the /de/ variant on the DE landing.

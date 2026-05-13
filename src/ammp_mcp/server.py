@@ -1296,8 +1296,7 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "h1": "Mentor your agent.",
         "lede": "Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.",
         "step1_h": "Step 1 — Request your access token",
-        "step1_p": "Tokens are issued by hand — one mail, one reply. Tap below and we'll send yours back through the secure channel you specify.",
-        "step1_cta": "Request access",
+        "step1_p": "Tokens are issued by hand — one form, one reply. Fill in the form below and we'll send yours back through the secure channel you specify.",
         "step2_h": "Step 2 — Configure your agent's MCP connection",
         "step2_p": "Pick your agent below and follow the paste path. Don't see yours? The <em>Generic</em> tab has the raw URL and Bearer header.",
         "tab_desktop_cta": "Download extension",
@@ -1337,20 +1336,7 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentor_prompt_copy": "Copy prompt",
         "mentors_empty": "No mentors are currently available.",
         # Mailto draft
-        "mailto_subject": "helmguild — Access request",
-        "mailto_body": (
-            "Hi helmguild Team,\n\n"
-            "I'd like to connect my agent to {base} as a mentee. Please send me an "
-            "access token to establish a secure connection.\n\n"
-            "1. My name: [ E.g. Alice ]\n"
-            "2. My agent runs on: [ Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes ]\n"
-            "3. Name of my agent: [ E.g. Alice Agent ]\n"
-            "4. Secure channel: [ WhatsApp / Telegram / iMessage + handle — "
-            "so the token doesn't travel by plain email ]\n"
-            "5. Mentor of interest: [ Pepe Arturo (default), or all of them ]\n"
-            "6. Message (optional): [ Free-form, 1-2 sentences — what you hope to get out of it ]\n\n"
-            "Thanks\n"
-        ),
+        "form_title": "Access request form",
     },
     "de": {
         "html_lang": "de",
@@ -1360,8 +1346,7 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "h1": "Mentor your agent.",
         "lede": "Gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Der Mentor denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, und eskaliert an einen Menschen, wenn es zu komplex wird. Keine gespeicherten Verläufe. Vier Schritte.",
         "step1_h": "Schritt 1 — Zugangs-Token anfordern",
-        "step1_p": "Tokens werden manuell ausgegeben — eine Mail, eine Antwort. Klick unten, und wir schicken dir deinen Token über den sicheren Kanal zurück, den du angibst.",
-        "step1_cta": "Zugang anfordern",
+        "step1_p": "Tokens werden manuell ausgegeben — ein Formular, eine Antwort. Füll das Formular unten aus, und wir schicken dir deinen Token über den sicheren Kanal zurück, den du angibst.",
         "step2_h": "Schritt 2 — MCP-Verbindung deines Agenten einrichten",
         "step2_p": "Wähl unten deinen Agenten und folge der Anleitung. Nicht dabei? Im Tab <em>Generic</em> findest du URL und Bearer-Header pur.",
         "tab_desktop_cta": "Erweiterung herunterladen",
@@ -1399,20 +1384,7 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentor_prompt_summary": "Prompt, um dieses Mentoring zu starten",
         "mentor_prompt_copy": "Prompt kopieren",
         "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
-        "mailto_subject": "helmguild — Zugang anfordern",
-        "mailto_body": (
-            "Hallo helmguild Team,\n\n"
-            "Ich möchte meinen Agenten mit {base} als Mentee verbinden. Bitte "
-            "schick mir einen Zugangs-Token, damit ich eine sichere Verbindung aufbauen kann.\n\n"
-            "1. Mein Name: [ z. B. Alice ]\n"
-            "2. Mein Agent läuft auf: [ Claude.ai / Claude Cowork / Claude Code / ChatGPT / OpenClaw / Hermes ]\n"
-            "3. Name meines Agenten: [ z. B. Alice Agent ]\n"
-            "4. Sicherer Kanal: [ WhatsApp / Telegram / iMessage + Handle — "
-            "damit der Token nicht unverschlüsselt per Mail reist ]\n"
-            "5. Mentor von Interesse: [ Pepe Arturo (Standard), oder alle ]\n"
-            "6. Nachricht (optional): [ Frei, 1–2 Sätze — was du dir vom Mentoring erhoffst ]\n\n"
-            "Danke\n"
-        ),
+        "form_title": "Zugangsanfrage-Formular",
     },
 }
 
@@ -1445,7 +1417,6 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     c = _LANDING_COPY.get(lang, _LANDING_COPY["en"])
     import re as _re
     from html import escape as _h
-    from urllib.parse import quote as _q
 
     # Inline-markdown renderer — handles `**bold**`, `*italic*`, and
     # `` `code` `` in summary lines so playbook / work-instruction
@@ -1486,12 +1457,10 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     parsed = _urlparse(base)
     host = (parsed.netloc + parsed.path).rstrip("/") or base
 
-    # Pull subject + body from the per-language copy block; pre-fill
-    # fields map to what `ammp mentee add` needs at the operator end
-    # (slug + operator derived from the name + agent runtime).
-    mailto = (
-        f"mailto:helmuthva@gmail.com?subject={_q(c['mailto_subject'])}&body={_q(c['mailto_body'].format(base=base))}"
-    )
+    # Access-request flow uses an embedded Google Form (the operator
+    # receives submissions in a Sheet and replies on the secure channel
+    # the requester names). Same form on EN + DE.
+    access_form_url = "https://docs.google.com/forms/d/e/1FAIpQLSfGJJCw_wd12OTYb8F4ryvtOaOb3doFShUTKSIrwFfYifSoKg/viewform?embedded=true"
 
     mentor_blocks_parts: list[str] = []
     for slug, m in ctx.mentors.items():
@@ -1691,6 +1660,9 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .empty{{color:var(--ink-soft);font-style:italic}}
 .runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
 .cta{{margin:1rem 0 .5rem}}
+.access-form{{margin:1.5rem 0 .5rem}}
+.access-form iframe{{display:block;width:100%;max-width:640px;height:1700px;border:1px solid var(--rule);border-radius:6px;background:var(--bg-hi)}}
+@media (max-width: 480px) {{ .access-form iframe{{height:2200px}} }}
 .agent-tabs{{margin:1.25rem 0 0}}
 .agent-tab-input{{position:absolute;opacity:0;pointer-events:none}}
 .agent-tab-row{{display:flex;gap:.1rem;border-bottom:1px solid var(--rule);margin-bottom:.85rem;flex-wrap:wrap}}
@@ -1733,7 +1705,9 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 
 <h2>{c["step1_h"]}</h2>
 <p>{c["step1_p"]}</p>
-<p class="cta"><a class="btn primary" href="{mailto}">{c["step1_cta"]}</a></p>
+<div class="access-form">
+  <iframe src="{access_form_url}" title="{c["form_title"]}" loading="lazy" width="640" height="1700" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
+</div>
 
 <h2>{c["step2_h"]}</h2>
 <p>{c["step2_p"]}</p>
