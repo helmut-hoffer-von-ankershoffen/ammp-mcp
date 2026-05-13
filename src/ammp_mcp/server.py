@@ -1670,7 +1670,7 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .access-form > summary::-webkit-details-marker{{display:none}}
 .access-form > summary::marker{{content:""}}
 .access-form > summary:focus-visible{{outline:2px solid var(--accent);outline-offset:2px}}
-.access-form iframe{{display:block;width:100%;max-width:640px;height:1700px;border:1px solid var(--rule);border-radius:6px;background:#fff;margin-top:1rem}}
+.access-form iframe{{display:block;width:100%;max-width:640px;height:1700px;border:1px solid var(--rule);border-radius:6px;background:#fff;margin-top:1rem;transition:height .35s ease}}
 @media (max-width: 480px) {{ .access-form iframe{{height:2200px}} }}
 .agent-tabs{{margin:1.25rem 0 0}}
 .agent-tab-input{{position:absolute;opacity:0;pointer-events:none}}
@@ -1817,6 +1817,21 @@ document.querySelectorAll('button.btn.copy').forEach(function(b) {{
     }} catch (e) {{
       b.textContent = 'Press ⌘C';
     }}
+  }});
+}});
+
+// Google Forms iframe — same-origin policy blocks reading the iframe's
+// content height, so we can't truly auto-fit. The submission redirect
+// triggers a second `load` event, which is the reliable signal we have
+// that the form has been submitted. Shrink the iframe to the size of
+// the "Thanks!" response page on the second load. (First load is the
+// form render itself; subsequent loads after the initial render are
+// the post-submit redirect.) CSS adds a height transition for smoothness.
+document.querySelectorAll('.access-form iframe').forEach(function(f) {{
+  var loads = 0;
+  f.addEventListener('load', function() {{
+    loads += 1;
+    if (loads >= 2) {{ f.style.height = '320px'; }}
   }});
 }});
 </script>
