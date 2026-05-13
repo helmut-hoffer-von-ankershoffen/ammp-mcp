@@ -1489,7 +1489,9 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     # Pull subject + body from the per-language copy block; pre-fill
     # fields map to what `ammp mentee add` needs at the operator end
     # (slug + operator derived from the name + agent runtime).
-    mailto = f"mailto:helmuthva@gmail.com?subject={_q(c['mailto_subject'])}&body={_q(c['mailto_body'].format(base=base))}"
+    mailto = (
+        f"mailto:helmuthva@gmail.com?subject={_q(c['mailto_subject'])}&body={_q(c['mailto_body'].format(base=base))}"
+    )
 
     mentor_blocks_parts: list[str] = []
     for slug, m in ctx.mentors.items():
