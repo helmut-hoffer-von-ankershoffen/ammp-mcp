@@ -242,7 +242,7 @@ The Typer-based CLI handles housekeeping. Subject-then-action layout (`ammp <sub
 # Inspect (omit `--mentor` to fall through to the configured default)
 ammp mentor list                                # registered mentors + corpus sizes
 ammp playbook list --mentor example             # playbooks for a mentor
-ammp playbook show 01-cite-or-decline           # AMMP GetPlaybook
+ammp playbook show example-mentoring            # AMMP GetPlaybook
 ammp playbook search "escalate" --mentor example # AMMP SearchPlaybooks
 
 # Ask + escalate (CLI parity with AMMP AskMentor / EscalateToHuman)
@@ -325,7 +325,7 @@ For day-to-day operations — minting mentees, rotating tokens, editing mentors 
 
 ## Status
 
-**v0.3** — multi-mentor + multi-mentee + LLM-synthesised AskMentor + Typer CLI + tagged test suite. Ships open-source under MIT.
+**v0.5** — mentor-mediated escalation (Telegram delivery + sync-or-pending `GetEscalation`), diagnostic `GetSystemInfo`, bilingual landing, `.mcpb` desktop bundle, release-time quality-gate verification. See `CHANGELOG.md` for the full surface. Ships open-source under MIT.
 
 Out of scope (for now):
 - The AMMP **Review track**'s 4 ops — needs a federated guild of human staff-plus engineers behind a Reviewer Service. Larger build.

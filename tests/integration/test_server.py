@@ -995,6 +995,32 @@ async def test_escalate_to_human_mentor_wrapper_forwards_progress_to_client(sett
     assert any("queued" in m or "delivered" in m for _, m in progress_events), progress_events
 
 
+async def test_favicon_routes_serve_brand_assets(server) -> None:
+    """`/favicon.svg`, `/favicon-32.png` and `/apple-touch-icon.png` serve the
+    helmguild compass — same files as www.helmguild.com — out of the
+    packaged `_data/favicon/` directory with sane content-types + cache headers.
+    """
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        svg = http.get("/favicon.svg")
+        png = http.get("/favicon-32.png")
+        ico = http.get("/apple-touch-icon.png")
+    assert svg.status_code == 200
+    assert svg.headers.get("content-type") == "image/svg+xml"
+    assert b"<svg" in svg.content
+    assert png.status_code == 200
+    assert png.headers.get("content-type") == "image/png"
+    assert png.content[:8] == b"\x89PNG\r\n\x1a\n"
+    assert ico.status_code == 200
+    assert ico.headers.get("content-type") == "image/png"
+    assert ico.content[:8] == b"\x89PNG\r\n\x1a\n"
+    # All three are cacheable — they're brand assets, not per-request.
+    for r in (svg, png, ico):
+        assert "max-age" in r.headers.get("cache-control", "")
+
+
 async def test_desktop_bundle_route_serves_mcpb_zip(server) -> None:
     """`GET /desktop-bundle.mcpb` returns a valid ZIP containing manifest + icon
     + server.js, with the BEARER substitution placeholder and the trailing-slash
