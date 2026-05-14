@@ -45,8 +45,8 @@ src/ammp_mcp/
 │   └── CLAUDE.md
 │
 ├── playbook/              # Playbook + Skill domain (AgentSkills-aligned)
-│   ├── _service.py        # Playbook + Skill dataclasses; load_playbooks (resolves plugin: refs), search, keyword_rank, safe_id
-│   ├── _cli.py            # `ammp playbook list/show/search`, `ammp instruction list/show`
+│   ├── _service.py        # Playbook + Skill dataclasses; load_playbooks (resolves plugin: refs), search, keyword_rank, safe_id, enumerate_plugin_refs, build_plugin_archive_response
+│   ├── _cli.py            # `ammp playbook list/show/search`, `ammp skill list/show`, `ammp plugin list/archive`
 │   └── CLAUDE.md
 │
 ├── escalation/            # Mentor-mediated escalation (B.a → A.h via A.a)
@@ -158,9 +158,11 @@ Adding a new MCP tool / operation (e.g. `EscalateToHumanMentor`, `GetEscalation`
 1. The code + tests.
 2. The IETF draft (`draft-ammp-NN`) in `helmut-hoffer-von-ankershoffen/helmguild.com` — list the new op alongside existing ones with the same level of detail. The draft URL is referenced from this repo but the file lives in the helmguild.com repo; cross-repo edits are part of the change.
 3. The repo `README.md` — enumerate the new op in the tools / operations section.
-4. The CLI surface — `ammp <subject> <action>` parity with sibling ops (e.g. `ammp escalation list/show/answer/cancel`).
+4. The CLI surface — `ammp <subject> <action>` parity with sibling ops (e.g. `ammp escalation list/show/answer/cancel`, `ammp plugin list/archive`, `ammp system info`).
 5. This `AGENTS.md` (the tool inventory in "What this is").
 6. `CLI_REFERENCE.md` — regenerated via `uv run python tools/generate_cli_reference.py`.
+
+**Service-layer shared between CLI and MCP.** The business logic for each op lives in `<domain>/_service.py` as pure functions (no auth, no audit, no I/O beyond what the op needs). The MCP wrapper in `server.py:_handle_*` and the Typer command in `<domain>/_cli.py` both call into the same service-layer helper, so the wire and the shell stay in lockstep. Example: `playbook/_service.py:build_plugin_archive_response` is called from `_handle_get_plugin_archive` (MCP), the `/plugins/<name>.zip` HTTP route, *and* `ammp plugin archive` (CLI). One source of truth, three surfaces.
 
 Server-side extensions over the AMMP-01 baseline must be labelled as such in both the README and the RFC's "Extensions" section so operators reading the spec can tell baseline ops from vendor extensions.
 

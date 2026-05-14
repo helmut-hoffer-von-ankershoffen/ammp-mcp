@@ -125,6 +125,14 @@ For Pepe's deployment, all three playbooks (`multi-channel-content-pipelines`, `
 
 Editing a `SKILL.md` body in the marketplace clone is visible on the next `GetPlaybook` / `ListPlaybooks` / `AskMentor` call — no restart. Adding/removing a whole playbook subdirectory likewise needs no restart. Editing `pepe/mentor.json` or any `playbook.json` (name/description/plugin-ref metadata) needs a restart.
 
+Local CLI parity with the `GetPluginArchive` MCP tool:
+
+```bash
+ammp plugin list                 # all (plugin, marketplace, clone-path) refs this server knows
+ammp plugin archive <name>       # resolve a plugin name to its zip URL + install instructions
+ammp plugin archive <name> --json
+```
+
 ---
 
 ## Mentor-mediated escalation (B.a → A.h via A.a)
@@ -163,6 +171,7 @@ Per AMMP §3.4, the cross-compartment forward is only legitimate when B.h has ap
 make status        # static install validation (paths, registries, env vars)
 make capability    # offline render of /.well-known/agent.json
 ammp system health # active probe — GET /.well-known/agent.json + per-backend HEAD
+ammp system info   # diagnostic envelope (version, AMMP draft, public URL, capability URL, Telegram bot)
 ```
 
 External:
