@@ -75,9 +75,7 @@ def test_install_round_trip_via_claude_code(plugin: str) -> None:
     )
     # Surface both streams on failure so the operator can see which step broke.
     assert proc.returncode == 0, (
-        f"e2e install failed for {plugin}\n"
-        f"--- stdout ---\n{proc.stdout}\n"
-        f"--- stderr ---\n{proc.stderr}\n"
+        f"e2e install failed for {plugin}\n--- stdout ---\n{proc.stdout}\n--- stderr ---\n{proc.stderr}\n"
     )
     # The script emits a final success line we can pin on.
     assert "E2E install round-trip succeeded" in proc.stdout, proc.stdout
