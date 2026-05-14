@@ -68,6 +68,46 @@ def capability() -> None:
     console.print_json(json.dumps(payload))
 
 
+@system_app.command("info")
+def system_info() -> None:
+    """Print the GetSystemInfo envelope locally (CLI parity with the MCP tool).
+
+    Same shape `GetSystemInfo` returns over the MCP wire — software
+    name + version, AMMP draft, Python + OS, mentor / mentee counts,
+    default mentor, escalation adapter kind, mount path + public URL.
+    Reads the offline settings + counts on-disk; no live server needed.
+    """
+    import platform as _platform
+    import sys as _sys
+
+    from .. import __ammp_draft__, __version__
+    from ..mentee import load_mentees
+    from ..mentor import load_mentors
+
+    s = get_settings()
+    mentors = load_mentors(s.mentors_root)
+    mentees = load_mentees(s.mentees_file)
+    payload = {
+        "name": "ammp-mcp",
+        "version": __version__,
+        "ammp_draft": __ammp_draft__,
+        "python_version": _platform.python_version(),
+        "platform": _sys.platform,
+        # `started_at` + `uptime_seconds` are runtime-only fields that
+        # only the live server can populate. The CLI surface returns
+        # `None` for both so consumers can tell static-vs-live apart.
+        "started_at": None,
+        "uptime_seconds": None,
+        "mentor_count": len(mentors),
+        "mentee_count": len(mentees),
+        "default_mentor": s.default_mentor,
+        "escalation_adapter": s.escalation_adapter,
+        "mount_path": s.mount_path,
+        "public_url": s.public_url,
+    }
+    console.print_json(json.dumps(payload))
+
+
 # ─── ammp system serve ───────────────────────────────────────────────────
 
 

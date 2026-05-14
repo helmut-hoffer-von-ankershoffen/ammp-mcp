@@ -24,6 +24,7 @@ $ ammp [OPTIONS] COMMAND [ARGS]...
 * `mentee`: Manage the mentee allowlist (add / remove...
 * `playbook`: Inspect and read a mentor&#x27;s playbooks...
 * `skill`: Inspect and read individual skills inside...
+* `plugin`: Resolve marketplace plugins (CLI parity...
 * `escalation`: Inspect and manage mentor-mediated...
 * `system`: Operate the install as a whole (setup,...
 
@@ -463,6 +464,62 @@ $ ammp skill show [OPTIONS] SKILL_ID
 * `--mentor TEXT`: Mentor slug.
 * `--help`: Show this message and exit.
 
+## `ammp plugin`
+
+Resolve marketplace plugins (CLI parity with the GetPluginArchive MCP tool).
+
+**Usage**:
+
+```console
+$ ammp plugin [OPTIONS] COMMAND [ARGS]...
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+**Commands**:
+
+* `list`: List every (plugin, marketplace)...
+* `archive`: Resolve a plugin name to its zip URL +...
+
+### `ammp plugin list`
+
+List every (plugin, marketplace) referenced by this server&#x27;s playbooks.
+
+**Usage**:
+
+```console
+$ ammp plugin list [OPTIONS]
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+### `ammp plugin archive`
+
+Resolve a plugin name to its zip URL + install instructions.
+
+CLI parity with the ``GetPluginArchive`` MCP tool — same in-process
+service-layer helper (:func:`build_plugin_archive_response`), so
+the wire and the shell stay in lockstep.
+
+**Usage**:
+
+```console
+$ ammp plugin archive [OPTIONS] PLUGIN
+```
+
+**Arguments**:
+
+* `PLUGIN`: Plugin name (kebab-case slug).  [required]
+
+**Options**:
+
+* `--json`: Emit raw JSON instead of a Rich table.
+* `--help`: Show this message and exit.
+
 ## `ammp escalation`
 
 Inspect and manage mentor-mediated escalations.
@@ -577,6 +634,7 @@ $ ammp system [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `capability`: Print the AMMP capability advertisement...
+* `info`: Print the GetSystemInfo envelope locally...
 * `serve`: Start the MCP server.
 * `setup`: First-run installation wizard.
 * `status`: Validate the current installation.
@@ -591,6 +649,25 @@ Print the AMMP capability advertisement (offline render).
 
 ```console
 $ ammp system capability [OPTIONS]
+```
+
+**Options**:
+
+* `--help`: Show this message and exit.
+
+### `ammp system info`
+
+Print the GetSystemInfo envelope locally (CLI parity with the MCP tool).
+
+Same shape `GetSystemInfo` returns over the MCP wire — software
+name + version, AMMP draft, Python + OS, mentor / mentee counts,
+default mentor, escalation adapter kind, mount path + public URL.
+Reads the offline settings + counts on-disk; no live server needed.
+
+**Usage**:
+
+```console
+$ ammp system info [OPTIONS]
 ```
 
 **Options**:

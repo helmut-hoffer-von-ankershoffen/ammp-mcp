@@ -5,6 +5,20 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.12.0] — 2026-05-14
+
+### Added — CLI ↔ MCP parity (shared `_service.py` layer)
+
+- **`ammp plugin list`** — local equivalent of enumerating `GetPluginArchive` references: Rich table over every `(plugin, marketplace, clone-path)` triple known to this server's playbook corpus.
+- **`ammp plugin archive <name> [--json]`** — local equivalent of the `GetPluginArchive` MCP tool: resolves a plugin name to its `https://<public_url>/plugins/<name>.zip` URL + install instructions. Same in-process service-layer helper (`build_plugin_archive_response`) the MCP handler + the HTTP route call, so wire + shell + raw download stay in lockstep. (#cli)
+- **`ammp system info`** — local equivalent of the `GetSystemInfo` MCP tool: prints the canonical `SystemInfo` envelope as JSON (version, AMMP draft, capability URL, public URL, optional Telegram bot username, `started_at`/`uptime_seconds` are `null` for offline CLI). (#cli)
+
+### Changed — service-layer extraction
+
+- **`playbook/_service.py`** gains two pure helpers `enumerate_plugin_refs(mentors, marketplaces_root)` and `build_plugin_archive_response(public_url, plugin, known_refs)`. `_PLUGIN_NAME_RE` moved here from `server.py`. Both `_handle_get_plugin_archive` (MCP) and the `/plugins/<name>.zip` HTTP route now delegate to `build_plugin_archive_response` for validation + resolution + envelope construction. CLI calls the same two helpers. One source of truth, three surfaces (wire, route, shell). (#refactor)
+- **`server._known_plugin_refs(ctx)`** is now a thin wrapper around `enumerate_plugin_refs` — kept only as a private convenience for the FastMCP handler signature.
+- **CLI_REFERENCE.md** regenerated to capture the new `ammp plugin {list,archive}` and `ammp system info` subcommands.
+
 ## [0.11.1] — 2026-05-14
 
 ### Fixed

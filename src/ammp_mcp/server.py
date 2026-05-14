@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -54,6 +53,8 @@ from .models import (
     SkillSummary,
 )
 from .playbook import (
+    build_plugin_archive_response,
+    enumerate_plugin_refs,
     keyword_rank,
     load_playbooks,
     safe_id,
@@ -1227,17 +1228,11 @@ def _build_desktop_bundle(public_url: str, mcp_url: str) -> bytes:
 
 
 def _known_plugin_refs(ctx: ServerContext) -> dict[str, tuple[str, str, Path]]:
-    """Enumerate every ``(plugin, marketplace)`` referenced by this server's playbooks.
+    """Thin wrapper over :func:`playbook.enumerate_plugin_refs` bound to ``ctx``.
 
-    Walks ``ctx.mentors`` → each mentor's playbook corpus → the
-    ``plugin:`` field on each playbook's ``playbook.json``. Returns
-    only references whose marketplace clone is present on disk under
-    ``settings.marketplaces_root`` — unresolvable references are
-    silently dropped so a stale config can't be probed.
-
-    Keyed by plugin name so the HTTP route can resolve a bare
-    ``/plugins/<plugin>.zip`` request without a marketplace path
-    segment (one plugin name lives in exactly one marketplace).
+    The shared service-layer implementation lives in ``playbook/_service.py``
+    so the CLI surface (``ammp plugin archive``) and the MCP surface
+    (``GetPluginArchive``) call the same code.
 
     Args:
         ctx: The per-request server context.
@@ -1245,21 +1240,7 @@ def _known_plugin_refs(ctx: ServerContext) -> dict[str, tuple[str, str, Path]]:
     Returns:
         Mapping of ``plugin_name → (plugin_name, marketplace_name, plugin_dir)``.
     """
-    mr = ctx.settings.marketplaces_root
-    out: dict[str, tuple[str, str, Path]] = {}
-    for mentor in ctx.mentors.values():
-        playbooks = load_playbooks(mentor.playbook_dir, marketplaces_root=mr)
-        for pb in playbooks:
-            if pb.plugin_ref is None:
-                continue
-            plugin, marketplace = pb.plugin_ref
-            plugin_dir = mr / marketplace / "plugins" / plugin
-            if plugin_dir.is_dir():
-                out[plugin] = (plugin, marketplace, plugin_dir)
-    return out
-
-
-_PLUGIN_NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+    return enumerate_plugin_refs(ctx.mentors, ctx.settings.marketplaces_root)
 
 
 def _build_plugin_archive(plugin_dir: Path, plugin_name: str) -> bytes:
@@ -1320,34 +1301,15 @@ def _handle_get_plugin_archive(ctx: ServerContext, plugin: str, api_key: str | N
         _authenticate(ctx, api_key)
     except ValueError as exc:
         return {"error": "auth_failed", "detail": str(exc)}
-    if not _PLUGIN_NAME_RE.match(plugin):
-        return {"error": "invalid_plugin"}
     known = _known_plugin_refs(ctx)
-    entry = known.get(plugin)
-    if entry is None:
-        return {"error": "not_found"}
-    _, marketplace, _ = entry
-    base = ctx.settings.public_url.rstrip("/")
-    archive_url = f"{base}/plugins/{plugin}.zip"
-    install_instructions = (
-        "Download the zip from `archive_url` (the same Bearer token authenticates "
-        "the download). Then ask your user to install the plugin into their Claude "
-        "Code / Desktop runtime by extracting the zip and running "
-        "`/plugin install <path-to-extracted-folder>`, or by uploading the zip via "
-        "the runtime's plugin installer. After install, the plugin's `.mcp.json` "
-        "wires this same AMMP server, so the live ops continue to work."
-    )
-    log_event(
-        ctx.settings.audit_log_path,
-        "GetPluginArchive",
-        extra=f"plugin={plugin} marketplace={marketplace}",
-    )
-    return {
-        "plugin": plugin,
-        "marketplace": marketplace,
-        "archive_url": archive_url,
-        "install_instructions": install_instructions,
-    }
+    response = build_plugin_archive_response(ctx.settings.public_url, plugin, known)
+    if "error" not in response:
+        log_event(
+            ctx.settings.audit_log_path,
+            "GetPluginArchive",
+            extra=f"plugin={plugin} marketplace={response['marketplace']}",
+        )
+    return response
 
 
 # ─── Human-facing landing page ────────────────────────────────────────────
@@ -2380,12 +2342,13 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         except ValueError as exc:
             return Response(status_code=401, content=str(exc))
         plugin = request.path_params["plugin"]
-        if not _PLUGIN_NAME_RE.match(plugin):
-            return Response(status_code=404)
+        # build_plugin_archive_response handles both invalid-name and
+        # not-found via in-band errors; map them to 404 on the HTTP wire.
         known = _known_plugin_refs(ctx)
-        entry = known.get(plugin)
-        if entry is None:
+        meta = build_plugin_archive_response(ctx.settings.public_url, plugin, known)
+        if meta.get("error"):
             return Response(status_code=404)
+        entry = known[plugin]
         _, marketplace, plugin_dir = entry
         body = _build_plugin_archive(plugin_dir, plugin)
         log_event(

@@ -1,11 +1,16 @@
-"""`ammp playbook …` and `ammp skill …` subcommands.
+"""`ammp playbook …`, `ammp skill …`, and `ammp plugin …` subcommands.
 
 The corpus is a two-level hierarchy — playbooks (areas of practice)
-contain skills (markdown files). ``ammp playbook`` operates
-on the area level; ``ammp skill`` operates on individual skills.
+contain skills (markdown files). ``ammp playbook`` operates on the
+area level; ``ammp skill`` operates on individual skills;
+``ammp plugin`` exposes the local equivalent of the ``GetPluginArchive``
+MCP tool so an operator on the host can resolve a plugin to its
+download URL + install instructions without an MCP round-trip.
 """
 
 from __future__ import annotations
+
+import json as _json
 
 import typer
 from rich.console import Console
@@ -14,7 +19,12 @@ from rich.table import Table
 from .._cli_utils import wire_help_on_no_args
 from ..mentor import get_mentor, load_mentors
 from ..settings import get_settings
-from ._service import load_playbooks, safe_id
+from ._service import (
+    build_plugin_archive_response,
+    enumerate_plugin_refs,
+    load_playbooks,
+    safe_id,
+)
 
 console = Console()
 
@@ -32,6 +42,61 @@ skill_app = typer.Typer(
     add_completion=False,
 )
 wire_help_on_no_args(skill_app)
+
+
+plugin_app = typer.Typer(
+    name="plugin",
+    help="Resolve marketplace plugins (CLI parity with the GetPluginArchive MCP tool).",
+    add_completion=False,
+)
+wire_help_on_no_args(plugin_app)
+
+
+@plugin_app.command("list")
+def plugin_list() -> None:
+    """List every (plugin, marketplace) referenced by this server's playbooks."""
+    s = get_settings()
+    mentors = load_mentors(s.mentors_root)
+    known = enumerate_plugin_refs(mentors, s.marketplaces_root)
+    if not known:
+        console.print("[dim]No playbook on this server references a plugin.[/dim]")
+        return
+    table = Table(title=f"Plugin refs ({len(known)})")
+    table.add_column("plugin", style="cyan")
+    table.add_column("marketplace", style="green")
+    table.add_column("clone path", style="dim")
+    for plugin, (_, marketplace, plugin_dir) in sorted(known.items()):
+        table.add_row(plugin, marketplace, str(plugin_dir))
+    console.print(table)
+
+
+@plugin_app.command("archive")
+def plugin_archive(
+    plugin: str = typer.Argument(..., help="Plugin name (kebab-case slug)."),
+    as_json: bool = typer.Option(False, "--json", help="Emit raw JSON instead of a Rich table."),
+) -> None:
+    """Resolve a plugin name to its zip URL + install instructions.
+
+    CLI parity with the ``GetPluginArchive`` MCP tool — same in-process
+    service-layer helper (:func:`build_plugin_archive_response`), so
+    the wire and the shell stay in lockstep.
+    """
+    s = get_settings()
+    mentors = load_mentors(s.mentors_root)
+    known = enumerate_plugin_refs(mentors, s.marketplaces_root)
+    payload = build_plugin_archive_response(s.public_url, plugin, known)
+    if as_json:
+        typer.echo(_json.dumps(payload, indent=2, ensure_ascii=False))
+        if "error" in payload:
+            raise typer.Exit(code=1)
+        return
+    if "error" in payload:
+        console.print(f"[red]{payload['error']}[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[bold]{payload['plugin']}[/bold] @ {payload['marketplace']}")
+    console.print(f"URL: {payload['archive_url']}")
+    console.print()
+    console.print(payload["install_instructions"])
 
 
 @playbook_app.command("list")

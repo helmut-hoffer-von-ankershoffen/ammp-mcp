@@ -34,6 +34,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -555,3 +556,99 @@ def keyword_rank(corpus: list[Playbook], question: str, limit: int = 3) -> list[
             rows.append((sk, rank))
     rows.sort(key=lambda r: -r[1])
     return rows[:limit]
+
+
+# ─── Plugin archive — shared logic for `GetPluginArchive` MCP tool + `ammp plugin archive` CLI ────
+
+
+_PLUGIN_NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def enumerate_plugin_refs(
+    mentors: Mapping[str, object],
+    marketplaces_root: Path | None,
+) -> dict[str, tuple[str, str, Path]]:
+    """Enumerate plugin references resolving to a marketplace clone on disk.
+
+    Walks every mentor's playbook corpus, collects each
+    ``(plugin, marketplace)`` ref from the ``playbook.json`` files,
+    and keeps only those whose marketplace clone is present at
+    ``marketplaces_root/<marketplace>/plugins/<plugin>/``.
+
+    Keyed by plugin name (one plugin name lives in exactly one marketplace,
+    by construction). Unresolvable references (missing clone) are
+    silently dropped so a stale config can't be probed via the wire.
+
+    Args:
+        mentors: Mapping of mentor slug → :class:`Mentor` (or any object
+            exposing ``playbook_dir: Path``). Decoupled from the
+            ``Mentor`` class to keep this helper testable without a
+            full server context.
+        marketplaces_root: Root directory holding marketplace clones,
+            or ``None`` when the operator hasn't configured one.
+
+    Returns:
+        ``{plugin_name: (plugin_name, marketplace_name, plugin_dir)}``.
+        Empty when no playbook references a plugin or none resolve.
+    """
+    if marketplaces_root is None:
+        return {}
+    out: dict[str, tuple[str, str, Path]] = {}
+    for mentor in mentors.values():
+        playbook_dir = getattr(mentor, "playbook_dir", None)
+        if playbook_dir is None:
+            continue
+        for pb in load_playbooks(playbook_dir, marketplaces_root=marketplaces_root):
+            if pb.plugin_ref is None:
+                continue
+            plugin, marketplace = pb.plugin_ref
+            plugin_dir = marketplaces_root / marketplace / "plugins" / plugin
+            if plugin_dir.is_dir():
+                out[plugin] = (plugin, marketplace, plugin_dir)
+    return out
+
+
+def build_plugin_archive_response(
+    public_url: str,
+    plugin: str,
+    known_refs: dict[str, tuple[str, str, Path]],
+) -> dict[str, str]:
+    """Render the response envelope for a plugin-archive lookup.
+
+    Pure function — no auth, no audit, no I/O. Both the MCP handler
+    (``_handle_get_plugin_archive``) and the CLI (``ammp plugin archive``)
+    call this with the same enumerated refs so the two surfaces stay
+    in lockstep.
+
+    Args:
+        public_url: Server's advertised URL (no trailing slash).
+        plugin: Plugin name requested by the caller (kebab-case slug).
+        known_refs: Output of :func:`enumerate_plugin_refs` for this
+            server's mentors + marketplaces_root.
+
+    Returns:
+        On success: ``{plugin, marketplace, archive_url, install_instructions}``.
+        On failure: ``{error: "invalid_plugin" | "not_found"}``.
+    """
+    if not _PLUGIN_NAME_RE.match(plugin):
+        return {"error": "invalid_plugin"}
+    entry = known_refs.get(plugin)
+    if entry is None:
+        return {"error": "not_found"}
+    _, marketplace, _ = entry
+    base = public_url.rstrip("/")
+    archive_url = f"{base}/plugins/{plugin}.zip"
+    install_instructions = (
+        "Download the zip from `archive_url` (the same Bearer token authenticates "
+        "the download). Then ask your user to install the plugin into their Claude "
+        "Code / Desktop runtime by extracting the zip and running "
+        "`/plugin install <path-to-extracted-folder>`, or by uploading the zip via "
+        "the runtime's plugin installer. After install, the plugin's `.mcp.json` "
+        "wires this same AMMP server, so the live ops continue to work."
+    )
+    return {
+        "plugin": plugin,
+        "marketplace": marketplace,
+        "archive_url": archive_url,
+        "install_instructions": install_instructions,
+    }
