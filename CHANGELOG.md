@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.10.0] — 2026-05-14
+
+### Added
+
+- **`Playbook.commercial: bool`** dataclass field, populated by reading the backing plugin's `plugin.json` `"commercial"` flag. Mirrors the two-marketplace model: the private `helmguild-plugins` marketplace serves commercial plugins (`commercial: true`); the public sibling [`helmguild-plugins-public`](https://github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public) serves community-licensed plugins (`commercial: false`). (#marketplace)
+- **Commercial badge** rendered on each playbook card on the landing (EN + DE). Visible mini-pill in the `.pb-name` header; tooltip explains the distribution policy (Helmguild Mentoring License v1.0 / AMMP `GetPluginArchive`-only). Empty when the playbook isn't backed by a commercial plugin. (#landing)
+
 ## [0.9.0] — 2026-05-14
 
 ### Added — CI / automation

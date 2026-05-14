@@ -1484,6 +1484,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentor_prompt_summary": "Prompt to start this mentoring",
         "mentor_prompt_copy": "Copy prompt",
         "mentors_empty": "No mentors are currently available.",
+        "commercial_label": "Commercial",
+        "commercial_title": "Distributed only inside an active helmguild mentoring engagement via AMMP GetPluginArchive — Helmguild Mentoring License v1.0.",
         # Mailto draft
         "form_title": "Access request form",
     },
@@ -1536,6 +1538,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentor_prompt_summary": "Prompt, um dieses Mentoring zu starten",
         "mentor_prompt_copy": "Prompt kopieren",
         "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
+        "commercial_label": "Kommerziell",
+        "commercial_title": "Wird nur innerhalb einer aktiven helmguild-Mentoring-Beziehung über AMMP GetPluginArchive verteilt — Helmguild Mentoring License v1.0.",
         "form_title": "Zugangsanfrage-Formular",
     },
 }
@@ -1692,9 +1696,14 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     f"<button class='btn copy' data-copy-from='#{prompt_dom_id}'>{c['mentor_prompt_copy']}</button>"
                     "</details>"
                 )
+                commercial_badge = (
+                    f"<span class='pb-commercial' title='{_h(c['commercial_title'])}'>{_h(c['commercial_label'])}</span>"
+                    if pb.commercial
+                    else ""
+                )
                 pb_html_parts.append(
                     "<section class='playbook'>"
-                    f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span></h4>"
+                    f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span>{commercial_badge}</h4>"
                     f"{pb_desc}"
                     f"{skills_block}"
                     f"{prompt_block}"
@@ -1796,6 +1805,7 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .playbook{{margin-top:1rem;padding:.75rem 0 0;border-top:1px dashed var(--rule)}}
 .pb-name{{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .15rem;color:var(--ink);display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
 .pb-id{{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);font-weight:400}}
+.pb-commercial{{font-family:var(--sans);font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:rgba(46, 79, 107, 0.08);border:1px solid rgba(46, 79, 107, 0.3);border-radius:3px;padding:.05rem .35rem;cursor:help}}
 .pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
 .skills-details,.prompt-details{{margin:.4rem 0 0}}
 .skills-details > summary,.prompt-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}

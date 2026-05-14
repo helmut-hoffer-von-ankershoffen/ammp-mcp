@@ -82,6 +82,10 @@ class Playbook:
         plugin_ref: When the playbook is plugin-backed,
             ``(plugin_name, marketplace_name)``; ``None`` when the
             playbook holds its skills locally.
+        commercial: ``True`` when the backing plugin's
+            ``plugin.json`` declares ``"commercial": true`` (private
+            helmguild-plugins marketplace). ``False`` for community-
+            licensed plugins or when no plugin backs the playbook.
         skills: Skills loaded from this playbook, sorted by
             ``order`` then ``id``.
     """
@@ -91,6 +95,7 @@ class Playbook:
     description: str
     dir: Path
     plugin_ref: tuple[str, str] | None = None
+    commercial: bool = False
     skills: list[Skill] = field(default_factory=list)
 
 
@@ -358,6 +363,7 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
     pid = playbook_dir.name
 
     plugin_ref = _parse_plugin_ref(meta.get("plugin"))
+    commercial = False
     if plugin_ref:
         plugin_name, marketplace_name = plugin_ref
         if marketplaces_root is None:
@@ -381,6 +387,16 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
                 skills = _load_skills_local(playbook_dir, pid)
             else:
                 skills = _load_skills_from_plugin(plugin_dir, pid)
+                # Surface the plugin's `commercial` flag on the
+                # Playbook envelope so the landing + capability JSON
+                # can render it visibly.
+                plugin_manifest = plugin_dir / ".claude-plugin" / "plugin.json"
+                if plugin_manifest.is_file():
+                    try:
+                        manifest = json.loads(plugin_manifest.read_text(encoding="utf-8"))
+                        commercial = bool(manifest.get("commercial"))
+                    except json.JSONDecodeError:
+                        pass
     else:
         skills = _load_skills_local(playbook_dir, pid)
 
@@ -390,6 +406,7 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
         description=description,
         dir=playbook_dir,
         plugin_ref=plugin_ref,
+        commercial=commercial,
         skills=skills,
     )
 
