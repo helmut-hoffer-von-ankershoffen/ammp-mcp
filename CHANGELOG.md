@@ -5,6 +5,40 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.7.0] — 2026-05-14
+
+### Removed (BREAKING)
+
+- **`GetWorkInstruction` MCP tool** — removed entirely. Use `GetSkill` instead. 0.5.x mentees that still hardcode the old name will see `tool_not_found` and must update.
+- **`WorkInstruction*` Python aliases** — `WorkInstruction`, `WorkInstructionSummary`, `WorkInstructionEntry`, `GetWorkInstructionResponse`, `flatten_instructions` are gone. Downstream code must import `Skill`, `SkillSummary`, `SkillEntry`, `GetSkillResponse`, `flatten_skills`.
+- **`ammp instruction` CLI command** — renamed to `ammp skill list / show`. Old subcommand name no longer accepted.
+
+### Changed (BREAKING — JSON wire)
+
+- **`PlaybookSummary` / `PlaybookEntry`** `instructions` field → `skills`.
+- **`PlaybookSummary` / `MentorSummary`** `instruction_count` field → `skill_count`.
+- **`GetPlaybookResponse`** `instructions` field → `skills`.
+- **`AskMentorResponse`** `relevant_instructions` field → `relevant_skills`.
+- **`/.well-known/agent.json`** per-mentor `instructionCount` field → `skillCount`. The `operations` array drops `GetWorkInstruction`.
+- **`Playbook` dataclass** attribute `instructions` → `skills` (Python-internal).
+
+### Migration
+
+Update mentee code:
+
+```diff
+-result = await client.call_tool("GetWorkInstruction", ...)
++result = await client.call_tool("GetSkill", ...)
+
+-for wi in playbook["instructions"]:
++for sk in playbook["skills"]:
+
+-summary.instruction_count
++summary.skill_count
+```
+
+This release completes the AgentSkills alignment started in 0.6.0. Every wire-level remnant of the old "work instruction" vocabulary is now removed.
+
 ## [0.6.0] — 2026-05-14
 
 ### Added

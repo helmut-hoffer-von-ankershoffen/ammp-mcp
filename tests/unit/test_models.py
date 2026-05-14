@@ -44,7 +44,7 @@ def test_ask_mentor_response_default_no_escalation() -> None:
         question="q",
         answer="a",
         confidence=0.8,
-        relevant_instructions=[SkillSummary(id="i", title="t")],
+        relevant_skills=[SkillSummary(id="i", title="t")],
     )
     assert r.escalation_recommended is False
     assert r.suggested_message_to_your_operator is None
@@ -74,7 +74,7 @@ def test_prompt_helper_includes_escalation_step_when_human_mentor_set(tmp_path) 
         playbook_id="personal-assistant-for-managers",
         playbook_name="Personal Assistant for managers",
         playbook_description="Calm, operator-grade support.",
-        instruction_count=5,
+        skill_count=5,
     )
     # Identity
     assert "Pepe Arturo" in prompt
@@ -109,7 +109,7 @@ def test_prompt_helper_omits_escalation_step_when_no_human_mentor(tmp_path) -> N
         playbook_id="rules",
         playbook_name="Strict rules",
         playbook_description="High-bar review rules.",
-        instruction_count=1,
+        skill_count=1,
     )
     # Singular-aware count
     assert "1 skill" in prompt

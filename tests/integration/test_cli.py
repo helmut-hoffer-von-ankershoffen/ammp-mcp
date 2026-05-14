@@ -75,17 +75,17 @@ def test_list_playbooks_unknown_mentor(runner: CliRunner) -> None:
 
 
 def test_show_playbook(runner: CliRunner) -> None:
-    """`ammp playbook show <id>` lists the work instructions inside the playbook."""
+    """`ammp playbook show <id>` lists the skills inside the playbook."""
     r = runner.invoke(app, ["playbook", "show", "intro"])
     assert r.exit_code == 0
-    # Playbook header + at least one work-instruction title from intro/.
+    # Playbook header + at least one skill title from intro/.
     assert "Welcome to Pepe" in r.output
     assert "OAuth callback resilience" in r.output
 
 
-def test_show_instruction(runner: CliRunner) -> None:
-    """`ammp instruction show <id> --playbook <pb>` prints one instruction body."""
-    r = runner.invoke(app, ["instruction", "show", "intro", "--playbook", "intro"])
+def test_show_skill(runner: CliRunner) -> None:
+    """`ammp skill show <id> --playbook <pb>` prints one skill body."""
+    r = runner.invoke(app, ["skill", "show", "intro", "--playbook", "intro"])
     assert r.exit_code == 0
     assert "Welcome" in r.output
 

@@ -254,16 +254,16 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
             if m.human_mentor
             else None
         )
-        # Embed work-instruction summaries only — bodies are fetched on
-        # demand via GetPlaybook / GetSkill. Without this, a
-        # corpus with a few dozen instructions inflates the response to
-        # 100+ KB which trips Claude Desktop's MCP-transport timeout.
+        # Embed skill summaries only — bodies are fetched on demand
+        # via GetPlaybook / GetSkill. Without this, a corpus with a
+        # few dozen skills inflates the response to 100+ KB which
+        # trips Claude Desktop's MCP-transport timeout.
         playbook_entries = [
             PlaybookEntry(
                 id=pb.id,
                 name=pb.name,
                 description=pb.description,
-                instructions=[SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions],
+                skills=[SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk in pb.skills],
             )
             for pb in corpus
         ]
@@ -276,7 +276,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
                 avatar_url=avatar_url,
                 human_mentor=human_mentor,
                 playbook_count=len(corpus),
-                instruction_count=sum(len(pb.instructions) for pb in corpus),
+                skill_count=sum(len(pb.skills) for pb in corpus),
                 confidence_threshold=m.confidence_threshold,
                 backend_kind=backend_kind,
                 backend_live=backend.is_live if backend else False,
@@ -295,10 +295,10 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
     """Handle the ``ListPlaybooks`` MCP tool call (AMMP §5.1).
 
     Returns the mentor's playbooks (areas of practice). Each playbook
-    carries its name + description + work-instruction summaries (id +
-    title + one-line summary, no bodies). Fetch a full playbook's
-    instruction bodies with ``GetPlaybook(id)``, or one instruction's
-    body with ``GetSkill(playbook_id, id)``.
+    carries its name + description + skill summaries (id + title +
+    one-line summary, no bodies). Fetch a full playbook's skill
+    bodies with ``GetPlaybook(id)``, or one skill's body with
+    ``GetSkill(playbook_id, id)``.
 
     Args:
         ctx: The per-request server context.
@@ -330,8 +330,8 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
                 id=pb.id,
                 name=pb.name,
                 description=pb.description,
-                instruction_count=len(pb.instructions),
-                instructions=[SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions],
+                skill_count=len(pb.skills),
+                skills=[SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk in pb.skills],
             )
             for pb in corpus
         ],
@@ -387,7 +387,7 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         id=pb.id,
         name=pb.name,
         description=pb.description,
-        instructions=[SkillEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body) for wi in pb.instructions],
+        skills=[SkillEntry(id=sk.id, title=sk.title, summary=sk.summary, body=sk.body) for sk in pb.skills],
     ).model_dump()
 
 
@@ -399,9 +399,7 @@ def _handle_get_skill(
     Server-side extension beyond AMMP-01's five operations: fetch one
     specific skill by ``(playbook_id, skill_id)`` when the mentee
     already knows which one it wants, without round-tripping the
-    whole playbook. Renamed from ``GetWorkInstruction`` in 0.6.0
-    (AgentSkills alignment); the old wire name is preserved as an
-    alias.
+    whole playbook.
 
     Args:
         ctx: The per-request server context.
@@ -440,7 +438,7 @@ def _handle_get_skill(
     pb = next((p for p in corpus if p.id == clean_pb), None)
     if pb is None:
         return {"error": "not_found", "detail": f"playbook_id={clean_pb}"}
-    sk = next((s for s in pb.instructions if s.id == clean_id), None)
+    sk = next((s for s in pb.skills if s.id == clean_id), None)
     if sk is None:
         return {"error": "not_found", "detail": f"playbook_id={clean_pb} id={clean_id}"}
     return GetSkillResponse(
@@ -583,12 +581,12 @@ async def _handle_ask_mentor(
 
     corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
     ranked = keyword_rank(corpus, q + " " + context, limit=3)
-    relevant = [SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi, _ in ranked]
+    relevant = [SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk, _ in ranked]
     # Backends consume `(title, body)` pairs to assemble the grounding
-    # block in the system prompt. With the new hierarchy we cite each
-    # skill by its full ``<playbook> · <instruction>`` path so
-    # the LLM can attribute back accurately when synthesising.
-    playbook_bodies = [(f"{wi.playbook_id} · {wi.title}", wi.body) for wi, _ in ranked]
+    # block in the system prompt. We cite each skill by its full
+    # ``<playbook> · <skill>`` path so the LLM can attribute back
+    # accurately when synthesising.
+    playbook_bodies = [(f"{sk.playbook_id} · {sk.title}", sk.body) for sk, _ in ranked]
 
     backend = ctx.backends.get(m.slug)
     if backend is None:
@@ -605,7 +603,7 @@ async def _handle_ask_mentor(
         return {
             "error": "llm_failed",
             "detail": "the mentor is currently unable to synthesise an answer; try GetSkill on a relevant id",
-            "relevant_instructions": [r.model_dump() for r in relevant],
+            "relevant_skills": [r.model_dump() for r in relevant],
         }
 
     threshold = m.confidence_threshold
@@ -635,7 +633,7 @@ async def _handle_ask_mentor(
         question=q[:500],
         answer=llm_answer.answer,
         confidence=llm_answer.confidence,
-        relevant_instructions=relevant,
+        relevant_skills=relevant,
         escalation_recommended=escalation_recommended,
         suggested_message_to_your_operator=suggested,
         escalation_to_human_mentor_draft=escalation_draft,
@@ -1117,7 +1115,7 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
                 "description": m.description,
                 "humanMentor": human_mentor,
                 "playbookCount": len(corpus),
-                "instructionCount": sum(len(pb.instructions) for pb in corpus),
+                "skillCount": sum(len(pb.skills) for pb in corpus),
                 "backend": backend.mode_label if backend else "unknown",
                 "backendLive": backend.is_live if backend else False,
             }
@@ -1156,7 +1154,6 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
             "ListPlaybooks",
             "GetPlaybook",
             "GetSkill",
-            "GetWorkInstruction",  # deprecated alias of GetSkill; kept through 0.x
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
@@ -1363,7 +1360,7 @@ def _build_mentor_playbook_prompt(
     playbook_id: str,
     playbook_name: str,
     playbook_description: str,
-    instruction_count: int,
+    skill_count: int,
     plugin_ref: tuple[str, str] | None = None,
 ) -> str:
     """Render a copy-paste prompt that starts a mentoring session.
@@ -1383,7 +1380,7 @@ def _build_mentor_playbook_prompt(
         playbook_name: The playbook's human-readable name.
         playbook_description: The one-line description from
             ``playbook.json``.
-        instruction_count: Number of skills inside this playbook.
+        skill_count: Number of skills inside this playbook.
         plugin_ref: Optional ``(plugin_name, marketplace_name)``
             reference from the playbook's ``playbook.json``. When
             set, the prompt asks the mentee to install the plugin
@@ -1393,8 +1390,8 @@ def _build_mentor_playbook_prompt(
         A multi-line prompt string, ready to drop into a ``<pre>``.
     """
     url = public_url.rstrip("/")
-    n = instruction_count
-    instr_word = "skill" if n == 1 else "skills"
+    n = skill_count
+    skill_word = "skill" if n == 1 else "skills"
     body = (
         f'You are now operating under the mentorship of {mentor.name}\'s "{playbook_name}" playbook '
         f"on the helmguild AMMP server at {url}.\n\n"
@@ -1404,7 +1401,7 @@ def _build_mentor_playbook_prompt(
     if plugin_ref is not None:
         plugin_name, _marketplace_name = plugin_ref
         body += (
-            f"{step}. Install the plugin so the {n} {instr_word} land locally in your runtime as durable AgentSkills:\n"
+            f"{step}. Install the plugin so the {n} {skill_word} land locally in your runtime as durable AgentSkills:\n"
             f'   - Call `GetPluginArchive` with `plugin: "{plugin_name}"` — you\'ll get back a URL pointing to a zip.\n'
             "   - Hand the URL + the returned install_instructions to your user. They download the zip "
             "(the same Bearer token authenticates the download) and install it into Claude Code / Desktop "
@@ -1416,11 +1413,11 @@ def _build_mentor_playbook_prompt(
     step += 1
     body += (
         f'{step}. Call `GetPlaybook` with `id: "{playbook_id}"` and `mentor: "{mentor.slug}"` to load the playbook — '
-        f'{n} {instr_word} covering "{playbook_description}".\n'
+        f'{n} {skill_word} covering "{playbook_description}".\n'
     )
     step += 1
     body += (
-        f"{step}. Internalize the {instr_word} and apply them going forward in this conversation. "
+        f"{step}. Internalize the {skill_word} and apply them going forward in this conversation. "
         f"When you hit something the playbook does not cover, call `AskMentor` on `{mentor.slug}` rather than guessing.\n"
     )
     step += 1
@@ -1432,7 +1429,7 @@ def _build_mentor_playbook_prompt(
             f"{mentor.name}. The call returns either A.h's answer (within `wait_seconds`) or a `pending` "
             f"escalation id; in the pending case, call `GetEscalation` later to pick up the reply.\n"
         )
-    body += f"\nAcknowledge by quoting the playbook name and the count of {instr_word} you loaded, then proceed."
+    body += f"\nAcknowledge by quoting the playbook name and the count of {skill_word} you loaded, then proceed."
     return body
 
 
@@ -1479,9 +1476,9 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         # Mentor-card chrome bits
         "mentor_behind": "Behind {mentor_name}: ",
         "mentor_no_playbooks": "No playbooks yet.",
-        "mentor_no_instructions": "No skills yet.",
-        "mentor_wi_count_one": "1 skill",
-        "mentor_wi_count_many": "{n} skills",
+        "mentor_no_skills": "No skills yet.",
+        "mentor_skill_count_one": "1 skill",
+        "mentor_skill_count_many": "{n} skills",
         "mentor_prompt_summary": "Prompt to start this mentoring",
         "mentor_prompt_copy": "Copy prompt",
         "mentors_empty": "No mentors are currently available.",
@@ -1529,9 +1526,9 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "footer": 'Referenz-Implementierung des <a href="https://www.helmguild.com/de/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-lizenziert. Betrieben von <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>. <a href="{base}/.well-known/agent.json">Capability-JSON</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">Quellcode</a>',
         "mentor_behind": "Hinter {mentor_name}: ",
         "mentor_no_playbooks": "Noch keine Playbooks.",
-        "mentor_no_instructions": "Noch keine Skills.",
-        "mentor_wi_count_one": "1 Skill",
-        "mentor_wi_count_many": "{n} Skills",
+        "mentor_no_skills": "Noch keine Skills.",
+        "mentor_skill_count_one": "1 Skill",
+        "mentor_skill_count_many": "{n} Skills",
         "mentor_prompt_summary": "Prompt, um dieses Mentoring zu starten",
         "mentor_prompt_copy": "Prompt kopieren",
         "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
@@ -1546,7 +1543,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     Self-contained HTML (inline CSS + JS, no external assets). For each
     mentor loaded in ``ctx`` renders avatar, name, description, the
     *human mentor* attribution (so escalation destinations are explicit),
-    and the playbook → work-instruction tree. All four sources are
+    and the playbook → skill tree. All four sources are
     pulled fresh per request — avatar via :meth:`Mentor.avatar_path`,
     playbooks via :func:`ammp_mcp.playbook.load_playbooks` — so the page
     reflects on-disk changes without a server restart. A single
@@ -1570,7 +1567,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
     from html import escape as _h
 
     # Inline-markdown renderer — handles `**bold**`, `*italic*`, and
-    # `` `code` `` in summary lines so playbook / work-instruction
+    # `` `code` `` in summary lines so playbook / skill
     # markdown doesn't show raw asterisks on the page. HTML-escape
     # first; the conversion only ever inserts the small set of tags
     # below, never anything attacker-controlled.
@@ -1586,8 +1583,8 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
         appear in the summary lines we surface on the landing.
 
         Args:
-            text: The raw text from a playbook description or work
-                instruction summary.
+            text: The raw text from a playbook description or skill
+                summary.
 
         Returns:
             HTML-safe rendered string.
@@ -1642,35 +1639,35 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
             human_html = f"<p class='human-mentor'>{behind_prefix}{hm_name_html}{hm_contact}</p>"
         else:
             human_html = ""
-        # Playbook → work-instruction nested rendering. Each playbook is
-        # an area of practice; each instruction is one craft rule.
-        # Instructions are collapsed inside a <details> by default —
-        # one mentor with three playbooks of 5-12 instructions each
-        # would otherwise dominate the page.
+        # Playbook → skill nested rendering. Each playbook is an area
+        # of practice; each skill is one craft rule. Skills are
+        # collapsed inside a <details> by default — one mentor with
+        # three playbooks of 5-12 skills each would otherwise dominate
+        # the page.
         if playbooks:
             pb_html_parts: list[str] = []
             for pb in playbooks:
-                if pb.instructions:
-                    instr_items = "".join(
-                        f"<li><span class='wi-title'>{_h(wi.title)}</span>"
-                        + (f"<span class='wi-desc'>{_md_inline(wi.summary)}</span>" if wi.summary else "")
+                if pb.skills:
+                    skill_items = "".join(
+                        f"<li><span class='skill-title'>{_h(sk.title)}</span>"
+                        + (f"<span class='skill-desc'>{_md_inline(sk.summary)}</span>" if sk.summary else "")
                         + "</li>"
-                        for wi in pb.instructions
+                        for sk in pb.skills
                     )
-                    n = len(pb.instructions)
-                    label = c["mentor_wi_count_one"] if n == 1 else c["mentor_wi_count_many"].format(n=n)
-                    instructions_block = (
-                        f"<details class='instructions-details'>"
+                    n = len(pb.skills)
+                    label = c["mentor_skill_count_one"] if n == 1 else c["mentor_skill_count_many"].format(n=n)
+                    skills_block = (
+                        f"<details class='skills-details'>"
                         f"<summary>{label}</summary>"
-                        f"<ul class='instructions'>{instr_items}</ul>"
+                        f"<ul class='skills'>{skill_items}</ul>"
                         "</details>"
                     )
                 else:
-                    instructions_block = f"<p class='empty'>{c['mentor_no_instructions']}</p>"
+                    skills_block = f"<p class='empty'>{c['mentor_no_skills']}</p>"
                 pb_desc = f"<p class='pb-desc'>{_md_inline(pb.description)}</p>" if pb.description else ""
                 # Copy-paste prompt for starting a mentoring session on
                 # this specific (mentor, playbook). User pastes into
-                # their MCP-aware agent. Sits next to the instructions
+                # their MCP-aware agent. Sits next to the skills
                 # disclosure as a sibling, collapsed by default.
                 prompt_text = _build_mentor_playbook_prompt(
                     public_url=base,
@@ -1678,7 +1675,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     playbook_id=pb.id,
                     playbook_name=pb.name,
                     playbook_description=pb.description,
-                    instruction_count=len(pb.instructions),
+                    skill_count=len(pb.skills),
                     plugin_ref=pb.plugin_ref,
                 )
                 prompt_dom_id = f"prompt--{_h(slug)}--{_h(pb.id)}"
@@ -1695,7 +1692,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     "<section class='playbook'>"
                     f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span></h4>"
                     f"{pb_desc}"
-                    f"{instructions_block}"
+                    f"{skills_block}"
                     f"{prompt_block}"
                     "</section>"
                 )
@@ -1796,22 +1793,22 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .pb-name{{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .15rem;color:var(--ink);display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
 .pb-id{{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);font-weight:400}}
 .pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
-.instructions-details,.prompt-details{{margin:.4rem 0 0}}
-.instructions-details > summary,.prompt-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}
-.instructions-details > summary::-webkit-details-marker,.prompt-details > summary::-webkit-details-marker{{display:none}}
-.instructions-details > summary::before,.prompt-details > summary::before{{content:"▸";display:inline-block;width:.9rem;color:var(--ink-soft);transition:transform .15s ease}}
-.instructions-details[open] > summary::before,.prompt-details[open] > summary::before{{transform:rotate(90deg)}}
-.instructions-details > summary:hover,.prompt-details > summary:hover{{color:var(--accent-hover)}}
+.skills-details,.prompt-details{{margin:.4rem 0 0}}
+.skills-details > summary,.prompt-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}
+.skills-details > summary::-webkit-details-marker,.prompt-details > summary::-webkit-details-marker{{display:none}}
+.skills-details > summary::before,.prompt-details > summary::before{{content:"▸";display:inline-block;width:.9rem;color:var(--ink-soft);transition:transform .15s ease}}
+.skills-details[open] > summary::before,.prompt-details[open] > summary::before{{transform:rotate(90deg)}}
+.skills-details > summary:hover,.prompt-details > summary:hover{{color:var(--accent-hover)}}
 .prompt-details pre.prompt{{margin:.5rem 0 .5rem;padding:.85rem 1rem;background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:.82rem;line-height:1.5;color:var(--ink);white-space:pre-wrap;overflow-x:auto}}
 @media (prefers-color-scheme: dark) {{ .prompt-details pre.prompt{{background:rgba(255,255,255,.04)}} }}
-.instructions{{margin:.5rem 0 0;padding:0 0 0 1.4rem;color:var(--ink-soft);list-style:disc}}
-.instructions li{{margin:.3rem 0;color:var(--ink);font-size:.92rem}}
-.instructions li::marker{{color:var(--ink-soft)}}
-.instructions .wi-title{{color:var(--ink);font-weight:500}}
-.instructions .wi-desc{{display:block;color:var(--ink-soft);font-size:.85rem;line-height:1.45;margin-top:.05rem}}
-.instructions .wi-desc code{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:3px;padding:.05rem .3rem;font-size:.92em}}
-@media (prefers-color-scheme: dark) {{ .instructions .wi-desc code{{background:rgba(255,255,255,.04)}} }}
-.instructions li.empty{{color:var(--ink-soft);font-style:italic;list-style:none;margin-left:-1.1rem}}
+.skills{{margin:.5rem 0 0;padding:0 0 0 1.4rem;color:var(--ink-soft);list-style:disc}}
+.skills li{{margin:.3rem 0;color:var(--ink);font-size:.92rem}}
+.skills li::marker{{color:var(--ink-soft)}}
+.skills .skill-title{{color:var(--ink);font-weight:500}}
+.skills .skill-desc{{display:block;color:var(--ink-soft);font-size:.85rem;line-height:1.45;margin-top:.05rem}}
+.skills .skill-desc code{{background:rgba(0,0,0,.045);border:1px solid var(--rule);border-radius:3px;padding:.05rem .3rem;font-size:.92em}}
+@media (prefers-color-scheme: dark) {{ .skills .skill-desc code{{background:rgba(255,255,255,.04)}} }}
+.skills li.empty{{color:var(--ink-soft);font-style:italic;list-style:none;margin-left:-1.1rem}}
 .empty{{color:var(--ink-soft);font-style:italic}}
 .runtimes{{margin:.4rem 0 0;color:var(--ink-soft);font-size:.95rem}}
 .cta{{margin:1rem 0 .5rem}}
@@ -2127,18 +2124,6 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         Server-side extension over AMMP-01: lets a mentee fetch a
         single skill body when it already knows ``(playbook_id, id)``,
         without round-tripping the whole playbook.
-
-        Renamed from ``GetWorkInstruction`` in 0.6.0 (AgentSkills
-        alignment); the old tool name is preserved as an alias.
-        """
-        return _handle_get_skill(ctx, playbook_id, id, mentor, None)
-
-    @mcp.tool
-    def GetWorkInstruction(playbook_id: str, id: str, mentor: str = "") -> dict[str, Any]:
-        """Alias of ``GetSkill`` — kept for 0.5.x mentees that still call the old name.
-
-        Deprecated; will be removed in 1.0. New code should call
-        ``GetSkill`` directly.
         """
         return _handle_get_skill(ctx, playbook_id, id, mentor, None)
 

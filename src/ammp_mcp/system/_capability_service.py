@@ -39,7 +39,7 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
                 "profileUrl": m.profile_url,
                 "humanMentor": human_mentor,
                 "playbookCount": len(corpus),
-                "instructionCount": sum(len(pb.instructions) for pb in corpus),
+                "skillCount": sum(len(pb.skills) for pb in corpus),
             }
         )
     return {
@@ -64,7 +64,6 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
             "ListPlaybooks",
             "GetPlaybook",
             "GetSkill",
-            "GetWorkInstruction",  # deprecated alias of GetSkill; kept through 0.x
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",

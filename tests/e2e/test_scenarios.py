@@ -105,7 +105,6 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
                 "ListPlaybooks",
                 "GetPlaybook",
                 "GetSkill",
-                "GetWorkInstruction",  # deprecated alias of GetSkill (kept through 0.x)
                 "SearchPlaybooks",
                 "AskMentor",
                 "EscalateToHuman",
@@ -123,8 +122,8 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
             first_id = listed["playbooks"][0]["id"]
             got = payload(await mentee.call_tool("GetPlaybook", {"id": first_id, "mentor": "pepe"}))
             assert got["id"] == first_id
-            assert isinstance(got["instructions"], list) and got["instructions"]
-            assert isinstance(got["instructions"][0]["body"], str) and got["instructions"][0]["body"]
+            assert isinstance(got["skills"], list) and got["skills"]
+            assert isinstance(got["skills"][0]["body"], str) and got["skills"][0]["body"]
 
             # Step 3: search.
             searched = payload(

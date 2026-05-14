@@ -76,8 +76,7 @@ async def test_stdio_transport_round_trip(isolated_tree: Path) -> None:
     async with Client(transport) as client:
         # Handshake completes inside __aenter__. The list of tools advertised
         # over stdio must match the HTTP wire surface — five Mentoring §5
-        # operations plus the ListMentors + GetSkill server-side extensions
-        # (GetWorkInstruction kept through 0.x as a deprecated alias of GetSkill).
+        # operations plus the ListMentors + GetSkill server-side extensions.
         tools = await client.list_tools()
         names = {t.name for t in tools}
         assert names == {
@@ -85,7 +84,6 @@ async def test_stdio_transport_round_trip(isolated_tree: Path) -> None:
             "ListPlaybooks",
             "GetPlaybook",
             "GetSkill",
-            "GetWorkInstruction",
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
@@ -105,10 +103,10 @@ async def test_stdio_transport_round_trip(isolated_tree: Path) -> None:
         # GetPlaybook — returns the playbook with every work-instruction body.
         got = _payload(await client.call_tool("GetPlaybook", {"id": "intro", "mentor": "pepe"}))
         assert got["id"] == "intro"
-        wi_ids = {wi["id"] for wi in got["instructions"]}
+        wi_ids = {wi["id"] for wi in got["skills"]}
         assert wi_ids == {"intro", "auth"}
-        intro_wi = next(wi for wi in got["instructions"] if wi["id"] == "intro")
-        assert "Welcome to Pepe" in intro_wi["body"]
+        intro_sk = next(wi for wi in got["skills"] if wi["id"] == "intro")
+        assert "Welcome to Pepe" in intro_sk["body"]
 
         # SearchPlaybooks — substring match.
         searched = _payload(

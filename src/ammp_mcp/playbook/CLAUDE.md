@@ -55,4 +55,4 @@ for sk, rank, snippet in hits:
 ## Test coverage
 
 - `tests/unit/test_playbooks.py` — playbook + skill loading (README excluded), metadata parsing, `safe_id` rejection cases, search + keyword_rank at skill granularity, missing-`playbook.json` subdirs skipped.
-- `tests/integration/test_server.py` — `ListPlaybooks / GetPlaybook / GetSkill / GetWorkInstruction / SearchPlaybooks` over the FastMCP client; `GetPluginArchive` + `/plugins/<name>.zip` route exercised end-to-end.
+- `tests/integration/test_server.py` — `ListPlaybooks / GetPlaybook / GetSkill / SearchPlaybooks` over the FastMCP client; `GetPluginArchive` + `/plugins/<name>.zip` route exercised end-to-end.

@@ -115,14 +115,14 @@ sequenceDiagram
 
 ## Operations
 
-Twelve MCP tools — the five normative Mentoring-track operations from AMMP §5 plus seven server-side extensions (`ListMentors`, `GetSkill`, `GetPluginArchive`, `EscalateToHumanMentor`, `GetEscalation`, `GetSystemInfo`, and the deprecated alias `GetWorkInstruction`). Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `mcp.helmguild.com/ammp`).
+Eleven MCP tools — the five normative Mentoring-track operations from AMMP §5 plus six server-side extensions (`ListMentors`, `GetSkill`, `GetPluginArchive`, `EscalateToHumanMentor`, `GetEscalation`, `GetSystemInfo`). Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `mcp.helmguild.com/ammp`).
 
 | Operation | Purpose |
 |---|---|
 | `ListMentors()` | Enumerate the mentors this server hosts. Each entry includes `slug`, `name`, `profile_url`, `playbook_count`, `confidence_threshold`, `backend_kind` (one of `anthropic` / `openclaw` / `stub`, matching `mentor.json`), `backend_live`, and `is_default`. Server-side extension over AMMP-01 — same data as the capability JSON, exposed over the MCP wire so mentees do not need a separate HTTP fetch to discover slugs. |
 | `ListPlaybooks(mentor?)` | Enumerate playbooks (areas of practice) with their skill summaries. |
 | `GetPlaybook(id, mentor?)` | Fetch one playbook with every skill body inline. |
-| `GetSkill(playbook_id, id, mentor?)` | Fetch a single skill body without round-tripping the whole playbook. Server-side extension over AMMP-01. Aligned with the open [AgentSkills](https://agentskills.io/home) standard; the legacy name `GetWorkInstruction` remains as a deprecated alias of this tool through 0.x. |
+| `GetSkill(playbook_id, id, mentor?)` | Fetch a single skill body without round-tripping the whole playbook. Server-side extension over AMMP-01. Aligned with the open [AgentSkills](https://agentskills.io/home) standard. |
 | `GetPluginArchive(plugin)` | Return a Bearer-token-gated download URL pointing to `/plugins/<plugin>.zip` on this server when a playbook is backed by a private marketplace plugin. The mentee hands the URL + install instructions to its user, who installs the plugin into Claude Code / Desktop by extracting the zip and running `/plugin install <path>`. Server-side extension over AMMP-01. |
 | `SearchPlaybooks(query, mentor?, limit?)` | Substring-rank the corpus at skill granularity; return matches with snippets. |
 | `AskMentor(question, mentor?, context?)` | LLM-synthesised answer + self-reported `confidence`. When confidence is below the mentor's threshold, the response also recommends `EscalateToHuman` with suggested phrasing — *mentor-triggered* escalation. |

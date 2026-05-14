@@ -23,7 +23,7 @@ $ ammp [OPTIONS] COMMAND [ARGS]...
 * `mentor`: Inspect registered mentors; ask one a...
 * `mentee`: Manage the mentee allowlist (add / remove...
 * `playbook`: Inspect and read a mentor&#x27;s playbooks...
-* `instruction`: Inspect and read individual skills inside...
+* `skill`: Inspect and read individual skills inside...
 * `escalation`: Inspect and manage mentor-mediated...
 * `system`: Operate the install as a whole (setup,...
 
@@ -387,9 +387,9 @@ $ ammp playbook show [OPTIONS] PLAYBOOK_ID
 
 Substring-search a mentor&#x27;s corpus (CLI parity with AMMP ``SearchPlaybooks``).
 
-Calls the same handler the MCP server uses. Search runs at
-work-instruction granularity; each match names its parent playbook.
-The hash-only audit log records the call.
+Calls the same handler the MCP server uses. Search runs at skill
+granularity; each match names its parent playbook. The hash-only
+audit log records the call.
 
 **Usage**:
 
@@ -399,7 +399,7 @@ $ ammp playbook search [OPTIONS] QUERY
 
 **Arguments**:
 
-* `QUERY`: Substring to search for across the mentor&#x27;s work-instruction corpus.  [required]
+* `QUERY`: Substring to search for across the mentor&#x27;s skill corpus.  [required]
 
 **Options**:
 
@@ -408,14 +408,14 @@ $ ammp playbook search [OPTIONS] QUERY
 * `--json`: Emit raw JSON (machine-readable) instead of a Rich table.
 * `--help`: Show this message and exit.
 
-## `ammp instruction`
+## `ammp skill`
 
 Inspect and read individual skills inside a mentor&#x27;s playbooks.
 
 **Usage**:
 
 ```console
-$ ammp instruction [OPTIONS] COMMAND [ARGS]...
+$ ammp skill [OPTIONS] COMMAND [ARGS]...
 ```
 
 **Options**:
@@ -427,14 +427,14 @@ $ ammp instruction [OPTIONS] COMMAND [ARGS]...
 * `list`: List the skills inside a playbook.
 * `show`: Print one skill body to stdout (CLI parity...
 
-### `ammp instruction list`
+### `ammp skill list`
 
 List the skills inside a playbook.
 
 **Usage**:
 
 ```console
-$ ammp instruction list [OPTIONS]
+$ ammp skill list [OPTIONS]
 ```
 
 **Options**:
@@ -443,19 +443,19 @@ $ ammp instruction list [OPTIONS]
 * `--mentor TEXT`: Mentor slug. Empty → server default.
 * `--help`: Show this message and exit.
 
-### `ammp instruction show`
+### `ammp skill show`
 
 Print one skill body to stdout (CLI parity with ``GetSkill``).
 
 **Usage**:
 
 ```console
-$ ammp instruction show [OPTIONS] INSTRUCTION_ID
+$ ammp skill show [OPTIONS] SKILL_ID
 ```
 
 **Arguments**:
 
-* `INSTRUCTION_ID`: Skill id (folder name or filename stem).  [required]
+* `SKILL_ID`: Skill id (folder name or filename stem).  [required]
 
 **Options**:
 

@@ -116,15 +116,15 @@ def mentor_list(
     table.add_column("backend", style="white")
     table.add_column("playbook_dir", style="dim")
     for slug, m in mentors.items():
-        corpus = load_playbooks(m.playbook_dir)
-        instruction_count = sum(len(pb.instructions) for pb in corpus)
+        corpus = load_playbooks(m.playbook_dir, marketplaces_root=s.marketplaces_root)
+        skill_count = sum(len(pb.skills) for pb in corpus)
         marker = " (default)" if slug == s.default_mentor else ""
         backend = m.backend.kind if m.backend else "fallback"
         table.add_row(
             slug + marker,
             m.name,
             str(len(corpus)),
-            str(instruction_count),
+            str(skill_count),
             f"{m.confidence_threshold:.2f}",
             backend,
             str(m.playbook_dir),

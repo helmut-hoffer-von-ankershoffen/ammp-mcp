@@ -45,14 +45,9 @@ logger = logging.getLogger(__name__)
 class Skill:
     """One skill loaded from disk.
 
-    Renamed from the original ``WorkInstruction`` to align with the
-    AgentSkills standard; the legacy wire op ``GetWorkInstruction``
-    survives as an alias of ``GetSkill`` so older mentees keep working.
-
     Attributes:
-        id: Slug used by the ``GetSkill`` / ``GetWorkInstruction`` wire
-            op. SKILL.md folder name for AgentSkills format; filename
-            stem for legacy format.
+        id: Slug used by the ``GetSkill`` wire op. SKILL.md folder
+            name for AgentSkills format; filename stem for legacy format.
         title: First H1 in the body (or the description, or the id).
         summary: One-line ``description`` from frontmatter, or the
             first non-blank non-heading body line as a fallback.
@@ -87,9 +82,8 @@ class Playbook:
         plugin_ref: When the playbook is plugin-backed,
             ``(plugin_name, marketplace_name)``; ``None`` when the
             playbook holds its skills locally.
-        instructions: Skills loaded from this playbook, sorted by
-            ``order`` then ``id``. The field name is kept for
-            backward compatibility — the type is :class:`Skill` now.
+        skills: Skills loaded from this playbook, sorted by
+            ``order`` then ``id``.
     """
 
     id: str
@@ -97,7 +91,7 @@ class Playbook:
     description: str
     dir: Path
     plugin_ref: tuple[str, str] | None = None
-    instructions: list[Skill] = field(default_factory=list)
+    skills: list[Skill] = field(default_factory=list)
 
 
 # `[^\n]+` instead of `.+` so the title group never backtracks across
@@ -222,14 +216,14 @@ def _load_skill_md(skill_dir: Path, playbook_id: str) -> Skill:
 
 
 def _load_legacy_md(path: Path, playbook_id: str) -> Skill:
-    """Read one legacy ``NN-*.md`` work-instruction file into a :class:`Skill`.
+    """Read one legacy ``NN-*.md`` skill file into a :class:`Skill`.
 
     Preserves the original AMMP-01 layout: filename stem is the id,
     ``NN-`` prefix sets the order, the first H1 is the title, the
     first non-blank non-heading line is the summary.
 
     Args:
-        path: Filesystem path to a single ``*.md`` instruction file.
+        path: Filesystem path to a single ``*.md`` skill file.
         playbook_id: Slug of the playbook this skill belongs to.
 
     Returns:
@@ -373,7 +367,7 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
                 plugin_name,
                 marketplace_name,
             )
-            instructions = _load_skills_local(playbook_dir, pid)
+            skills = _load_skills_local(playbook_dir, pid)
         else:
             plugin_dir = marketplaces_root / marketplace_name / "plugins" / plugin_name
             if not plugin_dir.is_dir():
@@ -384,11 +378,11 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
                     marketplace_name,
                     plugin_dir,
                 )
-                instructions = _load_skills_local(playbook_dir, pid)
+                skills = _load_skills_local(playbook_dir, pid)
             else:
-                instructions = _load_skills_from_plugin(plugin_dir, pid)
+                skills = _load_skills_from_plugin(plugin_dir, pid)
     else:
-        instructions = _load_skills_local(playbook_dir, pid)
+        skills = _load_skills_local(playbook_dir, pid)
 
     return Playbook(
         id=pid,
@@ -396,7 +390,7 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
         description=description,
         dir=playbook_dir,
         plugin_ref=plugin_ref,
-        instructions=instructions,
+        skills=skills,
     )
 
 
@@ -445,11 +439,7 @@ def flatten_skills(corpus: list[Playbook]) -> list[Skill]:
         Every :class:`Skill` from every playbook, in playbook order
         then file order.
     """
-    return [sk for pb in corpus for sk in pb.instructions]
-
-
-# Back-compat alias — older code refers to flatten_instructions.
-flatten_instructions = flatten_skills
+    return [sk for pb in corpus for sk in pb.skills]
 
 
 def safe_id(raw: str) -> str | None:

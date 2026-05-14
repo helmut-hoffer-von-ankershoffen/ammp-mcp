@@ -1,9 +1,8 @@
-"""`ammp playbook …` and `ammp instruction …` subcommands.
+"""`ammp playbook …` and `ammp skill …` subcommands.
 
 The corpus is a two-level hierarchy — playbooks (areas of practice)
 contain skills (markdown files). ``ammp playbook`` operates
-on the area level; ``ammp instruction`` operates on individual
-instructions.
+on the area level; ``ammp skill`` operates on individual skills.
 """
 
 from __future__ import annotations
@@ -27,12 +26,12 @@ playbook_app = typer.Typer(
 wire_help_on_no_args(playbook_app)
 
 
-instruction_app = typer.Typer(
-    name="instruction",
+skill_app = typer.Typer(
+    name="skill",
     help="Inspect and read individual skills inside a mentor's playbooks.",
     add_completion=False,
 )
-wire_help_on_no_args(instruction_app)
+wire_help_on_no_args(skill_app)
 
 
 @playbook_app.command("list")
@@ -44,14 +43,14 @@ def playbook_list(mentor: str = typer.Option("", help="Mentor slug. Empty → se
     if not m:
         console.print(f"[red]Unknown mentor: {mentor or s.default_mentor!r}[/red]")
         raise typer.Exit(code=2)
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=s.marketplaces_root)
     table = Table(title=f"{m.name} — playbooks ({len(corpus)})")
     table.add_column("id", style="cyan")
     table.add_column("name", style="white")
     table.add_column("description", style="dim")
-    table.add_column("instr", justify="right", style="magenta")
+    table.add_column("skills", justify="right", style="magenta")
     for pb in corpus:
-        table.add_row(pb.id, pb.name, pb.description[:80], str(len(pb.instructions)))
+        table.add_row(pb.id, pb.name, pb.description[:80], str(len(pb.skills)))
     console.print(table)
 
 
@@ -71,7 +70,7 @@ def playbook_show(
     if not clean:
         console.print(f"[red]Invalid playbook id: {playbook_id!r}[/red]")
         raise typer.Exit(code=2)
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=s.marketplaces_root)
     pb = next((p for p in corpus if p.id == clean), None)
     if pb is None:
         console.print(f"[red]Not found: playbook id={clean!r} for mentor {m.slug!r}[/red]")
@@ -80,17 +79,17 @@ def playbook_show(
     if pb.description:
         console.print(pb.description)
     console.print()
-    table = Table(title=f"skills ({len(pb.instructions)})")
+    table = Table(title=f"skills ({len(pb.skills)})")
     table.add_column("id", style="cyan")
     table.add_column("title", style="white")
     table.add_column("summary", style="dim")
-    for wi in pb.instructions:
-        table.add_row(wi.id, wi.title, wi.summary[:80])
+    for sk in pb.skills:
+        table.add_row(sk.id, sk.title, sk.summary[:80])
     console.print(table)
 
 
-@instruction_app.command("list")
-def instruction_list(
+@skill_app.command("list")
+def skill_list(
     playbook_id: str = typer.Option(..., "--playbook", "-p", help="Playbook id (directory name)."),
     mentor: str = typer.Option("", help="Mentor slug. Empty → server default."),
 ) -> None:
@@ -105,23 +104,23 @@ def instruction_list(
     if not clean_pb:
         console.print(f"[red]Invalid playbook id: {playbook_id!r}[/red]")
         raise typer.Exit(code=2)
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=s.marketplaces_root)
     pb = next((p for p in corpus if p.id == clean_pb), None)
     if pb is None:
         console.print(f"[red]Not found: playbook id={clean_pb!r} for mentor {m.slug!r}[/red]")
         raise typer.Exit(code=1)
-    table = Table(title=f"{m.name} · {pb.name} — skills ({len(pb.instructions)})")
+    table = Table(title=f"{m.name} · {pb.name} — skills ({len(pb.skills)})")
     table.add_column("id", style="cyan")
     table.add_column("title", style="white")
     table.add_column("summary", style="dim")
-    for wi in pb.instructions:
-        table.add_row(wi.id, wi.title, wi.summary[:80])
+    for sk in pb.skills:
+        table.add_row(sk.id, sk.title, sk.summary[:80])
     console.print(table)
 
 
-@instruction_app.command("show")
-def instruction_show(
-    instruction_id: str = typer.Argument(..., help="Skill id (folder name or filename stem)."),
+@skill_app.command("show")
+def skill_show(
+    skill_id: str = typer.Argument(..., help="Skill id (folder name or filename stem)."),
     playbook_id: str = typer.Option(..., "--playbook", "-p", help="Playbook id (directory name)."),
     mentor: str = typer.Option("", help="Mentor slug."),
 ) -> None:
@@ -133,29 +132,34 @@ def instruction_show(
         console.print(f"[red]Unknown mentor: {mentor or s.default_mentor!r}[/red]")
         raise typer.Exit(code=2)
     clean_pb = safe_id(playbook_id)
-    clean_id = safe_id(instruction_id)
+    clean_id = safe_id(skill_id)
     if not clean_pb or not clean_id:
         console.print("[red]Invalid id[/red]")
         raise typer.Exit(code=2)
-    target = m.playbook_dir / clean_pb / f"{clean_id}.md"
-    if not target.is_file():
-        console.print(f"[red]Not found: {target}[/red]")
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=s.marketplaces_root)
+    pb = next((p for p in corpus if p.id == clean_pb), None)
+    if pb is None:
+        console.print(f"[red]Not found: playbook id={clean_pb!r} for mentor {m.slug!r}[/red]")
         raise typer.Exit(code=1)
-    console.print(target.read_text(encoding="utf-8"))
+    sk = next((s_ for s_ in pb.skills if s_.id == clean_id), None)
+    if sk is None:
+        console.print(f"[red]Not found: skill id={clean_id!r} in playbook {clean_pb!r}[/red]")
+        raise typer.Exit(code=1)
+    console.print(sk.body)
 
 
 @playbook_app.command("search")
 def playbook_search(
-    query: str = typer.Argument(..., help="Substring to search for across the mentor's work-instruction corpus."),
+    query: str = typer.Argument(..., help="Substring to search for across the mentor's skill corpus."),
     mentor: str = typer.Option("", "--mentor", "-m", help="Mentor slug. Empty → server default."),
     limit: int = typer.Option(5, "--limit", "-n", min=1, max=50, help="Maximum number of matches to return."),
     as_json: bool = typer.Option(False, "--json", help="Emit raw JSON (machine-readable) instead of a Rich table."),
 ) -> None:
     """Substring-search a mentor's corpus (CLI parity with AMMP ``SearchPlaybooks``).
 
-    Calls the same handler the MCP server uses. Search runs at
-    work-instruction granularity; each match names its parent playbook.
-    The hash-only audit log records the call.
+    Calls the same handler the MCP server uses. Search runs at skill
+    granularity; each match names its parent playbook. The hash-only
+    audit log records the call.
     """
     import json as _json
 

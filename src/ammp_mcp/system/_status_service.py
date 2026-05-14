@@ -75,13 +75,13 @@ def _status_check_one_mentor(slug: str, m: Mentor, r: _StatusReporter) -> None:
     """
     corpus = load_playbooks(m.playbook_dir)
     backend_label = m.backend.kind if m.backend else "fallback"
-    instruction_count = sum(len(pb.instructions) for pb in corpus)
+    skill_count = sum(len(pb.skills) for pb in corpus)
     if not corpus:
         r.warn(f"  mentor {slug}", f"playbook_dir has no playbooks: {m.playbook_dir}")
     else:
         r.ok(
             f"  mentor {slug}",
-            f"{len(corpus)} playbook(s), {instruction_count} instruction(s), backend={backend_label}",
+            f"{len(corpus)} playbook(s), {skill_count} skill(s), backend={backend_label}",
         )
     if m.backend and m.backend.kind == "openclaw":
         env_name = m.backend.auth_bearer_env

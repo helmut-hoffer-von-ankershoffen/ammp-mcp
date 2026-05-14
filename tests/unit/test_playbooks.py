@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from ammp_mcp.playbook import (
-    flatten_instructions,
+    flatten_skills,
     keyword_rank,
     load_playbooks,
     safe_id,
@@ -24,7 +24,7 @@ def test_load_playbooks_picks_up_each_subdir(isolated_tree: Path) -> None:
 def test_load_playbooks_excludes_readme_in_instructions(isolated_tree: Path) -> None:
     corpus = load_playbooks(isolated_tree / "mentors" / "pepe" / "playbooks")
     intro = next(pb for pb in corpus if pb.id == "intro")
-    instr_ids = {wi.id for wi in intro.instructions}
+    instr_ids = {wi.id for wi in intro.skills}
     assert "readme" not in instr_ids
     assert {"intro", "auth"} <= instr_ids
 
@@ -43,11 +43,11 @@ def test_load_playbook_reads_metadata(isolated_tree: Path) -> None:
 def test_load_instruction_extracts_title_and_summary(isolated_tree: Path) -> None:
     corpus = load_playbooks(isolated_tree / "mentors" / "pepe" / "playbooks")
     intro = next(pb for pb in corpus if pb.id == "intro")
-    intro_wi = next(wi for wi in intro.instructions if wi.id == "intro")
-    assert intro_wi.title == "Welcome to Pepe's Playbooks"
-    assert "operational" in intro_wi.summary.lower()
+    intro_sk = next(wi for wi in intro.skills if wi.id == "intro")
+    assert intro_sk.title == "Welcome to Pepe's Playbooks"
+    assert "operational" in intro_sk.summary.lower()
     # Every instruction knows which playbook it belongs to.
-    assert intro_wi.playbook_id == "intro"
+    assert intro_sk.playbook_id == "intro"
 
 
 def test_load_playbooks_skips_dir_without_playbook_json(tmp_path: Path) -> None:
@@ -107,7 +107,7 @@ def test_keyword_rank_strips_stopwords_returns_instructions(isolated_tree: Path)
 
 def test_flatten_instructions(isolated_tree: Path) -> None:
     corpus = load_playbooks(isolated_tree / "mentors" / "pepe" / "playbooks")
-    flat = flatten_instructions(corpus)
+    flat = flatten_skills(corpus)
     # pepe has 2 playbooks: intro (2 instructions) + operator-craft (1).
     assert len(flat) == 3
 
@@ -137,8 +137,8 @@ def test_load_skill_md_picks_up_frontmatter_description_and_title(tmp_path: Path
     corpus = load_playbooks(root)
     pbk = corpus[0]
     # Ordering follows metadata.order (beta=1 before alpha=2).
-    assert [sk.id for sk in pbk.instructions] == ["beta", "alpha"]
-    alpha = next(sk for sk in pbk.instructions if sk.id == "alpha")
+    assert [sk.id for sk in pbk.skills] == ["beta", "alpha"]
+    alpha = next(sk for sk in pbk.skills if sk.id == "alpha")
     assert alpha.title == "Alpha skill title"
     assert alpha.summary == "Alpha skill summary."
     assert alpha.order == 2
@@ -162,8 +162,8 @@ def test_plugin_backed_playbook_loads_from_marketplace_clone(tmp_path: Path) -> 
     corpus = load_playbooks(root, marketplaces_root=mr)
     pbk = corpus[0]
     assert pbk.plugin_ref == ("demo-plugin", "demo-market")
-    assert [sk.id for sk in pbk.instructions] == ["alpha"]
-    assert pbk.instructions[0].summary == "From marketplace."
+    assert [sk.id for sk in pbk.skills] == ["alpha"]
+    assert pbk.skills[0].summary == "From marketplace."
 
 
 def test_plugin_ref_with_missing_marketplaces_root_falls_back_to_local(tmp_path: Path) -> None:
@@ -175,7 +175,7 @@ def test_plugin_ref_with_missing_marketplaces_root_falls_back_to_local(tmp_path:
     (pb / "01-local.md").write_text("# Local\n\nbody\n", encoding="utf-8")
     corpus = load_playbooks(root)  # no marketplaces_root
     assert corpus[0].plugin_ref == ("p", "m")
-    assert [sk.id for sk in corpus[0].instructions] == ["01-local"]
+    assert [sk.id for sk in corpus[0].skills] == ["01-local"]
 
 
 def test_plugin_ref_pointing_at_missing_dir_falls_back_to_local(tmp_path: Path) -> None:
@@ -189,7 +189,7 @@ def test_plugin_ref_pointing_at_missing_dir_falls_back_to_local(tmp_path: Path) 
     (pb / "01-local.md").write_text("# Local\n\nbody\n", encoding="utf-8")
     corpus = load_playbooks(root, marketplaces_root=tmp_path / "marketplaces")
     assert corpus[0].plugin_ref == ("missing", "absent")
-    assert [sk.id for sk in corpus[0].instructions] == ["01-local"]
+    assert [sk.id for sk in corpus[0].skills] == ["01-local"]
 
 
 def test_malformed_plugin_ref_is_ignored(tmp_path: Path) -> None:
@@ -204,7 +204,7 @@ def test_malformed_plugin_ref_is_ignored(tmp_path: Path) -> None:
     (pb / "01-local.md").write_text("# Local\n\nbody\n", encoding="utf-8")
     corpus = load_playbooks(root, marketplaces_root=tmp_path / "marketplaces")
     assert corpus[0].plugin_ref is None
-    assert [sk.id for sk in corpus[0].instructions] == ["01-local"]
+    assert [sk.id for sk in corpus[0].skills] == ["01-local"]
 
 
 def test_skills_subdir_wins_over_legacy_nn_files(tmp_path: Path) -> None:
@@ -219,7 +219,7 @@ def test_skills_subdir_wins_over_legacy_nn_files(tmp_path: Path) -> None:
     )
     (pb / "01-legacy.md").write_text("# Legacy\n\nbody\n", encoding="utf-8")
     corpus = load_playbooks(root)
-    assert [sk.id for sk in corpus[0].instructions] == ["alpha"]
+    assert [sk.id for sk in corpus[0].skills] == ["alpha"]
 
 
 def test_plugin_with_empty_skills_dir_returns_no_skills(tmp_path: Path) -> None:
@@ -232,7 +232,7 @@ def test_plugin_with_empty_skills_dir_returns_no_skills(tmp_path: Path) -> None:
     (mr / "m" / "plugins" / "p" / "skills").mkdir(parents=True)
     corpus = load_playbooks(root, marketplaces_root=mr)
     assert corpus[0].plugin_ref == ("p", "m")
-    assert corpus[0].instructions == []
+    assert corpus[0].skills == []
 
 
 def test_plugin_with_no_skills_subdir_returns_no_skills(tmp_path: Path) -> None:
@@ -244,7 +244,7 @@ def test_plugin_with_no_skills_subdir_returns_no_skills(tmp_path: Path) -> None:
     mr = tmp_path / "marketplaces"
     (mr / "m" / "plugins" / "p").mkdir(parents=True)
     corpus = load_playbooks(root, marketplaces_root=mr)
-    assert corpus[0].instructions == []
+    assert corpus[0].skills == []
 
 
 def test_start_prompt_for_plugin_backed_playbook_mentions_get_plugin_archive(tmp_path: Path) -> None:
@@ -265,7 +265,7 @@ def test_start_prompt_for_plugin_backed_playbook_mentions_get_plugin_archive(tmp
         playbook_id="x",
         playbook_name="X",
         playbook_description="desc",
-        instruction_count=4,
+        skill_count=4,
         plugin_ref=("pepe-x", "helmguild-plugins"),
     )
     # The install step uses GetPluginArchive (not /plugin marketplace add) so
