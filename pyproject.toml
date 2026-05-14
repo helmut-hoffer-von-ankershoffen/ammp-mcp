@@ -1,6 +1,6 @@
 [project]
 name = "ammp"
-version = "0.11.0"
+version = "0.11.1"
 description = "🍝 Reference implementation of AMMP — the Agentic Mentor-Mentee Protocol — Mentoring track. Pepe Arturo, exposing his curated playbook corpus to mentee agents (Claude Cowork, Claude.ai, Claude Code, …) over the MCP wire."
 readme = "README.md"
 authors = [

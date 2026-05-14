@@ -387,16 +387,27 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
                 skills = _load_skills_local(playbook_dir, pid)
             else:
                 skills = _load_skills_from_plugin(plugin_dir, pid)
-                # Surface the plugin's `commercial` flag on the
-                # Playbook envelope so the landing + capability JSON
-                # can render it visibly.
-                plugin_manifest = plugin_dir / ".claude-plugin" / "plugin.json"
-                if plugin_manifest.is_file():
+                # Surface the plugin's commercial flag from the
+                # marketplace catalogue. Claude Code's plugin.json
+                # schema rejects custom top-level keys, so the
+                # commercial flag lives only on `marketplace.json` —
+                # both at `metadata.commercial` and per-entry. We
+                # prefer the per-entry value when present; otherwise
+                # inherit from `metadata.commercial`.
+                mp_manifest = marketplaces_root / marketplace_name / ".claude-plugin" / "marketplace.json"
+                if mp_manifest.is_file():
                     try:
-                        manifest = json.loads(plugin_manifest.read_text(encoding="utf-8"))
-                        commercial = bool(manifest.get("commercial"))
+                        mp = json.loads(mp_manifest.read_text(encoding="utf-8"))
                     except json.JSONDecodeError:
-                        pass
+                        mp = {}
+                    entry = next(
+                        (p for p in mp.get("plugins") or [] if isinstance(p, dict) and p.get("name") == plugin_name),
+                        None,
+                    )
+                    if entry is not None and "commercial" in entry:
+                        commercial = bool(entry["commercial"])
+                    else:
+                        commercial = bool((mp.get("metadata") or {}).get("commercial"))
     else:
         skills = _load_skills_local(playbook_dir, pid)
 

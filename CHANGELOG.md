@@ -5,6 +5,18 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.11.1] — 2026-05-14
+
+### Fixed
+
+- **`Playbook.commercial` derivation**: read the flag from the **marketplace.json** (per-entry `commercial` with fallback to `metadata.commercial`) instead of the plugin's own `plugin.json`. Claude Code's `claude plugin validate` ships with a strict plugin.json schema that rejects custom top-level keys — including `commercial` — so the flag now lives only on the catalogue side. Plugins downloaded via `GetPluginArchive` extract cleanly through `claude plugin validate` again. The landing-page "Commercial" badge still renders correctly because the loader reads from the marketplace clone. (#commercial)
+
+### Added — live smoke E2E suite (production)
+
+- **`tests/e2e/test_live_ammp_smoke.py`** — 8 tests against `mcp.helmguild.com/ammp`: capability JSON shape + ops set + Pepe + privacy posture; robots.txt advertises sitemap; sitemap lists EN + DE + capability with hreflang; landing renders the open-standards section + commercial badges; per-plugin zip round-trips the Helmguild Mentoring License on plugin.json + every SKILL.md frontmatter; `/plugins/<name>.zip` 401s without a Bearer.
+- **`tests/e2e/test_live_helmguild_com_smoke.py`** — 12 tests against `www.helmguild.com`: robots.txt advertises sitemap; sitemap lists every canonical page (including the new mandatory-mentoring post); Atom feed (EN + DE) carries the latest post; each blog post (EN + DE) reachable; RFC pages name AgentSkills + Claude Code plugin docs; Pepe's profile names standards + no longer says "in provisioning".
+- All 23 e2e tests pass against production (2 unrelated tests skip when `AMMP_ANTHROPIC_API_KEY` is absent).
+
 ## [0.11.0] — 2026-05-14
 
 ### Added
