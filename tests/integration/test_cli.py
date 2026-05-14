@@ -390,6 +390,152 @@ def test_playbook_search_json_output(runner: CliRunner) -> None:
     assert payload["count"] >= 1
 
 
+# ─── ammp plugin {list,archive} + ammp system info ──────────────────────────
+#
+# CLI parity with the `GetPluginArchive` + `GetSystemInfo` MCP tools. Both
+# go through the same in-process service-layer helpers
+# (`build_plugin_archive_response`, `enumerate_plugin_refs`) the MCP wire
+# uses — see playbook/_service.py.
+
+
+def _make_marketplace(isolated_tree: Path, mentor: str = "pepe") -> Path:
+    """Lay down a one-plugin marketplace clone + a playbook that refs it.
+
+    Returns the marketplaces_root path for the caller to set
+    AMMP_MARKETPLACES_ROOT to.
+    """
+    marketplaces_root = isolated_tree / "marketplaces"
+    plugin_dir = marketplaces_root / "demo-mp" / "plugins" / "demo-plugin"
+    skill_dir = plugin_dir / "skills" / "hello"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: hello\ndescription: greet\n---\n# Hello\n", encoding="utf-8")
+    (plugin_dir / "plugin.json").write_text(json.dumps({"name": "demo-plugin", "version": "1.0.0"}), encoding="utf-8")
+    # Marketplace catalogue (per Claude Code's plugin marketplace format).
+    mp_catalogue_dir = marketplaces_root / "demo-mp" / ".claude-plugin"
+    mp_catalogue_dir.mkdir(parents=True)
+    (mp_catalogue_dir / "marketplace.json").write_text(
+        json.dumps(
+            {
+                "name": "demo-mp",
+                "owner": {"name": "test"},
+                "plugins": [{"name": "demo-plugin", "source": "./plugins/demo-plugin"}],
+                "metadata": {"commercial": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    # Wire a third playbook on `pepe` pointing at the plugin.
+    pb_dir = isolated_tree / "mentors" / mentor / "playbooks" / "demo-area"
+    pb_dir.mkdir(parents=True)
+    (pb_dir / "playbook.json").write_text(
+        json.dumps(
+            {
+                "name": "Demo area",
+                "description": "Plugin-backed playbook.",
+                "plugin": "demo-plugin@demo-mp",
+            }
+        ),
+        encoding="utf-8",
+    )
+    return marketplaces_root
+
+
+def test_plugin_list_no_refs(runner: CliRunner) -> None:
+    """`ammp plugin list` when no playbook references a plugin → dim hint."""
+    r = runner.invoke(app, ["plugin", "list"])
+    assert r.exit_code == 0, r.output
+    assert "No playbook" in r.output or "references a plugin" in r.output
+
+
+def test_plugin_list_with_marketplace(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`ammp plugin list` with a marketplace clone surfaces the (plugin, mp) ref."""
+    root = _make_marketplace(isolated_tree)
+    monkeypatch.setenv("AMMP_DIR", str(isolated_tree))
+    monkeypatch.setenv("AMMP_MENTORS_ROOT", str(isolated_tree / "mentors"))
+    monkeypatch.setenv("AMMP_MENTEES_FILE", str(isolated_tree / "mentees.json"))
+    monkeypatch.setenv("AMMP_MARKETPLACES_ROOT", str(root))
+    monkeypatch.setenv("AMMP_PUBLIC_URL", "http://test.invalid")
+    monkeypatch.setenv("AMMP_DEFAULT_MENTOR", "pepe")
+    monkeypatch.setenv("COLUMNS", "200")
+    settings_module.reset_settings_for_testing()
+    r = CliRunner().invoke(app, ["plugin", "list"])
+    settings_module.reset_settings_for_testing()
+    assert r.exit_code == 0, r.output
+    assert "demo-plugin" in r.output
+    assert "demo-mp" in r.output
+
+
+def test_plugin_archive_invalid_name(runner: CliRunner) -> None:
+    """`ammp plugin archive` rejects out-of-shape slugs (defence-in-depth)."""
+    r = runner.invoke(app, ["plugin", "archive", "Bad_Name!"])
+    assert r.exit_code == 1
+    assert "invalid_plugin" in r.output.lower() or "invalid" in r.output.lower()
+
+
+def test_plugin_archive_not_found_json(runner: CliRunner) -> None:
+    """`ammp plugin archive nonexistent --json` returns the JSON error envelope + exit 1."""
+    r = runner.invoke(app, ["plugin", "archive", "nonexistent", "--json"])
+    assert r.exit_code == 1
+    payload = json.loads(r.output)
+    assert payload["error"] == "not_found"
+
+
+def test_plugin_archive_happy_path(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`ammp plugin archive demo-plugin` returns the canonical URL + install hints."""
+    root = _make_marketplace(isolated_tree)
+    monkeypatch.setenv("AMMP_DIR", str(isolated_tree))
+    monkeypatch.setenv("AMMP_MENTORS_ROOT", str(isolated_tree / "mentors"))
+    monkeypatch.setenv("AMMP_MENTEES_FILE", str(isolated_tree / "mentees.json"))
+    monkeypatch.setenv("AMMP_MARKETPLACES_ROOT", str(root))
+    monkeypatch.setenv("AMMP_PUBLIC_URL", "http://test.invalid")
+    monkeypatch.setenv("AMMP_DEFAULT_MENTOR", "pepe")
+    monkeypatch.setenv("COLUMNS", "200")
+    settings_module.reset_settings_for_testing()
+    r = CliRunner().invoke(app, ["plugin", "archive", "demo-plugin", "--json"])
+    settings_module.reset_settings_for_testing()
+    assert r.exit_code == 0, r.output
+    payload = json.loads(r.output)
+    assert payload["plugin"] == "demo-plugin"
+    assert payload["marketplace"] == "demo-mp"
+    assert payload["archive_url"] == "http://test.invalid/plugins/demo-plugin.zip"
+    assert "install_instructions" in payload
+
+
+def test_plugin_archive_happy_path_rich(isolated_tree: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default (non-JSON) output prints the rich-formatted envelope to stdout."""
+    root = _make_marketplace(isolated_tree)
+    monkeypatch.setenv("AMMP_DIR", str(isolated_tree))
+    monkeypatch.setenv("AMMP_MENTORS_ROOT", str(isolated_tree / "mentors"))
+    monkeypatch.setenv("AMMP_MENTEES_FILE", str(isolated_tree / "mentees.json"))
+    monkeypatch.setenv("AMMP_MARKETPLACES_ROOT", str(root))
+    monkeypatch.setenv("AMMP_PUBLIC_URL", "http://test.invalid")
+    monkeypatch.setenv("AMMP_DEFAULT_MENTOR", "pepe")
+    monkeypatch.setenv("COLUMNS", "200")
+    settings_module.reset_settings_for_testing()
+    r = CliRunner().invoke(app, ["plugin", "archive", "demo-plugin"])
+    settings_module.reset_settings_for_testing()
+    assert r.exit_code == 0, r.output
+    assert "demo-plugin" in r.output
+    assert "demo-mp" in r.output
+    assert "http://test.invalid/plugins/demo-plugin.zip" in r.output
+
+
+def test_system_info_envelope_shape(runner: CliRunner) -> None:
+    """`ammp system info` prints the GetSystemInfo envelope as JSON."""
+    r = runner.invoke(app, ["system", "info"])
+    assert r.exit_code == 0, r.output
+    payload = json.loads(r.output)
+    assert payload["name"] == "ammp-mcp"
+    assert isinstance(payload["version"], str)
+    assert payload["ammp_draft"].startswith("draft-ammp-")
+    assert payload["default_mentor"] == "pepe"
+    assert payload["mentor_count"] >= 1
+    # CLI is offline — started_at + uptime_seconds intentionally null so
+    # downstream consumers can distinguish from a live-server payload.
+    assert payload["started_at"] is None
+    assert payload["uptime_seconds"] is None
+
+
 # ─── Help / discoverability invariants ──────────────────────────────────────
 
 
@@ -408,7 +554,10 @@ _LEAF_COMMANDS: list[list[str]] = [
     ["playbook", "list"],
     ["playbook", "show", "intro"],
     ["playbook", "search", "x"],
+    ["plugin", "list"],
+    ["plugin", "archive", "demo-plugin"],
     ["system", "capability"],
+    ["system", "info"],
     ["system", "setup"],
     ["system", "status"],
     ["system", "health"],
