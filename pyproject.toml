@@ -63,6 +63,7 @@ dev = [
     "ruff>=0.8,<1",
     "mypy>=1.13,<3",
     "pyright>=1.1.400,<2",  # second static type-checker; runs alongside mypy in CI
+    "types-PyYAML>=6,<7",  # stubs for the optional yaml import in playbook/_service.py
     "pydoclint>=0.5,<1",   # verifies Args/Returns/Raises match the signature
     "pytest>=9,<10",       # >=9 fixes CVE-2025-71176
     "pytest-asyncio>=1,<2",
