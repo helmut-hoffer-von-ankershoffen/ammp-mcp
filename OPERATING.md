@@ -202,3 +202,31 @@ The deployed instance at `https://mcp.helmguild.com/ammp` runs as two macOS Laun
 Logs at `~/Library/Logs/ammp-mcp.{out,err}.log`. Reload either with `launchctl unload <plist> && launchctl load <plist>`, or `launchctl kickstart -k gui/$(id -u)/com.helmguild.ammp-mcp` for an in-place restart.
 
 For Docker / cross-platform deployments, see the [Docker section in `README.md`](README.md#docker).
+
+---
+
+## Verify the plugin install path (real Claude Code, real server)
+
+`scripts/e2e-claude-code-install.sh` exercises the full mentee → user install flow against the live AMMP server using the real `claude` CLI. It downloads a plugin zip via the auth-gated route, validates the extract with Claude Code's own `plugin validate`, wraps the plugin in a throwaway local marketplace, installs it under `--scope local`, and asserts the install landed in `.claude/settings.local.json`. Cleanup runs in a trap.
+
+Usage:
+
+```sh
+# Default plugin: pepe-operator-craft (smallest payload).
+HELMGUILD_AMMP_BEARER=ammp-… ./scripts/e2e-claude-code-install.sh
+
+# Or specify a plugin — useful for the multi-MCP / bundled-scripts variant.
+PLUGIN=pepe-multi-channel-content-pipelines HELMGUILD_AMMP_BEARER=ammp-… \
+  ./scripts/e2e-claude-code-install.sh
+
+# Keep the tmp dir for inspection.
+KEEP_TMP=1 HELMGUILD_AMMP_BEARER=ammp-… ./scripts/e2e-claude-code-install.sh
+```
+
+A pytest wrapper at `tests/e2e/test_claude_code_install.py` parametrises over Pepe's three plugins; it skips automatically when `claude` / `curl` / `jq` / `unzip` is missing from PATH, or when `HELMGUILD_AMMP_BEARER` is unset:
+
+```sh
+HELMGUILD_AMMP_BEARER=ammp-… uv run pytest tests/e2e/test_claude_code_install.py -m e2e -q
+```
+
+When green, the install round-trip works end-to-end: ammp-mcp serves a structurally-valid plugin zip → `claude plugin install` accepts it → the install lands in `settings.local.json` with the bundled `.mcp.json` (HTTP + stdio servers) wired and any bundled scripts / mcp-server bodies still executable.
