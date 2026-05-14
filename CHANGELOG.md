@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.8.2] — 2026-05-14
+
+### Added
+
+- **License-metadata round-trip assertions** on `test_plugin_archive_zip_round_trips_scripts_and_mcp_payload`. The test now puts a `license` field on the synthetic plugin's `plugin.json` + SKILL.md frontmatter + a `LICENSE.md` body, and asserts all three survive the zip round-trip with the value intact. Pinned so a regression that strips or rewrites license metadata at zip time is caught before any plugin reaches a mentee. The `helmguild-plugins` marketplace this server's reference deployment serves uses `LicenseRef-helmguild-mentoring-1.0` (Helmguild Mentoring License v1.0). (#license)
+
+### Changed (documentation)
+
+- **README** now spells out the two-layer licensing model: the server itself (this repo) stays MIT, while plugin payloads served via `GetPluginArchive` follow whatever license the marketplace chose. The reference helmguild deployment serves a proprietary `LicenseRef-helmguild-mentoring-1.0`; other operators choose their own. (#docs)
+
 ## [0.8.1] — 2026-05-14
 
 ### Added

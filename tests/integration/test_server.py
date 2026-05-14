@@ -1477,15 +1477,28 @@ async def test_plugin_archive_zip_round_trips_scripts_and_mcp_payload(settings: 
     marketplace = "test-market"
     plugin_dir = settings.marketplaces_root / marketplace / "plugins" / plugin
     (plugin_dir / ".claude-plugin").mkdir(parents=True)
+    license_id = "LicenseRef-helmguild-mentoring-1.0"
     (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
-        '{"name": "demo-plugin-with-payload", "description": "Probe.", "version": "0.1.0"}',
+        _json.dumps(
+            {
+                "name": "demo-plugin-with-payload",
+                "description": "Probe.",
+                "version": "0.1.0",
+                "license": license_id,
+            }
+        ),
         encoding="utf-8",
     )
-    # AgentSkills SKILL.md
+    # AgentSkills SKILL.md — carries the same license id in frontmatter.
     skill_dir = plugin_dir / "skills" / "alpha"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
-        '---\nname: alpha\ndescription: "Probe."\nallowed-tools:\n  - Bash\n  - mcp__probe__tool_one\n---\n# Alpha\n\nbody\n',
+        f'---\nname: alpha\ndescription: "Probe."\nlicense: {license_id}\nallowed-tools:\n  - Bash\n  - mcp__probe__tool_one\n---\n# Alpha\n\nbody\n',
+        encoding="utf-8",
+    )
+    # Per-plugin LICENSE.md (short body) — must also ship in the zip.
+    (plugin_dir / "LICENSE.md").write_text(
+        "Licensed under the Helmguild Mentoring License v1.0.\nSee canonical text at the marketplace root.\n",
         encoding="utf-8",
     )
     # .mcp.json with TWO server entries: HTTP + bundled stdio.
@@ -1550,10 +1563,22 @@ async def test_plugin_archive_zip_round_trips_scripts_and_mcp_payload(settings: 
         assert f"{plugin}/skills/alpha/SKILL.md" in names
         assert f"{plugin}/mcp-server/probe.mjs" in names
         assert f"{plugin}/scripts/do-something.sh" in names
+        assert f"{plugin}/LICENSE.md" in names
         # .mcp.json parses + still names both servers (HTTP + bundled stdio).
         roundtripped_mcp = _json.loads(z.read(f"{plugin}/.mcp.json"))
         assert set(roundtripped_mcp["mcpServers"]) == {"helmguild-ammp", "probe"}
         assert roundtripped_mcp["mcpServers"]["probe"]["type"] == "stdio"
+        # License metadata round-trips on every surface a mentee runtime
+        # reads: plugin.json `license`, SKILL.md frontmatter `license:`,
+        # and the bundled LICENSE.md body. Pinned so a regression that
+        # strips or rewrites the license at zip time is caught here
+        # before any plugin reaches a mentee.
+        roundtripped_plugin = _json.loads(z.read(f"{plugin}/.claude-plugin/plugin.json"))
+        assert roundtripped_plugin["license"] == license_id
+        skill_body = z.read(f"{plugin}/skills/alpha/SKILL.md").decode("utf-8")
+        assert f"license: {license_id}" in skill_body
+        license_body = z.read(f"{plugin}/LICENSE.md").decode("utf-8")
+        assert "Helmguild Mentoring License v1.0" in license_body
         # Executable bit survives the round-trip — required for the runtime
         # to spawn `node mcp-server/probe.mjs` (or any shipped bash helper)
         # straight after `unzip` with no `chmod +x` post-step.
