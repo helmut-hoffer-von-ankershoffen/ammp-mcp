@@ -1,0 +1,55 @@
+name: Diagrams
+
+# Render every ```mermaid``` block in the README via mmdc to catch
+# diagram-syntax regressions before they ship. Mermaid renders
+# client-side on GitHub, so a broken diagram looks fine in the PR
+# preview but breaks in the rendered README for readers.
+#
+# Scoped narrowly — only fires when README.md or the diagram test
+# itself changes — so the heavy Puppeteer+Chromium install in
+# mermaid-cli doesn't slow down every push.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "tests/e2e/test_readme_diagrams.py"
+      - ".github/workflows/diagrams.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "README.md"
+      - "tests/e2e/test_readme_diagrams.py"
+      - ".github/workflows/diagrams.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    name: Render README mermaid blocks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install mermaid-cli
+        run: npm install -g @mermaid-js/mermaid-cli
+
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install (locked deps)
+        run: make install
+
+      - name: Render every README mermaid block
+        run: uv run pytest tests/e2e/test_readme_diagrams.py -m e2e -v --no-cov
