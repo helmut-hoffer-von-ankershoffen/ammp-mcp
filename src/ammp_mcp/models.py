@@ -7,7 +7,7 @@ envelopes each server tool returns.
 
 The corpus is a two-level hierarchy: a mentor has zero or more
 **playbooks** (areas of practice); each playbook contains zero or more
-**work instructions** (individual craft rules, one markdown file each).
+**skills** (individual craft rules, one markdown file each).
 The envelopes here mirror that shape.
 """
 
@@ -35,12 +35,16 @@ class HumanMentorSummary(BaseModel):
     contact: str | None = None
 
 
-class WorkInstructionSummary(BaseModel):
-    """Compact identity of one work instruction.
+class SkillSummary(BaseModel):
+    """Compact identity of one skill.
 
     No body — used by ``ListPlaybooks`` (folded into each playbook) and
     by ``SearchPlaybooks`` (snippet replaces body). Mentees fetch the
-    full body with ``GetWorkInstruction``.
+    full body with ``GetSkill``.
+
+    Renamed from ``WorkInstructionSummary`` in 0.6.0 to align with the
+    [AgentSkills](https://agentskills.io) standard; an alias keeps the
+    old name importable through the 0.x line.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -50,8 +54,16 @@ class WorkInstructionSummary(BaseModel):
     summary: str = ""
 
 
-class WorkInstructionEntry(BaseModel):
-    """One work instruction with its full body — for ``GetPlaybook`` etc."""
+# Backward-compat alias: 0.5.x and ammp-evals still import the old name.
+WorkInstructionSummary = SkillSummary
+
+
+class SkillEntry(BaseModel):
+    """One skill with its full body — for ``GetPlaybook`` etc.
+
+    Renamed from ``WorkInstructionEntry`` in 0.6.0 (AgentSkills
+    alignment); alias preserved through the 0.x line.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -61,8 +73,16 @@ class WorkInstructionEntry(BaseModel):
     body: str
 
 
+WorkInstructionEntry = SkillEntry
+
+
 class PlaybookSummary(BaseModel):
-    """Summary of one playbook (area of practice). No instruction bodies."""
+    """Summary of one playbook (area of practice). No skill bodies.
+
+    Field name ``instructions`` is retained for wire backward
+    compatibility — semantically these are now :class:`SkillSummary`
+    entries.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -70,17 +90,16 @@ class PlaybookSummary(BaseModel):
     name: str
     description: str = ""
     instruction_count: int = 0
-    instructions: list[WorkInstructionSummary] = Field(default_factory=list)
+    instructions: list[SkillSummary] = Field(default_factory=list)
 
 
 class ListPlaybooksResponse(BaseModel):
     """Response envelope for the ``ListPlaybooks`` AMMP operation.
 
     Returns the mentor's playbooks (areas of practice) — each carries
-    its name + description + instruction summaries (title only, no
-    bodies). Fetch a full instruction body with ``GetWorkInstruction``;
-    fetch a whole playbook (descriptions + every instruction body)
-    with ``GetPlaybook``.
+    its name + description + skill summaries (title only, no bodies).
+    Fetch a full skill body with ``GetSkill``; fetch a whole playbook
+    (descriptions + every skill body) with ``GetPlaybook``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -94,12 +113,15 @@ class ListPlaybooksResponse(BaseModel):
 class PlaybookEntry(BaseModel):
     """One playbook entry embedded in a ``ListMentors`` mentor summary.
 
-    Carries the playbook's identity + work-instruction *summaries*
-    (id/title/summary). Full instruction bodies are intentionally
-    omitted to keep the envelope small enough for transports with
-    response-size limits — fetch the body for a specific instruction
-    via ``GetWorkInstruction``, or the whole playbook via
-    ``GetPlaybook``.
+    Carries the playbook's identity + skill *summaries*
+    (id/title/summary). Full skill bodies are intentionally omitted
+    to keep the envelope small enough for transports with
+    response-size limits — fetch the body for a specific skill via
+    ``GetSkill``, or the whole playbook via ``GetPlaybook``.
+
+    Field name ``instructions`` is retained for wire backward
+    compatibility — semantically these are now :class:`SkillSummary`
+    entries.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -107,7 +129,7 @@ class PlaybookEntry(BaseModel):
     id: str
     name: str
     description: str = ""
-    instructions: list[WorkInstructionSummary] = Field(default_factory=list)
+    instructions: list[SkillSummary] = Field(default_factory=list)
 
 
 class MentorSummary(BaseModel):
@@ -118,10 +140,10 @@ class MentorSummary(BaseModel):
     what the docs reference. ``backend_live`` indicates whether the
     runtime can actually reach the synthesis path (an Anthropic backend
     without an API key still reports kind ``"anthropic"`` but is not
-    live). ``playbooks`` embeds each playbook and its work-instruction
-    summaries (id + title + one-line summary). Full bodies are fetched
-    on demand via ``GetPlaybook`` / ``GetWorkInstruction`` so this
-    envelope stays small (under most MCP-transport response-size limits).
+    live). ``playbooks`` embeds each playbook and its skill summaries
+    (id + title + one-line summary). Full bodies are fetched on demand
+    via ``GetPlaybook`` / ``GetSkill`` so this envelope stays small
+    (under most MCP-transport response-size limits).
 
     ``human_mentor`` names the human who stands behind the agentic
     mentor — surfaced so escalation paths are explicit (AMMP §3.4).
@@ -184,13 +206,18 @@ class GetPlaybookResponse(BaseModel):
     instructions: list[WorkInstructionEntry]
 
 
-class GetWorkInstructionResponse(BaseModel):
-    """Response envelope for the ``GetWorkInstruction`` AMMP-extension operation.
+class GetSkillResponse(BaseModel):
+    """Response envelope for the ``GetSkill`` AMMP-extension operation.
 
     Server-side extension over AMMP-01's five operations — lets a
-    mentee fetch one specific work instruction by ``(playbook_id, id)``
-    when it already knows which one it wants, without round-tripping
-    the entire playbook.
+    mentee fetch one specific skill by ``(playbook_id, id)`` when it
+    already knows which one it wants, without round-tripping the
+    entire playbook.
+
+    Renamed from ``GetWorkInstructionResponse`` in 0.6.0 (AgentSkills
+    alignment); the old class name is preserved as an alias and the
+    deprecated ``GetWorkInstruction`` MCP tool name still works
+    through the 0.x line.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -201,6 +228,10 @@ class GetWorkInstructionResponse(BaseModel):
     title: str
     summary: str = ""
     body: str
+
+
+# Backward-compat alias — older code may import the old class name.
+GetWorkInstructionResponse = GetSkillResponse
 
 
 class SearchMatch(BaseModel):
@@ -272,7 +303,7 @@ class AskMentorResponse(BaseModel):
       with a ``human_mentor``, the draft B.a can ask B.h to approve
       for forwarding to A.h via ``EscalateToHumanMentor``.
 
-    ``relevant_instructions`` cites the work instructions the mentor's
+    ``relevant_instructions`` cites the skills the mentor's
     keyword ranker considered most relevant to the question — both for
     auditability and so the mentee can fetch the full bodies if needed.
     """

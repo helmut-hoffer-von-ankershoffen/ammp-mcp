@@ -1,5 +1,5 @@
 {
-  "_doc": "Reference playbook (area of practice). The mentor's `mentor.json` describes the mentor; this file describes one playbook inside that mentor. Underscore-prefixed keys are stripped before reading.",
+  "_doc": "Reference playbook (area of practice). The mentor's `mentor.json` describes the mentor; this file describes one playbook inside that mentor. Underscore-prefixed keys are stripped before reading. Set an optional `plugin: \"<plugin-name>@<marketplace-name>\"` field when the skill bodies live in a Claude-Code plugin under `<AMMP_MARKETPLACES_ROOT>/<marketplace>/plugins/<plugin>/skills/`; omit it to load `*.md` files from this directory.",
   "name": "Example mentoring",
-  "description": "A starter playbook with two demo work instructions. Replace with your own areas of practice."
+  "description": "A starter playbook with two demo skills. Replace with your own areas of practice."
 }

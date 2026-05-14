@@ -63,12 +63,14 @@ def build_offline_capability(s: Settings, version: str, ammp_draft: str) -> dict
             "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
-            "GetWorkInstruction",
+            "GetSkill",
+            "GetWorkInstruction",  # deprecated alias of GetSkill; kept through 0.x
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
             "EscalateToHumanMentor",
             "GetEscalation",
+            "GetPluginArchive",
             "GetSystemInfo",
         ],
     }

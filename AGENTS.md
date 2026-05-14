@@ -4,12 +4,12 @@ Operator guide for AI agents (and humans) editing this repo. Match the project's
 
 ## What this is
 
-Reference implementation of **AMMP** (the Agentic Mentor-Mentee Protocol — Mentoring track), an open IETF Internet-Draft for agentic mentoring + on-demand engineering review. Implemented as a FastMCP server exposing eight MCP tools:
+Reference implementation of **AMMP** (the Agentic Mentor-Mentee Protocol — Mentoring track), an open IETF Internet-Draft for agentic mentoring + on-demand engineering review. Implemented as a FastMCP server exposing twelve MCP tools:
 
 * Five AMMP §5 baseline operations — `ListPlaybooks`, `GetPlaybook`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`.
-* Three server-side extensions — `ListMentors` (mentee enumerates mentors over the same wire), `GetWorkInstruction` (fetches one instruction by `(playbook_id, id)` without a whole-playbook round-trip), and `EscalateToHumanMentor` (long-running tool that forwards a B.h-approved question to A.h via a delivery adapter and returns A.h's reply synchronously).
+* Server-side extensions — `ListMentors` (mentee enumerates mentors over the same wire), `GetSkill` (fetches one skill body by `(playbook_id, id)` without a whole-playbook round-trip — aligned with the open AgentSkills standard; the legacy name `GetWorkInstruction` remains as a deprecated alias through 0.x), `GetPluginArchive` (Bearer-token-gated zip download URL for plugin-backed playbooks the mentee can't clone from GitHub), `EscalateToHumanMentor` (long-running tool that forwards a B.h-approved question to A.h via a delivery adapter and returns A.h's reply synchronously), `GetEscalation` (poll a pending escalation), and `GetSystemInfo` (diagnostic metadata).
 
-The corpus is a two-level hierarchy: each mentor has zero or more **playbooks** (areas of practice; each is one subdirectory with `playbook.json` + `*.md` files), and each playbook contains zero or more **work instructions** (one craft rule per markdown file).
+The corpus is a two-level hierarchy: each mentor has zero or more **playbooks** (areas of practice; each is one subdirectory with `playbook.json`), and each playbook contains zero or more **skills**. Skills load either from an AgentSkills plugin (when `playbook.json` carries an optional `plugin: "<name>@<marketplace>"` field — bodies live in `<marketplaces_root>/<marketplace>/plugins/<plugin>/skills/<id>/SKILL.md`) or from local `NN-*.md` files alongside the `playbook.json`.
 
 - IETF draft: `https://www.helmguild.com/rfc/ammp/`
 - Deployed instance: `https://mcp.helmguild.com/ammp` (one specific deployment under the gateway hostname; the implementation is protocol-named, not persona-named).
@@ -44,8 +44,8 @@ src/ammp_mcp/
 │   ├── _cli.py            # `ammp mentee list/add/remove/rotate-key/check-key`
 │   └── CLAUDE.md
 │
-├── playbook/              # Playbook + WorkInstruction domain
-│   ├── _service.py        # Playbook + WorkInstruction dataclasses; load_playbooks, search, keyword_rank, safe_id
+├── playbook/              # Playbook + Skill domain (AgentSkills-aligned)
+│   ├── _service.py        # Playbook + Skill dataclasses; load_playbooks (resolves plugin: refs), search, keyword_rank, safe_id
 │   ├── _cli.py            # `ammp playbook list/show/search`, `ammp instruction list/show`
 │   └── CLAUDE.md
 │
@@ -106,8 +106,9 @@ Each leaf can still be overridden individually (`AMMP_MENTORS_ROOT`, `AMMP_MENTE
 - **Mentee allowlist**: SHA-256-hashed Bearer keys in `mentees.json`. Plaintext keys are shown once at mint time. `hash_api_key` uses plain SHA-256 — not a slow KDF — because the inputs are 256-bit OS-CSPRNG random tokens, not human-chosen passwords. CodeQL flags this as a false positive; the rationale lives in `mentee/_service.py:hash_api_key.__doc__` and the dismissal lives on the alert in GitHub.
 - **Hash-only audit log**: `audit.log` records `<ts> op=<op> mentor=<slug> mentee=<slug> hash=<8 hex>` and never any payload. `ammp system usage` aggregates it without leaking content.
 - **No-retention**: the server never persists mentee questions or full context past the audit-log hash. Privacy posture is advertised in `/.well-known/agent.json`.
-- **`ListMentors` is a server-side extension** over AMMP-01's five §5 ops. Same data the capability JSON publishes, exposed over the MCP wire so mentees don't need an out-of-band HTTP fetch. The envelope embeds each mentor's full playbook list (every playbook with all its instruction bodies) so a single call can cold-start a mentee.
-- **`GetWorkInstruction` is a server-side extension** that lets a mentee fetch one specific instruction by `(playbook_id, id)` — useful once `ListMentors` or `ListPlaybooks` has given the mentee the index.
+- **`ListMentors` is a server-side extension** over AMMP-01's five §5 ops. Same data the capability JSON publishes, exposed over the MCP wire so mentees don't need an out-of-band HTTP fetch. The envelope embeds each mentor's full playbook list (every playbook with all its skill bodies) so a single call can cold-start a mentee.
+- **`GetSkill` is a server-side extension** that lets a mentee fetch one specific skill body by `(playbook_id, id)` — useful once `ListMentors` or `ListPlaybooks` has given the mentee the index. Renamed from `GetWorkInstruction` in 0.6.0 to align with the open [AgentSkills](https://agentskills.io/home) standard the on-disk plugin format follows. `GetWorkInstruction` remains as a deprecated alias through 0.x.
+- **`GetPluginArchive` is a server-side extension** that returns a Bearer-token-gated zip download URL (`<public_url>/plugins/<plugin>.zip`) for any plugin referenced by a playbook on this server. Required when the marketplace lives in a private GitHub repo and mentees can't `git clone` the marketplace themselves. The mentee hands the URL + install instructions to its user, who installs the plugin into Claude Code / Desktop by extracting the zip and running `/plugin install <path>`.
 - **`EscalateToHumanMentor` is a long-running server-side extension** that forwards a B.h-approved question to A.h. Implemented as an async MCP tool that awaits A.h's reply on an in-memory `asyncio.Event` (registered in `EscalationBroker`); the configured delivery adapter is responsible for both outbound (push X to A.h's channel) and inbound (route A.h's reply back, resolving the broker). Default adapter is `log` (no-op inbound); `telegram` adapter activates when bot token + chat id are set in `config.env`. Cross-compartment consent (B.h must approve forwarding) stays on the mentee side — `AskMentor` low-confidence responses carry a `escalation_to_human_mentor_draft` to surface to B.h, but A.a does not enforce the gate.
 - **JSON files written by the CLI use `ensure_ascii=False`** so em-dashes and smart quotes survive round-trips (`mentor.json`, `mentees.json`).
 - **`.env` / `config.env` files stay ASCII-only** — pydantic-settings crashes on unicode under ASCII locales.

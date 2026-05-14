@@ -104,12 +104,14 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
                 "ListMentors",
                 "ListPlaybooks",
                 "GetPlaybook",
-                "GetWorkInstruction",
+                "GetSkill",
+                "GetWorkInstruction",  # deprecated alias of GetSkill (kept through 0.x)
                 "SearchPlaybooks",
                 "AskMentor",
                 "EscalateToHuman",
                 "EscalateToHumanMentor",
                 "GetEscalation",
+                "GetPluginArchive",
                 "GetSystemInfo",
             }, tools
 

@@ -23,7 +23,7 @@ $ ammp [OPTIONS] COMMAND [ARGS]...
 * `mentor`: Inspect registered mentors; ask one a...
 * `mentee`: Manage the mentee allowlist (add / remove...
 * `playbook`: Inspect and read a mentor&#x27;s playbooks...
-* `instruction`: Inspect and read individual work...
+* `instruction`: Inspect and read individual skills inside...
 * `escalation`: Inspect and manage mentor-mediated...
 * `system`: Operate the install as a whole (setup,...
 
@@ -346,7 +346,7 @@ $ ammp playbook [OPTIONS] COMMAND [ARGS]...
 **Commands**:
 
 * `list`: List the playbooks (areas of practice) for...
-* `show`: Print one playbook&#x27;s metadata + its...
+* `show`: Print one playbook&#x27;s metadata + its skill...
 * `search`: Substring-search a mentor&#x27;s corpus (CLI...
 
 ### `ammp playbook list`
@@ -366,7 +366,7 @@ $ ammp playbook list [OPTIONS]
 
 ### `ammp playbook show`
 
-Print one playbook&#x27;s metadata + its work-instruction list.
+Print one playbook&#x27;s metadata + its skill list.
 
 **Usage**:
 
@@ -410,7 +410,7 @@ $ ammp playbook search [OPTIONS] QUERY
 
 ## `ammp instruction`
 
-Inspect and read individual work instructions inside a mentor&#x27;s playbooks.
+Inspect and read individual skills inside a mentor&#x27;s playbooks.
 
 **Usage**:
 
@@ -424,12 +424,12 @@ $ ammp instruction [OPTIONS] COMMAND [ARGS]...
 
 **Commands**:
 
-* `list`: List the work instructions inside a playbook.
-* `show`: Print one work instruction body to stdout...
+* `list`: List the skills inside a playbook.
+* `show`: Print one skill body to stdout (CLI parity...
 
 ### `ammp instruction list`
 
-List the work instructions inside a playbook.
+List the skills inside a playbook.
 
 **Usage**:
 
@@ -445,7 +445,7 @@ $ ammp instruction list [OPTIONS]
 
 ### `ammp instruction show`
 
-Print one work instruction body to stdout (CLI parity with ``GetWorkInstruction``).
+Print one skill body to stdout (CLI parity with ``GetSkill``).
 
 **Usage**:
 
@@ -455,7 +455,7 @@ $ ammp instruction show [OPTIONS] INSTRUCTION_ID
 
 **Arguments**:
 
-* `INSTRUCTION_ID`: Work instruction id (filename stem).  [required]
+* `INSTRUCTION_ID`: Skill id (folder name or filename stem).  [required]
 
 **Options**:
 

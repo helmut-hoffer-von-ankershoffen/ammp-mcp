@@ -5,6 +5,22 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.6.0] — 2026-05-14
+
+### Added
+
+- **AgentSkills alignment: `GetSkill(playbook_id, id)`** server-side extension. Renamed from `GetWorkInstruction` to align the wire name with the open [AgentSkills](https://agentskills.io/home) standard a playbook plugin's on-disk format follows. The old `GetWorkInstruction` tool is preserved as a deprecated alias through the 0.x line — existing mentees keep working without code changes. (#agentskills)
+- **`GetPluginArchive(plugin)`** server-side extension. When a playbook is backed by a private marketplace plugin (e.g. `helmut-hoffer-von-ankershoffen/helmguild-plugins`, which the mentee cannot clone from GitHub), this tool returns a Bearer-token-gated download URL pointing to `/plugins/<plugin>.zip` on the same server. The mentee hands the URL + install instructions to its user, who installs the plugin into Claude Code / Desktop by extracting the zip and running `/plugin install <path>`. The plugin's `.mcp.json` wires this same AMMP server, so the live ops keep working after install. (#plugins)
+- **Plugin-aware playbook loader.** `playbook.json` now accepts an optional `"plugin": "<name>@<marketplace>"` field. When present, the playbook's skill bodies load from `<marketplaces_root>/<marketplace>/plugins/<plugin>/skills/<id>/SKILL.md` (AgentSkills format with YAML frontmatter). When absent, the legacy `NN-*.md` format under the playbook directory continues to work. (#loader)
+- **`AMMP_MARKETPLACES_ROOT`** setting (default `~/.ammp/marketplaces`) — where the server looks for marketplace clones. (#config)
+- **Plugin-aware start prompt.** The per-playbook prompt rendered on the landing now opens with a `GetPluginArchive` install step when the playbook is plugin-backed, so the mentee gets a single URL it can hand its user to install the plugin into their runtime.
+
+### Changed
+
+- **`/.well-known/agent.json` `operations`** array now lists `GetSkill` and `GetPluginArchive` in addition to the previous ops. `GetWorkInstruction` remains advertised as a deprecated alias of `GetSkill` through 0.x. (#capability)
+- **Landing page copy** (EN + DE) — "work instructions" → "skills" in mentor-card chrome and per-playbook prompts. Functional behaviour unchanged. (#landing)
+- **Python rename:** `WorkInstruction` → `Skill`, `WorkInstructionSummary` → `SkillSummary`, `WorkInstructionEntry` → `SkillEntry`, `GetWorkInstructionResponse` → `GetSkillResponse`. Old names re-exported as aliases for backwards compatibility through 0.x.
+
 ## [0.5.0] — 2026-05-12
 
 ### Changed

@@ -115,15 +115,16 @@ sequenceDiagram
 
 ## Operations
 
-Ten MCP tools — the five normative Mentoring-track operations from AMMP §5 plus five server-side extensions (`ListMentors`, `GetWorkInstruction`, `EscalateToHumanMentor`, `GetEscalation`, `GetSystemInfo`). Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `mcp.helmguild.com/ammp`).
+Twelve MCP tools — the five normative Mentoring-track operations from AMMP §5 plus seven server-side extensions (`ListMentors`, `GetSkill`, `GetPluginArchive`, `EscalateToHumanMentor`, `GetEscalation`, `GetSystemInfo`, and the deprecated alias `GetWorkInstruction`). Each `mentor`-taking call accepts an optional slug; omit it to route to the default mentor (`example` in the shipped repo; `pepe` in the deployed instance at `mcp.helmguild.com/ammp`).
 
 | Operation | Purpose |
 |---|---|
 | `ListMentors()` | Enumerate the mentors this server hosts. Each entry includes `slug`, `name`, `profile_url`, `playbook_count`, `confidence_threshold`, `backend_kind` (one of `anthropic` / `openclaw` / `stub`, matching `mentor.json`), `backend_live`, and `is_default`. Server-side extension over AMMP-01 — same data as the capability JSON, exposed over the MCP wire so mentees do not need a separate HTTP fetch to discover slugs. |
-| `ListPlaybooks(mentor?)` | Enumerate playbooks (areas of practice) with their work-instruction summaries. |
-| `GetPlaybook(id, mentor?)` | Fetch one playbook with every work-instruction body inline. |
-| `GetWorkInstruction(playbook_id, id, mentor?)` | Fetch a single work-instruction body without round-tripping the whole playbook. Server-side extension over AMMP-01. |
-| `SearchPlaybooks(query, mentor?, limit?)` | Substring-rank the corpus at work-instruction granularity; return matches with snippets. |
+| `ListPlaybooks(mentor?)` | Enumerate playbooks (areas of practice) with their skill summaries. |
+| `GetPlaybook(id, mentor?)` | Fetch one playbook with every skill body inline. |
+| `GetSkill(playbook_id, id, mentor?)` | Fetch a single skill body without round-tripping the whole playbook. Server-side extension over AMMP-01. Aligned with the open [AgentSkills](https://agentskills.io/home) standard; the legacy name `GetWorkInstruction` remains as a deprecated alias of this tool through 0.x. |
+| `GetPluginArchive(plugin)` | Return a Bearer-token-gated download URL pointing to `/plugins/<plugin>.zip` on this server when a playbook is backed by a private marketplace plugin. The mentee hands the URL + install instructions to its user, who installs the plugin into Claude Code / Desktop by extracting the zip and running `/plugin install <path>`. Server-side extension over AMMP-01. |
+| `SearchPlaybooks(query, mentor?, limit?)` | Substring-rank the corpus at skill granularity; return matches with snippets. |
 | `AskMentor(question, mentor?, context?)` | LLM-synthesised answer + self-reported `confidence`. When confidence is below the mentor's threshold, the response also recommends `EscalateToHuman` with suggested phrasing — *mentor-triggered* escalation. |
 | `EscalateToHuman(situation, mentor?, why_stuck?)` | Mentee-triggered escalation to the *mentee's own operator*. Returns guidance text the mentee hands over. The mentor never pages anyone (AMMP §3.4). |
 | `EscalateToHumanMentor(question, mentor?, context?, wait_seconds?)` | Forward a B.h-approved question to the *human behind the mentor* (A.h) via the configured delivery adapter (log / Telegram). Blocks up to `wait_seconds` (default 25s — safely under typical MCP client per-tool timeouts); returns `status="answered"` with the answer if A.h replies in time, otherwise `status="pending"` with an `escalation_id` the mentee can poll. Server-side extension over AMMP-01. |
@@ -265,7 +266,7 @@ ammp serve                                      # boot the HTTP MCP server (alia
 ammp serve --stdio                              # subprocess transport for Claude Desktop / Claude Code
 ```
 
-Every Mentoring-track operation a mentee can invoke over the MCP wire (`ListMentors`, `ListPlaybooks`, `GetPlaybook`, `GetWorkInstruction`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) has a matching CLI subcommand. `ammp mentor list --json` returns the same envelope an MCP `ListMentors` call returns. The mentor-mediated escalation extensions (`EscalateToHumanMentor`, `GetEscalation`) and the diagnostic `GetSystemInfo` are exposed via the MCP wire only — they require live broker / delivery-adapter state that lives in the running server. An agent that prefers Bash-plus-CLI over MCP can still exercise the full Mentoring track without speaking the protocol. The CLI invokes the same in-process handlers the MCP server uses, so behaviour stays in lockstep.
+Every Mentoring-track operation a mentee can invoke over the MCP wire (`ListMentors`, `ListPlaybooks`, `GetPlaybook`, `GetSkill`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) has a matching CLI subcommand. `ammp mentor list --json` returns the same envelope an MCP `ListMentors` call returns. The mentor-mediated escalation extensions (`EscalateToHumanMentor`, `GetEscalation`), the plugin-archive download (`GetPluginArchive`), and the diagnostic `GetSystemInfo` are exposed via the MCP wire only — they require live broker / delivery-adapter state (or the live HTTP transport) that lives in the running server. An agent that prefers Bash-plus-CLI over MCP can still exercise the full Mentoring track without speaking the protocol. The CLI invokes the same in-process handlers the MCP server uses, so behaviour stays in lockstep.
 
 ## Configuration
 

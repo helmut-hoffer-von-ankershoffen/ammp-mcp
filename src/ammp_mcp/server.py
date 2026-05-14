@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -39,8 +40,8 @@ from .models import (
     EscalationToHumanMentorDraft,
     GetEscalationResponse,
     GetPlaybookResponse,
+    GetSkillResponse,
     GetSystemInfoResponse,
-    GetWorkInstructionResponse,
     HumanMentorSummary,
     ListMentorsResponse,
     ListPlaybooksResponse,
@@ -49,8 +50,8 @@ from .models import (
     PlaybookSummary,
     SearchMatch,
     SearchPlaybooksResponse,
-    WorkInstructionEntry,
-    WorkInstructionSummary,
+    SkillEntry,
+    SkillSummary,
 )
 from .playbook import (
     keyword_rank,
@@ -229,7 +230,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
     log_event(ctx.settings.audit_log_path, "ListMentors", mentee=mentee_slug)
     summaries: list[MentorSummary] = []
     for slug, m in ctx.mentors.items():
-        corpus = load_playbooks(m.playbook_dir)
+        corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
         backend = ctx.backends.get(slug)
         # Surface the config-level kind (`anthropic`/`openclaw`/`stub`) — what
         # the docs say and what the operator wrote in mentor.json — rather
@@ -254,7 +255,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
             else None
         )
         # Embed work-instruction summaries only — bodies are fetched on
-        # demand via GetPlaybook / GetWorkInstruction. Without this, a
+        # demand via GetPlaybook / GetSkill. Without this, a
         # corpus with a few dozen instructions inflates the response to
         # 100+ KB which trips Claude Desktop's MCP-transport timeout.
         playbook_entries = [
@@ -263,7 +264,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
                 name=pb.name,
                 description=pb.description,
                 instructions=[
-                    WorkInstructionSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
+                    SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
                 ],
             )
             for pb in corpus
@@ -299,7 +300,7 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
     carries its name + description + work-instruction summaries (id +
     title + one-line summary, no bodies). Fetch a full playbook's
     instruction bodies with ``GetPlaybook(id)``, or one instruction's
-    body with ``GetWorkInstruction(playbook_id, id)``.
+    body with ``GetSkill(playbook_id, id)``.
 
     Args:
         ctx: The per-request server context.
@@ -322,7 +323,7 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
     if not m:
         return {"error": "unknown_mentor", "detail": f"slug={mentor or ctx.settings.default_mentor!r}"}
     log_event(ctx.settings.audit_log_path, "ListPlaybooks", mentor=m.slug, mentee=mentee_slug)
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
     return ListPlaybooksResponse(
         mentor=m.slug,
         count=len(corpus),
@@ -333,7 +334,7 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
                 description=pb.description,
                 instruction_count=len(pb.instructions),
                 instructions=[
-                    WorkInstructionSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
+                    SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
                 ],
             )
             for pb in corpus
@@ -344,7 +345,7 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
 def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_key: str | None) -> dict[str, Any]:
     """Handle the ``GetPlaybook`` MCP tool call (AMMP §5.2).
 
-    Returns one playbook with the full body of every work instruction
+    Returns one playbook with the full body of every skill
     in it — a single round-trip for everything the mentee needs about
     one area of practice.
 
@@ -381,7 +382,7 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         mentee=mentee_slug,
         request_hash=short_hash(clean_id),
     )
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
     pb = next((p for p in corpus if p.id == clean_id), None)
     if pb is None:
         return {"error": "not_found", "detail": f"id={clean_id}"}
@@ -391,35 +392,37 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         name=pb.name,
         description=pb.description,
         instructions=[
-            WorkInstructionEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body) for wi in pb.instructions
+            SkillEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body) for wi in pb.instructions
         ],
     ).model_dump()
 
 
-def _handle_get_work_instruction(
-    ctx: ServerContext, playbook_id: str, instruction_id: str, mentor: str, api_key: str | None
+def _handle_get_skill(
+    ctx: ServerContext, playbook_id: str, skill_id: str, mentor: str, api_key: str | None
 ) -> dict[str, Any]:
-    """Handle the ``GetWorkInstruction`` MCP-extension tool call.
+    """Handle the ``GetSkill`` MCP-extension tool call.
 
     Server-side extension beyond AMMP-01's five operations: fetch one
-    specific work instruction by ``(playbook_id, instruction_id)`` when
-    the mentee already knows which one it wants, without round-tripping
-    the whole playbook.
+    specific skill by ``(playbook_id, skill_id)`` when the mentee
+    already knows which one it wants, without round-tripping the
+    whole playbook. Renamed from ``GetWorkInstruction`` in 0.6.0
+    (AgentSkills alignment); the old wire name is preserved as an
+    alias.
 
     Args:
         ctx: The per-request server context.
         playbook_id: Directory-name slug of the parent playbook.
-        instruction_id: Filename-stem of the requested instruction.
+        skill_id: Folder name (AgentSkills) or filename stem (legacy)
+            of the requested skill.
         mentor: Mentor slug. Empty string falls through to the
             configured default mentor.
         api_key: Caller-supplied Bearer key, or ``None``. Required when
             ``ctx.settings.require_auth`` is set.
 
     Returns:
-        A JSON-serialisable dict — either a
-        :class:`GetWorkInstructionResponse` envelope on success, or an
-        in-band error envelope on auth failure, unknown mentor,
-        invalid id, or not-found.
+        A JSON-serialisable dict — either a :class:`GetSkillResponse`
+        envelope on success, or an in-band error envelope on auth
+        failure, unknown mentor, invalid id, or not-found.
     """
     try:
         mentee_slug = _authenticate(ctx, api_key)
@@ -429,30 +432,30 @@ def _handle_get_work_instruction(
     if not m:
         return {"error": "unknown_mentor"}
     clean_pb = safe_id(playbook_id)
-    clean_id = safe_id(instruction_id)
+    clean_id = safe_id(skill_id)
     if not clean_pb or not clean_id:
         return {"error": "invalid_id"}
     log_event(
         ctx.settings.audit_log_path,
-        "GetWorkInstruction",
+        "GetSkill",
         mentor=m.slug,
         mentee=mentee_slug,
         request_hash=short_hash(f"{clean_pb}/{clean_id}"),
     )
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
     pb = next((p for p in corpus if p.id == clean_pb), None)
     if pb is None:
         return {"error": "not_found", "detail": f"playbook_id={clean_pb}"}
-    wi = next((w for w in pb.instructions if w.id == clean_id), None)
-    if wi is None:
+    sk = next((s for s in pb.instructions if s.id == clean_id), None)
+    if sk is None:
         return {"error": "not_found", "detail": f"playbook_id={clean_pb} id={clean_id}"}
-    return GetWorkInstructionResponse(
+    return GetSkillResponse(
         mentor=m.slug,
         playbook_id=pb.id,
-        id=wi.id,
-        title=wi.title,
-        summary=wi.summary,
-        body=wi.body,
+        id=sk.id,
+        title=sk.title,
+        summary=sk.summary,
+        body=sk.body,
     ).model_dump()
 
 
@@ -492,7 +495,7 @@ def _handle_search_playbooks(
         mentee=mentee_slug,
         request_hash=short_hash(query),
     )
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
     rows = search(corpus, query, limit=limit)
     return SearchPlaybooksResponse(
         mentor=m.slug,
@@ -584,12 +587,12 @@ async def _handle_ask_mentor(
         request_hash=short_hash(q),
     )
 
-    corpus = load_playbooks(m.playbook_dir)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
     ranked = keyword_rank(corpus, q + " " + context, limit=3)
-    relevant = [WorkInstructionSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi, _ in ranked]
+    relevant = [SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi, _ in ranked]
     # Backends consume `(title, body)` pairs to assemble the grounding
     # block in the system prompt. With the new hierarchy we cite each
-    # work instruction by its full ``<playbook> · <instruction>`` path so
+    # skill by its full ``<playbook> · <instruction>`` path so
     # the LLM can attribute back accurately when synthesising.
     playbook_bodies = [(f"{wi.playbook_id} · {wi.title}", wi.body) for wi, _ in ranked]
 
@@ -607,7 +610,7 @@ async def _handle_ask_mentor(
         logger.warning("AskMentor backend call failed (%s): %s", backend.mode_label, e)
         return {
             "error": "llm_failed",
-            "detail": "the mentor is currently unable to synthesise an answer; try GetWorkInstruction on a relevant id",
+            "detail": "the mentor is currently unable to synthesise an answer; try GetSkill on a relevant id",
             "relevant_instructions": [r.model_dump() for r in relevant],
         }
 
@@ -1102,7 +1105,7 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
     """
     mentor_summaries = []
     for slug, m in ctx.mentors.items():
-        corpus = load_playbooks(m.playbook_dir)
+        corpus = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
         backend = ctx.backends.get(slug)
         human_mentor = (
             {
@@ -1158,12 +1161,14 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
             "ListMentors",
             "ListPlaybooks",
             "GetPlaybook",
-            "GetWorkInstruction",
+            "GetSkill",
+            "GetWorkInstruction",  # deprecated alias of GetSkill; kept through 0.x
             "SearchPlaybooks",
             "AskMentor",
             "EscalateToHuman",
             "EscalateToHumanMentor",
             "GetEscalation",
+            "GetPluginArchive",
             "GetSystemInfo",
         ],
     }
@@ -1227,6 +1232,132 @@ def _build_desktop_bundle(public_url: str, mcp_url: str) -> bytes:
     return buf.getvalue()
 
 
+# ─── Plugin-archive (zip) generation ──────────────────────────────────────
+
+
+def _known_plugin_refs(ctx: ServerContext) -> dict[str, tuple[str, str, Path]]:
+    """Enumerate every ``(plugin, marketplace)`` referenced by this server's playbooks.
+
+    Walks ``ctx.mentors`` → each mentor's playbook corpus → the
+    ``plugin:`` field on each playbook's ``playbook.json``. Returns
+    only references whose marketplace clone is present on disk under
+    ``settings.marketplaces_root`` — unresolvable references are
+    silently dropped so a stale config can't be probed.
+
+    Keyed by plugin name so the HTTP route can resolve a bare
+    ``/plugins/<plugin>.zip`` request without a marketplace path
+    segment (one plugin name lives in exactly one marketplace).
+
+    Returns:
+        Mapping of ``plugin_name → (plugin_name, marketplace_name, plugin_dir)``.
+    """
+    mr = ctx.settings.marketplaces_root
+    out: dict[str, tuple[str, str, Path]] = {}
+    for mentor in ctx.mentors.values():
+        playbooks = load_playbooks(mentor.playbook_dir, marketplaces_root=mr)
+        for pb in playbooks:
+            if pb.plugin_ref is None:
+                continue
+            plugin, marketplace = pb.plugin_ref
+            plugin_dir = mr / marketplace / "plugins" / plugin
+            if plugin_dir.is_dir():
+                out[plugin] = (plugin, marketplace, plugin_dir)
+    return out
+
+
+_PLUGIN_NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
+
+
+def _build_plugin_archive(plugin_dir: Path, plugin_name: str) -> bytes:
+    """Zip a plugin folder into a Claude-Code-installable archive.
+
+    Walks the plugin directory and writes every file under a
+    ``<plugin_name>/`` prefix so the extracted tree matches the layout
+    Claude Code's plugin loader expects. Skips ``.git`` and
+    ``__pycache__`` to keep the archive small + reproducible.
+
+    Args:
+        plugin_dir: Source directory holding ``.claude-plugin/plugin.json``
+            plus ``skills/<id>/SKILL.md`` and friends.
+        plugin_name: The plugin's slug — used as the top-level
+            directory inside the zip so Claude Code installs it
+            under the right name.
+
+    Returns:
+        The zipped plugin as raw bytes, ready for an HTTP response body.
+    """
+    import io
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for path in sorted(plugin_dir.rglob("*")):
+            rel = path.relative_to(plugin_dir)
+            parts = rel.parts
+            if any(p in {".git", "__pycache__", ".DS_Store"} for p in parts):
+                continue
+            if path.is_dir():
+                continue
+            arcname = f"{plugin_name}/{rel.as_posix()}"
+            z.write(path, arcname=arcname)
+    return buf.getvalue()
+
+
+def _handle_get_plugin_archive(
+    ctx: ServerContext, plugin: str, api_key: str | None
+) -> dict[str, Any]:
+    """Return a download URL for a plugin zip that the mentee can pass to its user.
+
+    The zip itself is served from a separate HTTP route gated by the
+    same Bearer token; this tool exists so the LLM can hand the user
+    a single URL + install instructions without having to ferry the
+    binary through the MCP wire.
+
+    Args:
+        ctx: The per-request server context.
+        plugin: The plugin name (kebab-case slug). Must match a plugin
+            referenced by some playbook on this server.
+        api_key: Explicit bearer token from CLI paths, or ``None`` when
+            the request rides the HTTP ``Authorization`` header.
+
+    Returns:
+        On success: ``{plugin, marketplace, archive_url,
+        install_instructions}``. On failure: ``{error, detail?}``.
+    """
+    try:
+        _authenticate(ctx, api_key)
+    except ValueError as exc:
+        return {"error": "auth_failed", "detail": str(exc)}
+    if not _PLUGIN_NAME_RE.match(plugin):
+        return {"error": "invalid_plugin"}
+    known = _known_plugin_refs(ctx)
+    entry = known.get(plugin)
+    if entry is None:
+        return {"error": "not_found"}
+    _, marketplace, _ = entry
+    base = ctx.settings.public_url.rstrip("/")
+    archive_url = f"{base}/plugins/{plugin}.zip"
+    install_instructions = (
+        "Download the zip from `archive_url` (the same Bearer token authenticates "
+        "the download). Then ask your user to install the plugin into their Claude "
+        "Code / Desktop runtime by extracting the zip and running "
+        "`/plugin install <path-to-extracted-folder>`, or by uploading the zip via "
+        "the runtime's plugin installer. After install, the plugin's `.mcp.json` "
+        "wires this same AMMP server, so the live ops continue to work."
+    )
+    log_event(
+        ctx.settings.audit_log_path,
+        "GetPluginArchive",
+        extra=f"plugin={plugin} marketplace={marketplace}",
+    )
+    return {
+        "plugin": plugin,
+        "marketplace": marketplace,
+        "archive_url": archive_url,
+        "install_instructions": install_instructions,
+    }
+
+
 # ─── Human-facing landing page ────────────────────────────────────────────
 
 
@@ -1238,16 +1369,17 @@ def _build_mentor_playbook_prompt(
     playbook_name: str,
     playbook_description: str,
     instruction_count: int,
+    plugin_ref: tuple[str, str] | None = None,
 ) -> str:
     """Render a copy-paste prompt that starts a mentoring session.
 
     The user pastes this into their MCP-aware agent (Claude.ai /
     Cowork / Code / OpenClaw / Hermes) after they've configured the
-    ammp-mcp server in the agent's connector settings. The prompt
-    walks the agent through the canonical first three tool calls
-    (`ListPlaybooks` → `GetPlaybook` → `AskMentor`), and adds the
-    cross-compartment escalation step when the mentor has a
-    configured ``human_mentor``.
+    ammp-mcp server in the agent's connector settings. When the
+    playbook has a related plugin on a marketplace, the prompt opens
+    with an install step so the agent's runtime durably picks up
+    the skills as AgentSkills files; the mentor then stands by on
+    the AMMP wire for `AskMentor` / `EscalateToHumanMentor`.
 
     Args:
         public_url: The server's advertised URL (no trailing slash).
@@ -1256,34 +1388,58 @@ def _build_mentor_playbook_prompt(
         playbook_name: The playbook's human-readable name.
         playbook_description: The one-line description from
             ``playbook.json``.
-        instruction_count: Number of work instructions inside this
-            playbook.
+        instruction_count: Number of skills inside this playbook.
+        plugin_ref: Optional ``(plugin_name, marketplace_name)``
+            reference from the playbook's ``playbook.json``. When
+            set, the prompt asks the mentee to install the plugin
+            first so the skills are local + durable.
 
     Returns:
         A multi-line prompt string, ready to drop into a ``<pre>``.
     """
     url = public_url.rstrip("/")
     n = instruction_count
-    instr_word = "work instruction" if n == 1 else "work instructions"
+    instr_word = "skill" if n == 1 else "skills"
     body = (
         f'You are now operating under the mentorship of {mentor.name}\'s "{playbook_name}" playbook '
         f"on the helmguild AMMP server at {url}.\n\n"
         "To start:\n\n"
-        f'1. Call `ListPlaybooks` with `mentor: "{mentor.slug}"` to confirm you can reach the server.\n'
-        f'2. Call `GetPlaybook` with `id: "{playbook_id}"` and `mentor: "{mentor.slug}"` to load the playbook — '
+    )
+    step = 1
+    if plugin_ref is not None:
+        plugin_name, _marketplace_name = plugin_ref
+        body += (
+            f"{step}. Install the plugin so the {n} {instr_word} land locally in your runtime as durable AgentSkills:\n"
+            f'   - Call `GetPluginArchive` with `plugin: "{plugin_name}"` — you\'ll get back a URL pointing to a zip.\n'
+            "   - Hand the URL + the returned install_instructions to your user. They download the zip "
+            "(the same Bearer token authenticates the download) and install it into Claude Code / Desktop "
+            "via the runtime's plugin installer (e.g. `/plugin install <path>` after extracting).\n"
+            "   - The plugin's `.mcp.json` wires this AMMP server, so the live ops below keep working after the install.\n"
+        )
+        step += 1
+    body += (
+        f'{step}. Call `ListPlaybooks` with `mentor: "{mentor.slug}"` to confirm you can reach the server.\n'
+    )
+    step += 1
+    body += (
+        f'{step}. Call `GetPlaybook` with `id: "{playbook_id}"` and `mentor: "{mentor.slug}"` to load the playbook — '
         f'{n} {instr_word} covering "{playbook_description}".\n'
-        "3. Internalize the instructions and apply them going forward in this conversation. "
+    )
+    step += 1
+    body += (
+        f"{step}. Internalize the {instr_word} and apply them going forward in this conversation. "
         f"When you hit something the playbook does not cover, call `AskMentor` on `{mentor.slug}` rather than guessing.\n"
     )
+    step += 1
     if mentor.human_mentor is not None:
         hm_name = mentor.human_mentor.name
         body += (
-            f"4. If your confidence stays low after `AskMentor` AND my operator approves the forward, "
-            f"you may call `EscalateToHumanMentor` (long-running — it blocks until {hm_name} replies) "
-            f"to forward the question to {hm_name}, the human behind {mentor.name}. "
-            "Wait for the reply before acting.\n"
+            f"{step}. If your confidence stays low after `AskMentor` AND my operator approves the forward, "
+            f"you may call `EscalateToHumanMentor` to forward the question to {hm_name}, the human behind "
+            f"{mentor.name}. The call returns either A.h's answer (within `wait_seconds`) or a `pending` "
+            f"escalation id; in the pending case, call `GetEscalation` later to pick up the reply.\n"
         )
-    body += "\nAcknowledge by quoting the playbook name and the count of work instructions you loaded, then proceed."
+    body += f"\nAcknowledge by quoting the playbook name and the count of {instr_word} you loaded, then proceed."
     return body
 
 
@@ -1330,9 +1486,9 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         # Mentor-card chrome bits
         "mentor_behind": "Behind {mentor_name}: ",
         "mentor_no_playbooks": "No playbooks yet.",
-        "mentor_no_instructions": "No work instructions yet.",
-        "mentor_wi_count_one": "1 work instruction",
-        "mentor_wi_count_many": "{n} work instructions",
+        "mentor_no_instructions": "No skills yet.",
+        "mentor_wi_count_one": "1 skill",
+        "mentor_wi_count_many": "{n} skills",
         "mentor_prompt_summary": "Prompt to start this mentoring",
         "mentor_prompt_copy": "Copy prompt",
         "mentors_empty": "No mentors are currently available.",
@@ -1380,9 +1536,9 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "footer": 'Referenz-Implementierung des <a href="https://www.helmguild.com/de/rfc/ammp/">Agentic Mentor-Mentee Protocol</a>. MIT-lizenziert. Betrieben von <a href="https://helmut.hoffer-von-ankershoffen.me/">Helmut Hoffer von Ankershoffen</a>. <a href="{base}/.well-known/agent.json">Capability-JSON</a> · <a href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp">Quellcode</a>',
         "mentor_behind": "Hinter {mentor_name}: ",
         "mentor_no_playbooks": "Noch keine Playbooks.",
-        "mentor_no_instructions": "Noch keine Arbeitsanweisungen.",
-        "mentor_wi_count_one": "1 Arbeitsanweisung",
-        "mentor_wi_count_many": "{n} Arbeitsanweisungen",
+        "mentor_no_instructions": "Noch keine Skills.",
+        "mentor_wi_count_one": "1 Skill",
+        "mentor_wi_count_many": "{n} Skills",
         "mentor_prompt_summary": "Prompt, um dieses Mentoring zu starten",
         "mentor_prompt_copy": "Prompt kopieren",
         "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
@@ -1466,7 +1622,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
 
     mentor_blocks_parts: list[str] = []
     for slug, m in ctx.mentors.items():
-        playbooks = load_playbooks(m.playbook_dir)
+        playbooks = load_playbooks(m.playbook_dir, marketplaces_root=ctx.settings.marketplaces_root)
         # Avatar: real image if a file exists on disk; otherwise render
         # an initial-letter glyph so every mentor still has a visual.
         if m.avatar_path() is not None:
@@ -1530,6 +1686,7 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     playbook_name=pb.name,
                     playbook_description=pb.description,
                     instruction_count=len(pb.instructions),
+                    plugin_ref=pb.plugin_ref,
                 )
                 prompt_dom_id = f"prompt--{_h(slug)}--{_h(pb.id)}"
                 prompt_block = (
@@ -1967,22 +2124,34 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool
     def GetPlaybook(id: str, mentor: str = "") -> dict[str, Any]:
-        """Retrieve one playbook with the full body of every work instruction inside it."""
+        """Retrieve one playbook with the full body of every skill inside it."""
         return _handle_get_playbook(ctx, id, mentor, None)
 
     @mcp.tool
-    def GetWorkInstruction(playbook_id: str, id: str, mentor: str = "") -> dict[str, Any]:
-        """Retrieve one specific work instruction from a playbook.
+    def GetSkill(playbook_id: str, id: str, mentor: str = "") -> dict[str, Any]:
+        """Retrieve one specific skill from a playbook.
 
-        Server-side extension over AMMP-01: lets a mentee fetch a single
-        instruction body when it already knows ``(playbook_id, id)``,
+        Server-side extension over AMMP-01: lets a mentee fetch a
+        single skill body when it already knows ``(playbook_id, id)``,
         without round-tripping the whole playbook.
+
+        Renamed from ``GetWorkInstruction`` in 0.6.0 (AgentSkills
+        alignment); the old tool name is preserved as an alias.
         """
-        return _handle_get_work_instruction(ctx, playbook_id, id, mentor, None)
+        return _handle_get_skill(ctx, playbook_id, id, mentor, None)
+
+    @mcp.tool
+    def GetWorkInstruction(playbook_id: str, id: str, mentor: str = "") -> dict[str, Any]:
+        """Alias of ``GetSkill`` — kept for 0.5.x mentees that still call the old name.
+
+        Deprecated; will be removed in 1.0. New code should call
+        ``GetSkill`` directly.
+        """
+        return _handle_get_skill(ctx, playbook_id, id, mentor, None)
 
     @mcp.tool
     def SearchPlaybooks(query: str, mentor: str = "", limit: int = 5) -> dict[str, Any]:
-        """Substring-search the mentor's corpus at work-instruction granularity. Returns ranked matches."""
+        """Substring-search the mentor's corpus at skill granularity. Returns ranked matches."""
         return _handle_search_playbooks(ctx, query, mentor, limit, None)
 
     @mcp.tool
@@ -2112,6 +2281,27 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return _handle_escalate_to_human(ctx, situation, mentor, why_stuck, None)
 
     @mcp.tool
+    def GetPluginArchive(plugin: str) -> dict[str, Any]:
+        """Return a download URL for a plugin zip the mentee can install locally.
+
+        Server-side extension over AMMP-01: when a mentor's playbook
+        references a private marketplace plugin, the mentee can't
+        clone the repo (the marketplace lives behind GitHub auth). It
+        calls ``GetPluginArchive(plugin)`` and receives a URL pointing
+        at this same server's ``/plugins/<plugin>.zip`` route, gated
+        by the same Bearer token. The mentee hands the URL + install
+        instructions to its user, who installs the plugin into their
+        Claude Code / Desktop runtime by extracting the zip and
+        running ``/plugin install <path>`` (or via the runtime's
+        upload-zip installer).
+
+        Args:
+            plugin: The plugin name (kebab-case slug). Must match a
+                plugin referenced by some playbook on this server.
+        """
+        return _handle_get_plugin_archive(ctx, plugin, None)
+
+    @mcp.tool
     def GetSystemInfo() -> dict[str, Any]:
         """Return build / release / runtime metadata for the server.
 
@@ -2162,6 +2352,54 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         return FileResponse(
             path,
             headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    @mcp.custom_route(f"{prefix}/plugins/{{plugin}}.zip", methods=["GET"])
+    async def plugin_archive(request: Request) -> Response:
+        """Serve a plugin zip a mentee can hand its user to install.
+
+        Bearer-token gated. The plugin name is validated against the
+        set of ``plugin:`` references in this server's playbooks —
+        unknown plugins return 404 (no information about whether the
+        plugin exists in the marketplace clone but isn't referenced).
+        """
+        try:
+            from fastmcp.server.dependencies import get_http_request
+
+            req = get_http_request()
+            auth_header = req.headers.get("authorization", "")
+        except Exception:
+            auth_header = request.headers.get("authorization", "")
+        api_key: str | None = None
+        if auth_header.lower().startswith("bearer "):
+            api_key = auth_header[len("bearer ") :].strip() or None
+        try:
+            _authenticate(ctx, api_key)
+        except ValueError as exc:
+            return Response(status_code=401, content=str(exc))
+        plugin = request.path_params["plugin"]
+        if not _PLUGIN_NAME_RE.match(plugin):
+            return Response(status_code=404)
+        known = _known_plugin_refs(ctx)
+        entry = known.get(plugin)
+        if entry is None:
+            return Response(status_code=404)
+        _, marketplace, plugin_dir = entry
+        body = _build_plugin_archive(plugin_dir, plugin)
+        log_event(
+            ctx.settings.audit_log_path,
+            "PluginArchiveDownload",
+            extra=f"plugin={plugin} marketplace={marketplace} bytes={len(body)}",
+        )
+        return Response(
+            content=body,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{plugin}.zip"',
+                # Cache short so an in-flight plugin edit becomes visible
+                # without an operator restart.
+                "Cache-Control": "private, max-age=60",
+            },
         )
 
     @mcp.custom_route(f"{prefix}/desktop-bundle.mcpb", methods=["GET"])

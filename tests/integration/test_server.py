@@ -505,10 +505,10 @@ async def test_landing_prompts_match_actual_server_state(server) -> None:
         assert "error" not in get_result.data, (mentor_slug, playbook_id, get_result.data)
         assert get_result.data["id"] == playbook_id
         actual_count = len(get_result.data["instructions"])
-        # The prompt must state the *correct* instruction count.
-        expected_count_phrase = f"{actual_count} work instruction"
+        # The prompt must state the *correct* skill count.
+        expected_count_phrase = f"{actual_count} skill"
         assert expected_count_phrase in prompt_text, (
-            f"prompt for ({mentor_slug}, {playbook_id}) claims a different instruction count "
+            f"prompt for ({mentor_slug}, {playbook_id}) claims a different skill count "
             f"than the server returns ({actual_count}). Prompt text: {prompt_text[:200]}"
         )
         # Tool names the prompt tells the agent to call must be the
@@ -904,12 +904,14 @@ async def test_capability_route(server) -> None:
         "ListMentors",
         "ListPlaybooks",
         "GetPlaybook",
-        "GetWorkInstruction",
+        "GetSkill",
+        "GetWorkInstruction",  # deprecated alias of GetSkill (kept through 0.x)
         "SearchPlaybooks",
         "AskMentor",
         "EscalateToHuman",
         "EscalateToHumanMentor",
         "GetEscalation",
+        "GetPluginArchive",
         "GetSystemInfo",
     }
     # humanMentor surfaces in the capability JSON too — operators who
@@ -1270,12 +1272,14 @@ async def test_tools_listed_match_ammp_operations(server) -> None:
         "ListMentors",
         "ListPlaybooks",
         "GetPlaybook",
-        "GetWorkInstruction",
+        "GetSkill",
+        "GetWorkInstruction",  # deprecated alias of GetSkill (kept through 0.x)
         "SearchPlaybooks",
         "AskMentor",
         "EscalateToHuman",
         "EscalateToHumanMentor",
         "GetEscalation",
+        "GetPluginArchive",
         "GetSystemInfo",
     }
 
@@ -1317,3 +1321,126 @@ async def test_capability_advertises_per_mentor_backends(server) -> None:
     # (which is `is_live=False` here because no API key is configured).
     assert backends_by_slug["pepe"] == "anthropic-direct"
     assert backends_by_slug["strict"] == "anthropic-direct"
+
+
+# ─── GetPluginArchive + /plugins/<name>.zip route ─────────────────────────
+
+
+def _wire_test_marketplace(settings: Settings) -> tuple[str, str]:
+    """Drop a tiny test marketplace + plugin on disk and point a playbook at it.
+
+    Returns:
+        ``(plugin_name, marketplace_name)`` pair so the test knows what
+        to ask for.
+    """
+    plugin = "test-plugin"
+    marketplace = "test-market"
+    # Build the marketplace clone the loader expects.
+    plugin_dir = settings.marketplaces_root / marketplace / "plugins" / plugin
+    (plugin_dir / ".claude-plugin").mkdir(parents=True)
+    (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "test-plugin", "description": "Probe plugin for tests."}',
+        encoding="utf-8",
+    )
+    skill_dir = plugin_dir / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        '---\nname: alpha\ndescription: "Probe skill."\nlicense: CC-BY-4.0\n---\n# Alpha\n\nBody.\n',
+        encoding="utf-8",
+    )
+    # Point the pepe `intro` playbook at this plugin.
+    pb_json = settings.mentors_root / "pepe" / "playbooks" / "intro" / "playbook.json"
+    pb_json.write_text(
+        json.dumps(
+            {
+                "name": "Welcome to Pepe",
+                "description": "Onboarding for new mentees.",
+                "plugin": f"{plugin}@{marketplace}",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    return plugin, marketplace
+
+
+async def test_get_plugin_archive_returns_url_for_referenced_plugin(settings: Settings) -> None:
+    """GetPluginArchive returns the auth-gated zip URL + install instructions
+    for any plugin referenced by a playbook on this server.
+
+    Pinned because the install-flow shifted from `/plugin marketplace add`
+    to a direct zip download once helmguild-plugins went private —
+    mentees can no longer clone the marketplace from GitHub.
+    """
+    plugin, marketplace = _wire_test_marketplace(settings)
+    server = create_server(settings)
+    async with Client(server) as c:
+        result = await c.call_tool("GetPluginArchive", {"plugin": plugin})
+    assert "error" not in result.data, result.data
+    assert result.data["plugin"] == plugin
+    assert result.data["marketplace"] == marketplace
+    assert result.data["archive_url"].endswith(f"/plugins/{plugin}.zip")
+    assert "Bearer token" in result.data["install_instructions"]
+
+
+async def test_get_plugin_archive_unknown_plugin_returns_not_found(settings: Settings) -> None:
+    """Plugins not referenced by any playbook on this server return not_found,
+    independent of whether they exist in the marketplace clone."""
+    _wire_test_marketplace(settings)
+    server = create_server(settings)
+    async with Client(server) as c:
+        result = await c.call_tool("GetPluginArchive", {"plugin": "nope-not-here"})
+    assert result.data["error"] == "not_found"
+
+
+async def test_get_plugin_archive_rejects_path_traversal(settings: Settings) -> None:
+    """Plugin name must match the kebab-case regex — traversal attempts
+    don't even reach the marketplace lookup."""
+    _wire_test_marketplace(settings)
+    server = create_server(settings)
+    async with Client(server) as c:
+        result = await c.call_tool("GetPluginArchive", {"plugin": "../../etc/passwd"})
+    assert result.data["error"] == "invalid_plugin"
+
+
+async def test_plugin_archive_route_serves_zip(settings: Settings) -> None:
+    """`GET /plugins/<plugin>.zip` returns the zip contents under the plugin
+    name, gated by the same Bearer token as the MCP wire."""
+    import io
+    import zipfile
+
+    plugin, _marketplace = _wire_test_marketplace(settings)
+    # Auth on so the route exercises the bearer-header path.
+    settings_auth = settings.model_copy(update={"require_auth": True})
+    # Hot-reload mentees so the test key is loadable; the conftest's
+    # mentees.json already has `ammp-test-key-1` wired.
+    server = create_server(settings_auth)
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        # No auth → 401.
+        r_unauth = http.get(f"/plugins/{plugin}.zip")
+        assert r_unauth.status_code == 401
+        # Bad plugin name (kebab violation) → 404.
+        r_bad = http.get("/plugins/UPPERCASE.zip", headers={"Authorization": "Bearer ammp-test-key-1"})
+        assert r_bad.status_code == 404
+        # Unknown plugin → 404.
+        r_missing = http.get(
+            "/plugins/no-such-plugin.zip", headers={"Authorization": "Bearer ammp-test-key-1"}
+        )
+        assert r_missing.status_code == 404
+        # Good auth + known plugin → zip body, prefixed with plugin name.
+        r = http.get(f"/plugins/{plugin}.zip", headers={"Authorization": "Bearer ammp-test-key-1"})
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+    assert r.headers.get("content-disposition", "").endswith(f'"{plugin}.zip"')
+    body = r.content
+    assert body[:2] == b"PK"
+    with zipfile.ZipFile(io.BytesIO(body)) as z:
+        names = z.namelist()
+    # Files are prefixed with the plugin name so Claude Code extracts
+    # them under a sensible directory.
+    assert all(n.startswith(f"{plugin}/") for n in names), names
+    assert f"{plugin}/.claude-plugin/plugin.json" in names
+    assert f"{plugin}/skills/alpha/SKILL.md" in names

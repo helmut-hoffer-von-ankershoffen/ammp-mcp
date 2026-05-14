@@ -1,6 +1,6 @@
 [project]
 name = "ammp"
-version = "0.5.0"
+version = "0.6.0"
 description = "🍝 Reference implementation of AMMP — the Agentic Mentor-Mentee Protocol — Mentoring track. Pepe Arturo, exposing his curated playbook corpus to mentee agents (Claude Cowork, Claude.ai, Claude Code, …) over the MCP wire."
 readme = "README.md"
 authors = [
@@ -121,7 +121,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 30  # FastMCP factories wire many tools; raising over the default 10
+max-complexity = 40  # FastMCP factories wire many tools; raising over the default 10
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

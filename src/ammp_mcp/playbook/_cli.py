@@ -1,7 +1,7 @@
 """`ammp playbook …` and `ammp instruction …` subcommands.
 
 The corpus is a two-level hierarchy — playbooks (areas of practice)
-contain work instructions (markdown files). ``ammp playbook`` operates
+contain skills (markdown files). ``ammp playbook`` operates
 on the area level; ``ammp instruction`` operates on individual
 instructions.
 """
@@ -29,7 +29,7 @@ wire_help_on_no_args(playbook_app)
 
 instruction_app = typer.Typer(
     name="instruction",
-    help="Inspect and read individual work instructions inside a mentor's playbooks.",
+    help="Inspect and read individual skills inside a mentor's playbooks.",
     add_completion=False,
 )
 wire_help_on_no_args(instruction_app)
@@ -60,7 +60,7 @@ def playbook_show(
     playbook_id: str = typer.Argument(..., help="Playbook id (directory name)."),
     mentor: str = typer.Option("", help="Mentor slug."),
 ) -> None:
-    """Print one playbook's metadata + its work-instruction list."""
+    """Print one playbook's metadata + its skill list."""
     s = get_settings()
     mentors = load_mentors(s.mentors_root)
     m = get_mentor(mentors, mentor, s.default_mentor)
@@ -80,7 +80,7 @@ def playbook_show(
     if pb.description:
         console.print(pb.description)
     console.print()
-    table = Table(title=f"work instructions ({len(pb.instructions)})")
+    table = Table(title=f"skills ({len(pb.instructions)})")
     table.add_column("id", style="cyan")
     table.add_column("title", style="white")
     table.add_column("summary", style="dim")
@@ -94,7 +94,7 @@ def instruction_list(
     playbook_id: str = typer.Option(..., "--playbook", "-p", help="Playbook id (directory name)."),
     mentor: str = typer.Option("", help="Mentor slug. Empty → server default."),
 ) -> None:
-    """List the work instructions inside a playbook."""
+    """List the skills inside a playbook."""
     s = get_settings()
     mentors = load_mentors(s.mentors_root)
     m = get_mentor(mentors, mentor, s.default_mentor)
@@ -110,7 +110,7 @@ def instruction_list(
     if pb is None:
         console.print(f"[red]Not found: playbook id={clean_pb!r} for mentor {m.slug!r}[/red]")
         raise typer.Exit(code=1)
-    table = Table(title=f"{m.name} · {pb.name} — work instructions ({len(pb.instructions)})")
+    table = Table(title=f"{m.name} · {pb.name} — skills ({len(pb.instructions)})")
     table.add_column("id", style="cyan")
     table.add_column("title", style="white")
     table.add_column("summary", style="dim")
@@ -121,11 +121,11 @@ def instruction_list(
 
 @instruction_app.command("show")
 def instruction_show(
-    instruction_id: str = typer.Argument(..., help="Work instruction id (filename stem)."),
+    instruction_id: str = typer.Argument(..., help="Skill id (folder name or filename stem)."),
     playbook_id: str = typer.Option(..., "--playbook", "-p", help="Playbook id (directory name)."),
     mentor: str = typer.Option("", help="Mentor slug."),
 ) -> None:
-    """Print one work instruction body to stdout (CLI parity with ``GetWorkInstruction``)."""
+    """Print one skill body to stdout (CLI parity with ``GetSkill``)."""
     s = get_settings()
     mentors = load_mentors(s.mentors_root)
     m = get_mentor(mentors, mentor, s.default_mentor)

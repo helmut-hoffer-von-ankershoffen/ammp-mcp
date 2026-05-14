@@ -52,6 +52,24 @@ def _default_config_env_path() -> Path:
     return _resolve_ammp_dir() / "config.env"
 
 
+def _default_marketplaces_root() -> Path:
+    """Resolve the default marketplaces directory (`<AMMP_DIR>/marketplaces`).
+
+    Mirrors the convention used for mentor / mentee / audit / escalation
+    file paths: every leaf defaults relative to AMMP_DIR. Marketplaces
+    are git clones of plugin marketplaces (e.g. `helmguild-plugins`)
+    that a mentor's playbook can reference via the `plugin` field in
+    its `playbook.json`. The loader walks
+    `<marketplaces_root>/<marketplace-name>/plugins/<plugin>/skills/`
+    when a playbook resolves to a plugin reference.
+
+    Returns:
+        Filesystem path that AMMP_DIR resolves to, with `marketplaces/`
+        appended.
+    """
+    return _resolve_ammp_dir() / "marketplaces"
+
+
 def _default_mentors_root() -> Path:
     """Return the default mentors-registry root (``<AMMP_DIR>/mentors``).
 
@@ -156,6 +174,19 @@ class Settings(BaseSettings):
     mentors_root: Path = Field(
         default_factory=_default_mentors_root,
         description="Root directory holding one subdirectory per mentor (slug = dirname). Defaults to `<AMMP_DIR>/mentors`.",
+    )
+    marketplaces_root: Path = Field(
+        default_factory=_default_marketplaces_root,
+        description=(
+            "Root directory holding git clones of plugin marketplaces. A mentor's "
+            "`playbook.json` may reference a plugin via the `plugin` field "
+            "(e.g. `\"pepe-multi-channel-content-pipelines@helmguild-plugins\"`); "
+            "the loader resolves the marketplace name to "
+            "`<marketplaces_root>/<marketplace>/plugins/<plugin>/skills/`. "
+            "Defaults to `<AMMP_DIR>/marketplaces`. Operators clone the "
+            "marketplace repo into this directory once; future versions may "
+            "fetch / refresh automatically."
+        ),
     )
     default_mentor: str = Field(
         default="example", description="Mentor slug used when a mentee omits the `mentor` argument."
@@ -278,6 +309,8 @@ class Settings(BaseSettings):
         # ones still pointing at the env-default tree.
         if str(self.mentors_root).startswith(str(env_default)):
             object.__setattr__(self, "mentors_root", explicit_ammp_dir / "mentors")
+        if str(self.marketplaces_root).startswith(str(env_default)):
+            object.__setattr__(self, "marketplaces_root", explicit_ammp_dir / "marketplaces")
         if str(self.mentees_file).startswith(str(env_default)):
             object.__setattr__(self, "mentees_file", explicit_ammp_dir / "mentees.json")
         if str(self.audit_log_path).startswith(str(env_default)):

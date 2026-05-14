@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from ammp_mcp.mentee import Mentee
 from ammp_mcp.mentor import Mentor
-from ammp_mcp.models import AskMentorResponse, WorkInstructionSummary
+from ammp_mcp.models import AskMentorResponse, SkillSummary
 
 pytestmark = pytest.mark.unit
 
@@ -44,7 +44,7 @@ def test_ask_mentor_response_default_no_escalation() -> None:
         question="q",
         answer="a",
         confidence=0.8,
-        relevant_instructions=[WorkInstructionSummary(id="i", title="t")],
+        relevant_instructions=[SkillSummary(id="i", title="t")],
     )
     assert r.escalation_recommended is False
     assert r.suggested_message_to_your_operator is None
@@ -83,7 +83,7 @@ def test_prompt_helper_includes_escalation_step_when_human_mentor_set(tmp_path) 
     assert 'mentor: "pepe"' in prompt
     assert 'id: "personal-assistant-for-managers"' in prompt
     # Plural-aware count
-    assert "5 work instructions" in prompt
+    assert "5 skills" in prompt
     # All four canonical tool names appear when human_mentor is set.
     for tool in ("ListPlaybooks", "GetPlaybook", "AskMentor", "EscalateToHumanMentor"):
         assert tool in prompt, tool
@@ -112,8 +112,8 @@ def test_prompt_helper_omits_escalation_step_when_no_human_mentor(tmp_path) -> N
         instruction_count=1,
     )
     # Singular-aware count
-    assert "1 work instruction" in prompt
-    assert "1 work instructions" not in prompt
+    assert "1 skill" in prompt
+    assert "1 skills" not in prompt
     # Other three tools still mentioned
     for tool in ("ListPlaybooks", "GetPlaybook", "AskMentor"):
         assert tool in prompt

@@ -115,12 +115,15 @@ pepe/
 ├── avatar.jpg                  # 256-512px square (served at /mentors/pepe/avatar)
 └── playbooks/
     ├── <playbook-slug>/
-    │   ├── playbook.json       # name, description (area of practice)
-    │   └── <instruction>.md    # one work instruction per file
+    │   └── playbook.json       # name, description, optional plugin: "<name>@<marketplace>"
     └── ...
 ```
 
-Edit any `playbooks/<slug>/<instruction>.md` (or add/remove `.md` files) and the change is visible on the next `GetPlaybook` / `ListPlaybooks` / `AskMentor` call — no restart. Adding/removing a whole playbook subdirectory likewise needs no restart. Editing `pepe/mentor.json` or any `playbook.json` (name/description metadata) needs a restart.
+Each `playbook.json` carries an optional `plugin: "<plugin-name>@<marketplace-name>"` reference. When set, skill bodies load from `<AMMP_MARKETPLACES_ROOT>/<marketplace>/plugins/<plugin>/skills/<id>/SKILL.md` (AgentSkills format); when absent, the loader falls back to legacy `NN-*.md` files alongside the `playbook.json`.
+
+For Pepe's deployment, all three playbooks (`multi-channel-content-pipelines`, `operator-craft`, `personal-assistant-for-managers`) are plugin-backed and live in the private `helmut-hoffer-von-ankershoffen/helmguild-plugins` marketplace cloned at `~/.ammp/marketplaces/helmguild-plugins/`.
+
+Editing a `SKILL.md` body in the marketplace clone is visible on the next `GetPlaybook` / `ListPlaybooks` / `AskMentor` call — no restart. Adding/removing a whole playbook subdirectory likewise needs no restart. Editing `pepe/mentor.json` or any `playbook.json` (name/description/plugin-ref metadata) needs a restart.
 
 ---
 
