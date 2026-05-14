@@ -263,9 +263,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
                 id=pb.id,
                 name=pb.name,
                 description=pb.description,
-                instructions=[
-                    SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
-                ],
+                instructions=[SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions],
             )
             for pb in corpus
         ]
@@ -333,9 +331,7 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
                 name=pb.name,
                 description=pb.description,
                 instruction_count=len(pb.instructions),
-                instructions=[
-                    SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions
-                ],
+                instructions=[SkillSummary(id=wi.id, title=wi.title, summary=wi.summary) for wi in pb.instructions],
             )
             for pb in corpus
         ],
@@ -391,9 +387,7 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         id=pb.id,
         name=pb.name,
         description=pb.description,
-        instructions=[
-            SkillEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body) for wi in pb.instructions
-        ],
+        instructions=[SkillEntry(id=wi.id, title=wi.title, summary=wi.summary, body=wi.body) for wi in pb.instructions],
     ).model_dump()
 
 
@@ -1303,9 +1297,7 @@ def _build_plugin_archive(plugin_dir: Path, plugin_name: str) -> bytes:
     return buf.getvalue()
 
 
-def _handle_get_plugin_archive(
-    ctx: ServerContext, plugin: str, api_key: str | None
-) -> dict[str, Any]:
+def _handle_get_plugin_archive(ctx: ServerContext, plugin: str, api_key: str | None) -> dict[str, Any]:
     """Return a download URL for a plugin zip that the mentee can pass to its user.
 
     The zip itself is served from a separate HTTP route gated by the
@@ -1417,9 +1409,7 @@ def _build_mentor_playbook_prompt(
             "   - The plugin's `.mcp.json` wires this AMMP server, so the live ops below keep working after the install.\n"
         )
         step += 1
-    body += (
-        f'{step}. Call `ListPlaybooks` with `mentor: "{mentor.slug}"` to confirm you can reach the server.\n'
-    )
+    body += f'{step}. Call `ListPlaybooks` with `mentor: "{mentor.slug}"` to confirm you can reach the server.\n'
     step += 1
     body += (
         f'{step}. Call `GetPlaybook` with `id: "{playbook_id}"` and `mentor: "{mentor.slug}"` to load the playbook — '

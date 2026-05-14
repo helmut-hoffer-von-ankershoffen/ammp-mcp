@@ -180,7 +180,7 @@ class Settings(BaseSettings):
         description=(
             "Root directory holding git clones of plugin marketplaces. A mentor's "
             "`playbook.json` may reference a plugin via the `plugin` field "
-            "(e.g. `\"pepe-multi-channel-content-pipelines@helmguild-plugins\"`); "
+            '(e.g. `"pepe-multi-channel-content-pipelines@helmguild-plugins"`); '
             "the loader resolves the marketplace name to "
             "`<marketplaces_root>/<marketplace>/plugins/<plugin>/skills/`. "
             "Defaults to `<AMMP_DIR>/marketplaces`. Operators clone the "

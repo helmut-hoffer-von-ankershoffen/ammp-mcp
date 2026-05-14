@@ -328,9 +328,7 @@ def _load_skills_local(playbook_dir: Path, playbook_id: str) -> list[Skill]:
             return skills
     # Legacy AMMP-01: NN-*.md files under the playbook dir
     skills = [
-        _load_legacy_md(p, playbook_id)
-        for p in sorted(playbook_dir.glob("*.md"))
-        if p.name.lower() != "readme.md"
+        _load_legacy_md(p, playbook_id) for p in sorted(playbook_dir.glob("*.md")) if p.name.lower() != "readme.md"
     ]
     skills.sort(key=lambda s: (s.order, s.id))
     return skills

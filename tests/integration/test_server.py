@@ -1426,9 +1426,7 @@ async def test_plugin_archive_route_serves_zip(settings: Settings) -> None:
         r_bad = http.get("/plugins/UPPERCASE.zip", headers={"Authorization": "Bearer ammp-test-key-1"})
         assert r_bad.status_code == 404
         # Unknown plugin → 404.
-        r_missing = http.get(
-            "/plugins/no-such-plugin.zip", headers={"Authorization": "Bearer ammp-test-key-1"}
-        )
+        r_missing = http.get("/plugins/no-such-plugin.zip", headers={"Authorization": "Bearer ammp-test-key-1"})
         assert r_missing.status_code == 404
         # Good auth + known plugin → zip body, prefixed with plugin name.
         r = http.get(f"/plugins/{plugin}.zip", headers={"Authorization": "Bearer ammp-test-key-1"})
