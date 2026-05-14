@@ -334,7 +334,9 @@ Out of scope (for now):
 
 ## License & Attributions
 
-`ammp-mcp` is **MIT-licensed** — see [`LICENSE`](LICENSE).
+`ammp-mcp` itself — the server, the CLI, the bundled landing copy and `.mcpb` shim — is **MIT-licensed**; see [`LICENSE`](LICENSE).
+
+The **plugin payloads served via `GetPluginArchive`** are a separate licensing layer. The reference deployment at `mcp.helmguild.com/ammp` serves plugins from the private [`helmguild-plugins`](https://github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins) marketplace, where every plugin is licensed under the **Helmguild Mentoring License v1.0** (SPDX `LicenseRef-helmguild-mentoring-1.0`): proprietary, no redistribution, install + use only inside an active mentor/mentee engagement brokered by helmguild. Operators running their own ammp-mcp instance choose their own license for the plugin payloads they serve.
 
 Attributions for the open-source projects this server depends on are in [`ATTRIBUTIONS.md`](ATTRIBUTIONS.md). Regenerate after dependency bumps with `python tools/generate_attributions.py`.
 
