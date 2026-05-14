@@ -18,7 +18,7 @@ def example_mentor_path() -> Path:
     Callers (typically ``ammp setup``) copy this tree into the operator's
     ``~/.ammp/mentors/example/`` to bootstrap a fresh install.
     """
-    return Path(str(resources.files(__package__).joinpath("example_mentor")))
+    return Path(str(resources.files(__package__ or "ammp_mcp._data").joinpath("example_mentor")))
 
 
 def favicon_path() -> Path:
@@ -33,7 +33,7 @@ def favicon_path() -> Path:
     Returns:
         Filesystem path to ``src/ammp_mcp/_data/favicon/``.
     """
-    return Path(str(resources.files(__package__).joinpath("favicon")))
+    return Path(str(resources.files(__package__ or "ammp_mcp._data").joinpath("favicon")))
 
 
 def desktop_bundle_path() -> Path:
@@ -47,4 +47,4 @@ def desktop_bundle_path() -> Path:
     Returns:
         Filesystem path to ``src/ammp_mcp/_data/desktop_bundle/``.
     """
-    return Path(str(resources.files(__package__).joinpath("desktop_bundle")))
+    return Path(str(resources.files(__package__ or "ammp_mcp._data").joinpath("desktop_bundle")))

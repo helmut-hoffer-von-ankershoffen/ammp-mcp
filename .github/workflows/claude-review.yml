@@ -1,0 +1,86 @@
+name: Claude PR Review
+
+# Runs Claude Code on every PR diff, posts a review, and (when the
+# review is a PASS + every other required check is green) auto-merges
+# the PR via squash.
+#
+# Required secrets:
+#   ANTHROPIC_API_KEY  — Claude API key for the action's underlying calls.
+#
+# Auto-merge policy:
+#   - Claude returns a structured pass/fail verdict in the review body
+#     (the action's default contract is to add an "approved" review
+#     when the model's verdict is PASS).
+#   - This workflow then enables GitHub auto-merge; the merge happens
+#     once all branch-protection-required checks pass.
+#   - Manual reviewers can still override (request changes) before merge.
+#
+# Forks: secrets aren't available on PRs from forks, so the review
+# step short-circuits with a `::notice::` instead of failing the job.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write          # for `gh pr merge`
+  pull-requests: write     # for review submission + auto-merge enable
+  issues: write            # comment fallback when reviews aren't applicable
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Check ANTHROPIC_API_KEY secret is wired
+        id: secret_check
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            if [ -n "${PR_HEAD_REPO:-}" ] && [ "$PR_HEAD_REPO" != "$REPO" ]; then
+              echo "::notice::Claude review self-skipped — secret is not visible to fork PRs."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::ANTHROPIC_API_KEY not set; wire it: gh secret set ANTHROPIC_API_KEY"
+            exit 1
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        if: steps.secret_check.outputs.skip != 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code review
+        if: steps.secret_check.outputs.skip != 'true'
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          mode: review
+          # Reviewers should focus on correctness, security, and lockstep
+          # consistency with the project's CLAUDE.md / AGENTS.md.
+          prompt: |
+            Review this PR against the project's CLAUDE.md and AGENTS.md.
+            Focus on:
+              - correctness of the change vs. the PR description
+              - security / OWASP-top-10 regressions
+              - drift between the AMMP wire surface and its docs
+              - test coverage on the new code path
+              - lockstep updates (README, CHANGELOG, RFC, landing copy)
+                where they should have moved together
+            Approve if the change is clearly correct + well-tested.
+            Request changes if you see a regression, missing test, or
+            stale doc. Be terse — quote the smallest excerpt that proves
+            your point.
+
+      - name: Auto-enable merge when Claude approves
+        if: steps.secret_check.outputs.skip != 'true' && steps.claude.outputs.verdict == 'approve'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -5,6 +5,19 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.9.0] — 2026-05-14
+
+### Added — CI / automation
+
+- **Pyright** added as a second static type-checker alongside mypy. Runs in `make lint` and on every CI push/PR. Config in `pyproject.toml` (`[tool.pyright]`: `typeCheckingMode = "standard"`, includes `src/`, Python 3.11+). Caught + fixed: `asynccontextmanager` `_lifespan` lacked an `AsyncIterator[…]` return annotation; `_data/__init__.py` passed `__package__` (typed `str | None`) to `importlib.resources.files` without a fallback; a stale composite `# type: ignore[…]` comment on the YAML import in `playbook/_service.py`. (#typing)
+- **`.github/workflows/dependabot-auto-merge.yml`** — auto-approves + enables auto-merge on patch + minor Dependabot bumps; labels major bumps with `needs-human-review` and leaves them. Uses `dependabot/fetch-metadata` v2.4 (SHA-pinned). Auto-merge respects every branch-protection-required check — no bypass. (#ci)
+- **`.github/workflows/claude-review.yml`** — runs Claude Code on every PR diff via the `anthropics/claude-code-action`, posts a structured review against the project's CLAUDE.md / AGENTS.md, and auto-enables merge when the verdict is `approve`. Fork PRs short-circuit gracefully (secrets aren't visible there). Required secret: `ANTHROPIC_API_KEY`. (#ci)
+- **`.github/workflows/e2e-install.yml`** — weekly + on-demand workflow that runs `scripts/e2e-claude-code-install.sh` against the live `mcp.helmguild.com` deployment using a `HELMGUILD_AMMP_BEARER` secret. Catches regressions in the end-to-end mentee install path. Gated behind a `vars.AMMP_E2E_ENABLED` repo variable so it stays dormant until Helmut wires the secret. (#ci)
+
+### Pre-existing
+
+- **Trivy** vulnerability + SBOM scan is already integrated in `audit.yml` (HIGH/CRITICAL findings fail the gate; SARIF uploaded to Code Scanning). Helmut's checklist item #2 was already satisfied.
+
 ## [0.8.2] — 2026-05-14
 
 ### Added

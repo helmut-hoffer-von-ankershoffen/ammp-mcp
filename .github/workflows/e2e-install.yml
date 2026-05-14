@@ -1,0 +1,80 @@
+name: E2E Install
+
+# Runs the real Claude-Code plugin-install round-trip against the live
+# mcp.helmguild.com server. This is the only CI workflow that exercises
+# the full mentee → user install path: it downloads the auth-gated
+# zip via /plugins/<name>.zip, validates with `claude plugin validate`,
+# installs into a project-local scope, and confirms the install landed
+# in settings.local.json.
+#
+# Required for the workflow to actually run something useful:
+#   - HELMGUILD_AMMP_BEARER  GitHub Actions secret holding a valid
+#                            mentee Bearer token. Without it, every job
+#                            here short-circuits to a SKIPPED state.
+#
+# The Bearer is read inside the script via env var; it never appears
+# in workflow logs. The job runs in an ephemeral runner so the install
+# state is wiped at the end automatically — no cleanup-on-developer
+# concerns like the local script has.
+
+on:
+  schedule:
+    # Weekly, Sunday 02:00 UTC — catches regressions in the live deploy
+    # surface even when no push has happened. The Bearer secret must be
+    # set for this to run anything.
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: "Plugin to install (default: pepe-operator-craft)"
+        default: "pepe-operator-craft"
+        required: false
+  push:
+    branches: [main]
+    paths:
+      # Re-run when the install path itself, the plugin-archive route,
+      # or the e2e harness changes — three places where a regression
+      # could quietly break first-time install.
+      - "scripts/e2e-claude-code-install.sh"
+      - "tests/e2e/test_claude_code_install.py"
+      - "src/ammp_mcp/server.py"
+
+permissions:
+  contents: read
+
+jobs:
+  install-round-trip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Skip silently when the Bearer secret is absent (e.g. on forks or
+    # before Helmut wires it). This makes the workflow safe to land
+    # without an immediate secret-setup step.
+    if: ${{ vars.AMMP_E2E_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node (for claude CLI + bundled stdio MCP smoke test)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Claude Code CLI
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          claude --version
+
+      - name: Install jq + unzip
+        run: |
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq jq unzip
+
+      - name: Run E2E install round-trip
+        env:
+          HELMGUILD_AMMP_BEARER: ${{ secrets.HELMGUILD_AMMP_BEARER }}
+          PLUGIN: ${{ github.event.inputs.plugin || 'pepe-operator-craft' }}
+        run: |
+          if [[ -z "$HELMGUILD_AMMP_BEARER" ]]; then
+            echo "::warning::HELMGUILD_AMMP_BEARER secret is not set — skipping the install round-trip"
+            exit 0
+          fi
+          bash scripts/e2e-claude-code-install.sh

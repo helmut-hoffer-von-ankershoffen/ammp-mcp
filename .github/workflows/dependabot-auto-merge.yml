@@ -1,0 +1,53 @@
+name: Dependabot Auto-Merge
+
+# Auto-approve + auto-merge Dependabot PRs that pass every CI gate.
+#
+# Policy:
+#   - patch + minor version bumps: auto-approve + enable auto-merge
+#   - major version bumps: leave for human review (no approval, no merge)
+#
+# Auto-merge is "queue for merge when all required checks pass"; the
+# actual merge still happens through GitHub's branch-protection gates,
+# so this workflow does NOT bypass any required-status checks.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: write          # for `gh pr merge`
+  pull-requests: write     # for `gh pr review --approve`
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.draft == false
+    steps:
+      - name: Inspect Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7  # v2.4.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Auto-approve patch + minor bumps
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge on patch + minor bumps
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Flag major bumps for human review
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        run: |
+          echo "::notice::Major version bump (${{ steps.meta.outputs.dependency-names }} → ${{ steps.meta.outputs.new-version }}); leaving for human review."
+          gh pr edit "$PR_URL" --add-label "major-version-bump,needs-human-review"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

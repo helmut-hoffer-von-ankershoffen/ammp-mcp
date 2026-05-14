@@ -142,7 +142,7 @@ def _parse_frontmatter(text: str) -> dict[str, Any]:
         return {}
     raw = text[4:end]
     try:
-        import yaml  # type: ignore[import-untyped,import-not-found,unused-ignore]
+        import yaml  # pyright: ignore[reportMissingTypeStubs]  # type: ignore[import-untyped,unused-ignore]
 
         data = yaml.safe_load(raw)
         return data if isinstance(data, dict) else {}

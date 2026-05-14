@@ -2059,10 +2059,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         ctx.delivery_adapter.kind,
     )
 
+    from collections.abc import AsyncIterator
     from contextlib import asynccontextmanager
 
     @asynccontextmanager
-    async def _lifespan(_server: FastMCP[Any]) -> Any:
+    async def _lifespan(_server: FastMCP[Any]) -> AsyncIterator[dict[str, Any]]:
         """Start the delivery adapter on server boot; stop it on shutdown.
 
         The adapter's inbound task (Telegram long-poll, for the

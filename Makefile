@@ -50,10 +50,11 @@ clean: ## Reset the dev tree — remove caches, .venv, reports, dist.
 
 ##@ Lint / type-check / docstrings
 
-lint: ## Run the full CI lint gate (ruff + format + mypy + docstring coverage + pydoclint).
+lint: ## Run the full CI lint gate (ruff + format + mypy + pyright + docstring coverage + pydoclint).
 	uv run ruff check .
 	uv run ruff format --check .
 	uv run mypy src/ammp_mcp
+	uv run pyright src/ammp_mcp
 	uv run python tools/check_docstrings.py
 	uv run pydoclint src/ammp_mcp
 
