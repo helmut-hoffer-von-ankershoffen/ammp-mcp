@@ -49,7 +49,6 @@ from .models import (
     PlaybookSummary,
     SearchMatch,
     SearchPlaybooksResponse,
-    SkillEntry,
     SkillSummary,
 )
 from .playbook import (
@@ -388,7 +387,7 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         id=pb.id,
         name=pb.name,
         description=pb.description,
-        skills=[SkillEntry(id=sk.id, title=sk.title, summary=sk.summary, body=sk.body) for sk in pb.skills],
+        skills=[SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk in pb.skills],
     ).model_dump()
 
 

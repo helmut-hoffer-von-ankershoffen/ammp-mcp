@@ -100,13 +100,14 @@ async def test_stdio_transport_round_trip(isolated_tree: Path) -> None:
         ids = {pb["id"] for pb in listed["playbooks"]}
         assert ids == {"intro", "operator-craft"}, ids
 
-        # GetPlaybook — returns the playbook with every work-instruction body.
+        # GetPlaybook — returns the playbook + every skill's summary (no
+        # body; mentees fetch a specific body via GetSkill on demand).
         got = _payload(await client.call_tool("GetPlaybook", {"id": "intro", "mentor": "pepe"}))
         assert got["id"] == "intro"
         wi_ids = {wi["id"] for wi in got["skills"]}
         assert wi_ids == {"intro", "auth"}
-        intro_sk = next(wi for wi in got["skills"] if wi["id"] == "intro")
-        assert "Welcome to Pepe" in intro_sk["body"]
+        for sk in got["skills"]:
+            assert "body" not in sk, f"skill {sk['id']} leaked body into GetPlaybook envelope"
 
         # SearchPlaybooks — substring match.
         searched = _payload(

@@ -5,6 +5,17 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.13.0] — 2026-05-14
+
+### Changed — wire envelope (breaking)
+
+- **`GetPlaybook` returns skill summaries, not full bodies.** The response's `skills[]` is now a `list[SkillSummary]` (id + title + summary) instead of `list[SkillEntry]` (id + title + summary + body). Mentees that need a body fetch it via `GetSkill(playbook_id, id)` on demand. Surfaced by the new `e2e-skill-walkthrough.sh` test: a real Claude Code mentee tripped the per-tool token budget reading the pepe-multi-channel-content-pipelines playbook (7 skills × ~20 KB after the 2.x rewrite ≈ 150 KB), fell back to ListMentors' embedded skill list to compensate. The slim-down restores the GetPlaybook = enumeration / GetSkill = body discipline from the `mcp_list_ops_summarize` memory note. (#wire)
+- Removed unused `SkillEntry` import from `server.py` (the type is now only referenced by tests + the dropped envelope path). Class itself is retained in `models.py` for any out-of-process consumer that depends on the older shape.
+
+### Added — skill-execution e2e
+
+- **`scripts/e2e-skill-walkthrough.sh`** — spawns a real `claude -p` mentee with a fresh AMMP Bearer, points it at the live `mcp.helmguild.com/ammp` via `.mcp.json`, exercises the bundled scaffolders (`brand-identity-scaffold`, `cameo-roster-scaffold`, `state-dir-init`) against a Sandra-as-cooking-brand fixture, runs `setup-doctor.sh` and asserts `brand-identity` + `cameo-protocol` + `strategy` report `ready`, then asks the mentee to enumerate the playbook's skill ids in order via real `ListMentors` + `GetPlaybook` MCP calls. Proves the skills are LLM-followable end-to-end with no external API spend (Veo / Meta / X not exercised). macOS-compatible (falls back to `gtimeout`, then no-timeout). (#e2e)
+
 ## [0.12.1] — 2026-05-14
 
 ### Changed

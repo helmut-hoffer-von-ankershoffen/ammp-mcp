@@ -168,9 +168,14 @@ class ListMentorsResponse(BaseModel):
 class GetPlaybookResponse(BaseModel):
     """Response envelope for the ``GetPlaybook`` AMMP operation.
 
-    Returns a playbook's identity plus the full body of every skill
-    in it — one round-trip to load everything the mentee needs about
-    an area of practice.
+    Returns a playbook's identity plus a summary of every skill
+    inside — id + title + summary, **no body**. Mentees fetch a
+    specific skill's body via ``GetSkill(playbook_id, id)`` on
+    demand. This keeps the response small enough that a real-world
+    playbook with many long SKILL.md bodies (the pepe-multi-channel-
+    content-pipelines playbook ships 7 skills, each ~20 KB after the
+    2.x rewrite) doesn't trip the mentee runtime's per-tool token
+    budget.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -179,7 +184,7 @@ class GetPlaybookResponse(BaseModel):
     id: str
     name: str
     description: str = ""
-    skills: list[SkillEntry]
+    skills: list[SkillSummary]
 
 
 class GetSkillResponse(BaseModel):

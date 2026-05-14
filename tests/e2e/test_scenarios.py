@@ -123,7 +123,19 @@ async def test_scenario_openclaw_mentor_and_claude_code_mentee(isolated_tree: Pa
             got = payload(await mentee.call_tool("GetPlaybook", {"id": first_id, "mentor": "pepe"}))
             assert got["id"] == first_id
             assert isinstance(got["skills"], list) and got["skills"]
-            assert isinstance(got["skills"][0]["body"], str) and got["skills"][0]["body"]
+            # GetPlaybook returns summaries only; bodies are fetched on
+            # demand via GetSkill to stay under the mentee's per-tool budget.
+            first_skill = got["skills"][0]
+            assert {"id", "title", "summary"} <= set(first_skill.keys())
+            assert "body" not in first_skill
+            # Round-trip: GetSkill returns the body for that summary id.
+            sk = payload(
+                await mentee.call_tool(
+                    "GetSkill",
+                    {"playbook_id": first_id, "id": first_skill["id"], "mentor": "pepe"},
+                )
+            )
+            assert isinstance(sk.get("body"), str) and sk["body"]
 
             # Step 3: search.
             searched = payload(

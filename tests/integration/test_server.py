@@ -123,17 +123,24 @@ async def test_list_playbooks_unknown_mentor(server) -> None:
     assert result.data["error"] == "unknown_mentor"
 
 
-async def test_get_playbook_returns_skills(server) -> None:
-    """GetPlaybook returns the playbook + every skill body."""
+async def test_get_playbook_returns_skill_summaries(server) -> None:
+    """GetPlaybook returns the playbook + every skill's summary (id + title +
+    summary, no body). Bodies are fetched separately via GetSkill so a
+    playbook with many long SKILL.md bodies doesn't trip the mentee
+    runtime's per-tool token budget.
+    """
     async with Client(server) as c:
         result = await c.call_tool("GetPlaybook", {"id": "intro"})
     assert result.data["id"] == "intro"
     assert result.data["name"] == "Welcome to Pepe"
     skill_ids = {sk["id"] for sk in result.data["skills"]}
     assert skill_ids == {"intro", "auth"}
-    # Bodies are full markdown.
-    intro_sk = next(sk for sk in result.data["skills"] if sk["id"] == "intro")
-    assert "Welcome" in intro_sk["body"]
+    # Summaries only — body must NOT be in the envelope.
+    for sk in result.data["skills"]:
+        assert "id" in sk
+        assert "title" in sk
+        assert "summary" in sk
+        assert "body" not in sk, f"skill {sk['id']} leaked body into GetPlaybook envelope"
 
 
 async def test_get_playbook_path_traversal_rejected(server) -> None:
