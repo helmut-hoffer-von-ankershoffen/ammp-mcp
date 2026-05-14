@@ -58,8 +58,18 @@ def test_readme_mermaid_block_renders(idx: int) -> None:
         src = tmp / f"d{idx}.mmd"
         out = tmp / f"d{idx}.png"
         src.write_text(blocks[idx], encoding="utf-8")
+        # mermaid-cli launches headless Chromium under the hood; on
+        # GitHub Actions / containerised runners the default sandbox
+        # path is blocked and Puppeteer fails to spawn. Passing a
+        # config that turns the sandbox off is harmless on macOS dev
+        # machines and required in CI.
+        puppeteer_cfg = tmp / "puppeteer.json"
+        puppeteer_cfg.write_text(
+            '{"args": ["--no-sandbox", "--disable-setuid-sandbox"]}',
+            encoding="utf-8",
+        )
         proc = subprocess.run(
-            ["mmdc", "-i", str(src), "-o", str(out), "-b", "transparent"],
+            ["mmdc", "-i", str(src), "-o", str(out), "-b", "transparent", "-p", str(puppeteer_cfg)],
             capture_output=True,
             text=True,
             timeout=60,

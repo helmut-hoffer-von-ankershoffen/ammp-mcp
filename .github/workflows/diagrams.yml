@@ -52,4 +52,6 @@ jobs:
         run: make install
 
       - name: Render every README mermaid block
+        # The test passes the puppeteer --no-sandbox config inline; no
+        # extra env wiring needed.
         run: uv run pytest tests/e2e/test_readme_diagrams.py -m e2e -v --no-cov
