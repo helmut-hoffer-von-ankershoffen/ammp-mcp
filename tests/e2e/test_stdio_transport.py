@@ -7,7 +7,7 @@ EscalateToHuman), and verifies the responses match the in-process contract
 the integration tests already cover.
 
 This is the canonical "does the subprocess transport actually work" test —
-the kind a Claude Desktop / Claude Code mentee would exercise on first
+the kind a Claude Cowork / Claude Code mentee would exercise on first
 connect.
 """
 

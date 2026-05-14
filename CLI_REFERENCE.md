@@ -40,7 +40,7 @@ $ ammp serve [OPTIONS]
 
 **Options**:
 
-* `--stdio`: Speak MCP JSON-RPC over stdin/stdout (subprocess transport). Wins over --host/--port and AMMP_TRANSPORT=http when set. Use this for Claude Desktop / Claude Code subprocess MCP integration.
+* `--stdio`: Speak MCP JSON-RPC over stdin/stdout (subprocess transport). Wins over --host/--port and AMMP_TRANSPORT=http when set. Use this for Claude Cowork / Claude Code subprocess MCP integration.
 * `--host TEXT`: Override bind host (HTTP transport only).
 * `--port INTEGER`: Override bind port (HTTP transport only).  [default: 0]
 * `--help`: Show this message and exit.
@@ -683,7 +683,7 @@ example mentor, writes a `config.env` scaffold) on first run so a
 fresh install can `ammp serve` immediately. Re-runs are no-ops.
 
 Default transport is HTTP (Streamable-HTTP at `/mcp/`). Use ``--stdio`` for
-subprocess transport (Claude Desktop, Claude Code stdio integrations). The
+subprocess transport (Claude Cowork, Claude Code stdio integrations). The
 transport can also be set via ``AMMP_TRANSPORT={http,stdio}``; the
 ``--stdio`` flag wins when both are present.
 
@@ -695,7 +695,7 @@ $ ammp system serve [OPTIONS]
 
 **Options**:
 
-* `--stdio`: Speak MCP JSON-RPC over stdin/stdout (subprocess transport). Wins over --host/--port and AMMP_TRANSPORT=http when set. Use this for Claude Desktop / Claude Code subprocess MCP integration.
+* `--stdio`: Speak MCP JSON-RPC over stdin/stdout (subprocess transport). Wins over --host/--port and AMMP_TRANSPORT=http when set. Use this for Claude Cowork / Claude Code subprocess MCP integration.
 * `--host TEXT`: Override bind host (HTTP transport only).
 * `--port INTEGER`: Override bind port (HTTP transport only).  [default: 0]
 * `--help`: Show this message and exit.

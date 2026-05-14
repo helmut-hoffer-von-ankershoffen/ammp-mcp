@@ -180,7 +180,7 @@ tests/
 
 ## Stdio transport
 
-`ammp system serve --stdio` boots the server speaking MCP JSON-RPC over stdin/stdout instead of HTTP. Useful for Claude Code / Claude Desktop integrations that prefer subprocess MCPs. HTTP mode (default) is for shared deployments behind a tunnel like Cloudflare.
+`ammp system serve --stdio` boots the server speaking MCP JSON-RPC over stdin/stdout instead of HTTP. Useful for Claude Code / Claude Cowork integrations that prefer subprocess MCPs. HTTP mode (default) is for shared deployments behind a tunnel like Cloudflare.
 
 ## Commit identity
 

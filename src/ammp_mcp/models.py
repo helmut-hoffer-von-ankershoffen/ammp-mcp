@@ -314,7 +314,7 @@ class EscalateToHumanMentorResponse(BaseModel):
       pings, or after a polite delay) to retrieve the answer.
 
     The pending path is the production default — MCP clients vary in
-    how long they hold a single tool call open (Claude Desktop's
+    how long they hold a single tool call open (Claude Cowork's
     per-tool timeout is ~60 s and is not always reset by progress
     notifications), so we don't bet on a long sync wait.
 

@@ -258,7 +258,7 @@ def _handle_list_mentors(ctx: ServerContext, api_key: str | None) -> dict[str, A
         # Embed skill summaries only — bodies are fetched on demand
         # via GetPlaybook / GetSkill. Without this, a corpus with a
         # few dozen skills inflates the response to 100+ KB which
-        # trips Claude Desktop's MCP-transport timeout.
+        # trips Claude Cowork's MCP-transport timeout.
         playbook_entries = [
             PlaybookEntry(
                 id=pb.id,
@@ -800,7 +800,7 @@ async def _handle_escalate_to_human_mentor(
        reply to whichever next poll arms a waiter.
 
     Why the sync-or-pending design: MCP clients vary in how long they
-    hold a tool call open. Claude Desktop's per-tool deadline (~60s)
+    hold a tool call open. Claude Cowork's per-tool deadline (~60s)
     is not always reset by ``notifications/progress``, so a long
     block-and-wait is unreliable. Short blocking (default 25s) buys
     one-shot UX for fast humans without betting on the client.
@@ -1166,15 +1166,15 @@ def _build_capability_payload(ctx: ServerContext) -> dict[str, Any]:
     }
 
 
-# ─── Claude Desktop bundle (.mcpb) generation ─────────────────────────────
+# ─── Claude Cowork bundle (.mcpb) generation ─────────────────────────────
 
 
 def _build_desktop_bundle(public_url: str, mcp_url: str) -> bytes:
-    """Generate a Claude Desktop .mcpb bundle pointing at this server.
+    """Generate a Claude Cowork .mcpb bundle pointing at this server.
 
     The bundle is a zip containing a ``manifest.json`` (DXT/MCPB
     schema 0.1) plus an ``icon.png``. The manifest declares a
-    ``user_config.bearer_token`` field so Claude Desktop prompts the
+    ``user_config.bearer_token`` field so Claude Cowork prompts the
     visitor for their per-mentee token at install time and substitutes
     it into the ``mcp-remote`` invocation. No token ever lives inside
     the bundle itself — bundles can be shared freely.
@@ -1409,7 +1409,7 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "step2_h": "Step 2 — Configure your agent's MCP connection",
         "step2_p": "Pick your agent below and follow the paste path. Don't see yours? The <em>Generic</em> tab has the raw URL and Bearer header.",
         "tab_desktop_cta": "Download extension",
-        "tab_desktop_li1": "Click the downloaded <code>.mcpb</code> file — Claude Desktop opens its extension installer.",
+        "tab_desktop_li1": "Click the downloaded <code>.mcpb</code> file — Claude Cowork opens its extension installer.",
         "tab_desktop_li2": "Paste your Bearer token when prompted.",
         "tab_desktop_li3": "Enable the extension. Done.",
         "tab_code_intro": "One command in your terminal. Replace <code>&lt;your-token&gt;</code> with the value mailed to you.",
@@ -1464,7 +1464,7 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "step2_h": "Schritt 2 — MCP-Verbindung deines Agenten einrichten",
         "step2_p": "Wähl unten deinen Agenten und folge der Anleitung. Nicht dabei? Im Tab <em>Generic</em> findest du URL und Bearer-Header pur.",
         "tab_desktop_cta": "Erweiterung herunterladen",
-        "tab_desktop_li1": "Klick auf die heruntergeladene <code>.mcpb</code>-Datei — Claude Desktop öffnet den Erweiterungs-Installer.",
+        "tab_desktop_li1": "Klick auf die heruntergeladene <code>.mcpb</code>-Datei — Claude Cowork öffnet den Erweiterungs-Installer.",
         "tab_desktop_li2": "Bearer-Token einfügen, wenn du gefragt wirst.",
         "tab_desktop_li3": "Erweiterung aktivieren. Fertig.",
         "tab_code_intro": "Ein Befehl in deinem Terminal. Ersetze <code>&lt;dein-token&gt;</code> durch den Wert aus der Mail.",
@@ -1853,7 +1853,7 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
   <input type="radio" name="agent-tab" id="agent-tab-hermes" class="agent-tab-input">
   <input type="radio" name="agent-tab" id="agent-tab-generic" class="agent-tab-input">
   <div class="agent-tab-row" role="tablist">
-    <label for="agent-tab-desktop" class="agent-tab-label" role="tab">Claude Desktop</label>
+    <label for="agent-tab-desktop" class="agent-tab-label" role="tab">Claude Cowork</label>
     <label for="agent-tab-code" class="agent-tab-label" role="tab">Claude Code</label>
     <label for="agent-tab-copilot" class="agent-tab-label" role="tab">Copilot</label>
     <label for="agent-tab-openclaw" class="agent-tab-label" role="tab">OpenClaw</label>
@@ -2369,9 +2369,9 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.custom_route(f"{prefix}/desktop-bundle.mcpb", methods=["GET"])
     async def desktop_bundle(_request: Request) -> Response:
-        """Serve a Claude Desktop ``.mcpb`` bundle pointing at this server.
+        """Serve a Claude Cowork ``.mcpb`` bundle pointing at this server.
 
-        Visitor double-clicks the downloaded file; Claude Desktop reads
+        Visitor double-clicks the downloaded file; Claude Cowork reads
         the bundled ``manifest.json``, prompts for the Bearer token via
         the declared ``user_config.bearer_token`` field, and installs
         the connector. No token is baked into the bundle, so it can
@@ -2382,7 +2382,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         # Trailing slash required — the FastMCP transport is mounted at
         # `/mcp/` and Starlette 307s a no-slash request, which mcp-remote
         # does not follow on POST. (Confirmed empirically 2026-05-11
-        # when the .mcpb showed "server disconnected" in Claude Desktop.)
+        # when the .mcpb showed "server disconnected" in Claude Cowork.)
         mcp_url = f"{base}/mcp/"
         bundle = _build_desktop_bundle(public_url=base, mcp_url=mcp_url)
         return Response(

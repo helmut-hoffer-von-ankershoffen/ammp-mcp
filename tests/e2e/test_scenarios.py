@@ -22,7 +22,7 @@ runtimes:
        confusion between mentors.
 
 All three are marked `@pytest.mark.e2e`. They use the subprocess stdio
-transport so they exercise the same binary a Claude Desktop / Claude Code
+transport so they exercise the same binary a Claude Cowork / Claude Code
 mentee would attach to.
 """
 

@@ -290,7 +290,7 @@ async def test_landing_page_route(server) -> None:
     assert "avatar-fallback" in body  # stubmentor + strict have no avatar file
     # Each per-agent tab label must render — six tabs, one for every
     # supported runtime plus a Generic catch-all.
-    for runtime in ("Claude Desktop", "Claude Code", "Copilot", "OpenClaw", "Hermes", "Generic"):
+    for runtime in ("Claude Cowork", "Claude Code", "Copilot", "OpenClaw", "Hermes", "Generic"):
         assert runtime in body, f"runtime {runtime!r} missing from landing page"
     # The canonical MCP endpoint must be visible for copy/paste.
     assert "/mcp/" in body
@@ -624,7 +624,7 @@ async def test_escalate_to_human_mentor_round_trips(settings: Settings) -> None:
 async def test_escalate_to_human_mentor_emits_progress_heartbeats_while_waiting(settings: Settings) -> None:
     """Long wait → periodic progress notifications fire.
 
-    The MCP per-tool timeout on Claude Desktop is ~60s; each
+    The MCP per-tool timeout on Claude Cowork is ~60s; each
     `notifications/progress` resets it. Without heartbeats, the
     client gives up with `-32001` long before A.h can reply. Pinned
     so a regression that drops the heartbeat surfaces as a failing

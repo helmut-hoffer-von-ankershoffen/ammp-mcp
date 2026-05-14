@@ -90,9 +90,9 @@ Tunnel / reverse-proxy setup is out of scope for this guide. Anything that front
 
 ---
 
-## Connect a mentee — Claude Desktop (stdio)
+## Connect a mentee — Claude Cowork (stdio)
 
-For Claude Desktop and similar hosts that prefer subprocess-MCP over HTTP, run the server in **stdio mode**:
+For Claude Cowork and similar hosts that prefer subprocess-MCP over HTTP, run the server in **stdio mode**:
 
 ```jsonc
 // ~/Library/Application Support/Claude/claude_desktop_config.json

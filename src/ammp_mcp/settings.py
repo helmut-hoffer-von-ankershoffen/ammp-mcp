@@ -145,7 +145,7 @@ class Settings(BaseSettings):
             "Wire transport for the MCP server. `http` (default) — Streamable-HTTP "
             "with `/mcp/` endpoint, suitable for shared deployments behind a tunnel. "
             "`stdio` — speak MCP JSON-RPC over stdin/stdout, for subprocess "
-            "integration with Claude Desktop / Claude Code, where the parent "
+            "integration with Claude Cowork / Claude Code, where the parent "
             "process is the trust boundary. Stdio mode ignores `host` / `port`."
         ),
     )
@@ -285,7 +285,7 @@ class Settings(BaseSettings):
             "Cadence at which the long-running `EscalateToHumanMentor` "
             "handler emits `notifications/progress` while waiting for "
             "A.h's reply. Each notification resets the MCP client's "
-            "per-tool timeout — Claude Desktop's default is ~60s, so "
+            "per-tool timeout — Claude Cowork's default is ~60s, so "
             "keep this comfortably below that or the client gives up "
             "with `-32001` before the human can answer."
         ),

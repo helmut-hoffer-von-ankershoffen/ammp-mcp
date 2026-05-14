@@ -361,7 +361,7 @@ ammp status                                     # validate the install
 ammp usage --days 7                             # aggregate the audit log
 ammp capability                                 # offline /.well-known/agent.json
 ammp serve                                      # boot the HTTP MCP server (alias for `ammp system serve`)
-ammp serve --stdio                              # subprocess transport for Claude Desktop / Claude Code
+ammp serve --stdio                              # subprocess transport for Claude Cowork / Claude Code
 ```
 
 Every Mentoring-track operation a mentee can invoke over the MCP wire (`ListMentors`, `ListPlaybooks`, `GetPlaybook`, `GetSkill`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`) has a matching CLI subcommand. `ammp mentor list --json` returns the same envelope an MCP `ListMentors` call returns. The mentor-mediated escalation extensions (`EscalateToHumanMentor`, `GetEscalation`), the plugin-archive download (`GetPluginArchive`), and the diagnostic `GetSystemInfo` are exposed via the MCP wire only — they require live broker / delivery-adapter state (or the live HTTP transport) that lives in the running server. An agent that prefers Bash-plus-CLI over MCP can still exercise the full Mentoring track without speaking the protocol. The CLI invokes the same in-process handlers the MCP server uses, so behaviour stays in lockstep.
@@ -373,7 +373,7 @@ All settings are env vars prefixed `AMMP_`. The server auto-loads `<AMMP_DIR>/co
 | Var | Default | Notes |
 |---|---|---|
 | `AMMP_DIR` | `~/.ammp` | Single directory holding `config.env`, `mentors/`, `mentees.json`, `audit.log`. Override to relocate the whole tree. |
-| `AMMP_TRANSPORT` | `http` | `http` (Streamable-HTTP on `/mcp/`) or `stdio` (subprocess transport for Claude Desktop / Claude Code). Stdio mode ignores `host` / `port`. |
+| `AMMP_TRANSPORT` | `http` | `http` (Streamable-HTTP on `/mcp/`) or `stdio` (subprocess transport for Claude Cowork / Claude Code). Stdio mode ignores `host` / `port`. |
 | `AMMP_HOST` | `127.0.0.1` | Bind address. Set `0.0.0.0` for container deploys. |
 | `AMMP_PORT` | `8765` | |
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://mcp.helmguild.com/ammp` in production (include any mount prefix). |

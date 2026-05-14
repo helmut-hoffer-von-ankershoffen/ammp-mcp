@@ -3,7 +3,7 @@
 //
 // Replaces `mcp-remote` for the Bearer-token case. `mcp-remote` binds
 // an OAuth-callback HTTP server on localhost at startup; that bind
-// fails under Claude Desktop's extension sandbox, killing the
+// fails under Claude Cowork's extension sandbox, killing the
 // connector before the first MCP frame can flow. We don't need OAuth
 // — AMMP is Bearer-only — so we skip all of that and proxy directly.
 //

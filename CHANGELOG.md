@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.12.1] — 2026-05-14
+
+### Changed
+
+- **Rebrand: Claude Desktop → Claude Cowork.** Anthropic renamed the desktop MCP host; this repo follows. Updated across server prose (HTML landing tabs, EN + DE), README, INSTALLATION, AGENTS, OPERATING, RFC (EN + DE), models / settings / system CLI docstrings, integration + e2e test fixtures, the `.mcpb` desktop-bundle template (Node proxy), and historical CHANGELOG entries for consistency. Technical identifiers — the on-disk config path `~/Library/Application Support/Claude/claude_desktop_config.json`, the `_data/desktop_bundle/` Python module path, and HTML CSS ids like `agent-tab-desktop` — kept as-is to avoid breaking host-side compatibility. (#rebrand)
+
 ## [0.12.0] — 2026-05-14
 
 ### Added — CLI ↔ MCP parity (shared `_service.py` layer)
@@ -176,12 +182,12 @@ Before the next tag actually lands on PyPI, the **`ammp` package needs a Trusted
 - **Progress heartbeats** on the long-running escalation path. Wraps the wait in a loop that emits `notifications/progress` every `escalation_progress_heartbeat_seconds` (default 25 s) so MCP clients that reset per-tool timeouts on progress notifications hold the call open until the human replies. (#escalation)
 - **`Mentor.profile_url`** + **`HumanMentor.profile_url`** fields. When set, the landing page wraps the mentor / human-mentor name in a link to the longer profile page. URLs on `https://www.helmguild.com/<path>/` auto-swap to the `/de/` variant on the German landing. (#landing)
 - **Bilingual landing.** `/de/` route serves the German mirror (translated chrome — lede, step headings, tab labels, mailto draft); mentor names + playbook content stay in English (corpus is content, not chrome). EN · DE language pill + helmguild.com banner at the top of every landing. (#landing)
-- **`.mcpb` desktop bundle** at `GET /desktop-bundle.mcpb` — a Claude Desktop extension built on the fly from a pure Node stdio→Streamable-HTTP MCP proxy (~100 lines, no deps). Replaces `mcp-remote` for the Bearer-token case (Claude Desktop's extension sandbox blocks `mcp-remote`'s localhost OAuth-callback bind). (#desktop)
+- **`.mcpb` desktop bundle** at `GET /desktop-bundle.mcpb` — a Claude Cowork extension built on the fly from a pure Node stdio→Streamable-HTTP MCP proxy (~100 lines, no deps). Replaces `mcp-remote` for the Bearer-token case (Claude Cowork's extension sandbox blocks `mcp-remote`'s localhost OAuth-callback bind). (#desktop)
 
 ### Changed
 
 - **Auth flows via HTTP `Authorization: Bearer` header**, not a tool parameter. `_authenticate` reads the token from the request via FastMCP's request-scoped context; the LLM never sees an `api_key` argument and so never asks for one. (#auth)
-- **`ListMentors` returns work-instruction summaries**, not full bodies. Previous behaviour inflated the response to ~100 KB which tripped Claude Desktop's MCP-transport timeout on connect. Full bodies fetched on demand via `GetPlaybook` / `GetWorkInstruction`. (#listmentors)
+- **`ListMentors` returns work-instruction summaries**, not full bodies. Previous behaviour inflated the response to ~100 KB which tripped Claude Cowork's MCP-transport timeout on connect. Full bodies fetched on demand via `GetPlaybook` / `GetWorkInstruction`. (#listmentors)
 - **AMMP_MOUNT_PATH** lets the server live under a URL prefix (e.g. `/ammp`). The hostname `mcp.helmguild.com` is now a gateway that can host sibling MCP servers under other prefixes. (#deploy)
 
 ### Fixed
@@ -199,7 +205,7 @@ Before the next tag actually lands on PyPI, the **`ammp` package needs a Trusted
 ### Added
 
 - **Modulith architecture.** `src/ammp_mcp/` partitioned into per-domain folders following the Aignostics/python-sdk pattern: `mentor/`, `mentee/`, `playbook/`, `system/`. Each holds a `_service.py` (business logic) and `_cli.py` (Typer shell). `cli.py` slimmed from 877 lines to ~60. (#refactor)
-- **Stdio MCP transport.** New `AMMP_TRANSPORT={http,stdio}` setting and `ammp system serve --stdio` flag. Stdio mode quiets the root logger to stderr so the wire stays clean MCP JSON-RPC. Suits Claude Desktop / Claude Code subprocess-MCP hosts. (#stdio)
+- **Stdio MCP transport.** New `AMMP_TRANSPORT={http,stdio}` setting and `ammp system serve --stdio` flag. Stdio mode quiets the root logger to stderr so the wire stays clean MCP JSON-RPC. Suits Claude Cowork / Claude Code subprocess-MCP hosts. (#stdio)
 - **`CLI_REFERENCE.md`** — generated from the Typer app by `tools/generate_cli_reference.py`. Regenerate after CLI changes. (#docs)
 - **`AGENTS.md`** + **`CLAUDE.md`** at the repo root, plus per-module `CLAUDE.md` files under each domain (`mentor/`, `mentee/`, `playbook/`, `system/`, `backends/`). (#docs)
 - **`INSTALLATION.md`** — five-minute path, Claude-Code wiring (HTTP + stdio), config matrix, troubleshooting table. (#docs)

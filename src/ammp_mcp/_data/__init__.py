@@ -37,7 +37,7 @@ def favicon_path() -> Path:
 
 
 def desktop_bundle_path() -> Path:
-    """Path to the Claude Desktop bundle template directory.
+    """Path to the Claude Cowork bundle template directory.
 
     Contains ``manifest.json.template`` and ``icon.png``. Used by
     :func:`ammp_mcp.server._build_desktop_bundle` to assemble a
