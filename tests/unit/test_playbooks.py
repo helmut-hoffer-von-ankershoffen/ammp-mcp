@@ -171,9 +171,7 @@ def test_plugin_ref_with_missing_marketplaces_root_falls_back_to_local(tmp_path:
     root = tmp_path / "playbooks"
     pb = root / "demo"
     pb.mkdir(parents=True)
-    (pb / "playbook.json").write_text(
-        '{"name": "Demo", "description": "d", "plugin": "p@m"}', encoding="utf-8"
-    )
+    (pb / "playbook.json").write_text('{"name": "Demo", "description": "d", "plugin": "p@m"}', encoding="utf-8")
     (pb / "01-local.md").write_text("# Local\n\nbody\n", encoding="utf-8")
     corpus = load_playbooks(root)  # no marketplaces_root
     assert corpus[0].plugin_ref == ("p", "m")
@@ -229,9 +227,7 @@ def test_plugin_with_empty_skills_dir_returns_no_skills(tmp_path: Path) -> None:
     root = tmp_path / "playbooks"
     pb = root / "demo"
     pb.mkdir(parents=True)
-    (pb / "playbook.json").write_text(
-        '{"name": "Demo", "description": "d", "plugin": "p@m"}', encoding="utf-8"
-    )
+    (pb / "playbook.json").write_text('{"name": "Demo", "description": "d", "plugin": "p@m"}', encoding="utf-8")
     mr = tmp_path / "marketplaces"
     (mr / "m" / "plugins" / "p" / "skills").mkdir(parents=True)
     corpus = load_playbooks(root, marketplaces_root=mr)
@@ -244,9 +240,7 @@ def test_plugin_with_no_skills_subdir_returns_no_skills(tmp_path: Path) -> None:
     root = tmp_path / "playbooks"
     pb = root / "demo"
     pb.mkdir(parents=True)
-    (pb / "playbook.json").write_text(
-        '{"name": "Demo", "description": "d", "plugin": "p@m"}', encoding="utf-8"
-    )
+    (pb / "playbook.json").write_text('{"name": "Demo", "description": "d", "plugin": "p@m"}', encoding="utf-8")
     mr = tmp_path / "marketplaces"
     (mr / "m" / "plugins" / "p").mkdir(parents=True)
     corpus = load_playbooks(root, marketplaces_root=mr)
