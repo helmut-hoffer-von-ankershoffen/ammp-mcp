@@ -2466,6 +2466,61 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
+    @mcp.custom_route(f"{prefix}/robots.txt", methods=["GET"])
+    async def robots_txt(_request: Request) -> Response:
+        """Crawler-friendly robots.txt + Sitemap pointer for mcp.helmguild.com."""
+        base = ctx.settings.public_url.rstrip("/")
+        body = (
+            "# mcp.helmguild.com — public AMMP landing.\n"
+            "# Crawl freely; the sitemap below is the canonical URL inventory.\n"
+            "# Tool transport endpoints under /mcp/ are bot-irrelevant (JSON-RPC,\n"
+            "# Bearer-gated) and are disallowed below to save crawler budget.\n"
+            "\n"
+            "User-agent: *\n"
+            "Allow: /\n"
+            "Disallow: /mcp/\n"
+            "Disallow: /plugins/\n"
+            "\n"
+            f"Sitemap: {base}/sitemap.xml\n"
+        )
+        return Response(
+            content=body,
+            media_type="text/plain; charset=utf-8",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
+    @mcp.custom_route(f"{prefix}/sitemap.xml", methods=["GET"])
+    async def sitemap_xml(_request: Request) -> Response:
+        """Sitemap XML covering the bilingual landing + the canonical capability JSON."""
+        base = ctx.settings.public_url.rstrip("/")
+        today = datetime.now(UTC).date().isoformat()
+        urls = [
+            (base + "/", "weekly", "1.0", base + "/", base + "/de/"),
+            (base + "/de/", "weekly", "1.0", base + "/", base + "/de/"),
+            (base + "/.well-known/agent.json", "weekly", "0.7", None, None),
+        ]
+        parts = ['<?xml version="1.0" encoding="UTF-8"?>']
+        parts.append(
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'
+        )
+        for loc, changefreq, priority, en, de in urls:
+            parts.append("  <url>")
+            parts.append(f"    <loc>{loc}</loc>")
+            parts.append(f"    <lastmod>{today}</lastmod>")
+            parts.append(f"    <changefreq>{changefreq}</changefreq>")
+            parts.append(f"    <priority>{priority}</priority>")
+            if en and de:
+                parts.append(f'    <xhtml:link rel="alternate" hreflang="en" href="{en}"/>')
+                parts.append(f'    <xhtml:link rel="alternate" hreflang="de" href="{de}"/>')
+                parts.append(f'    <xhtml:link rel="alternate" hreflang="x-default" href="{en}"/>')
+            parts.append("  </url>")
+        parts.append("</urlset>\n")
+        return Response(
+            content="\n".join(parts),
+            media_type="application/xml; charset=utf-8",
+            headers={"Cache-Control": "public, max-age=3600"},
+        )
+
     @mcp.custom_route(f"{prefix}/", methods=["GET"])
     async def landing(_request: Request) -> HTMLResponse:
         """English landing page — how to connect a mentee + CLI usage."""

@@ -1038,6 +1038,55 @@ async def test_favicon_routes_serve_brand_assets(server) -> None:
         assert "max-age" in r.headers.get("cache-control", "")
 
 
+async def test_robots_txt_route_advertises_sitemap(server) -> None:
+    """`GET /robots.txt` serves a crawler-friendly file pointing at the sitemap.
+
+    Pinned so a regression that drops the bot-discovery surface (sitemap
+    pointer + Allow rules) is caught here, not by an SEO regression
+    weeks later.
+    """
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/robots.txt")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/plain")
+    body = r.text
+    assert "User-agent: *" in body
+    assert "Allow: /" in body
+    assert "Sitemap:" in body
+    assert "sitemap.xml" in body
+    # The MCP transport endpoints + per-plugin zips are uninteresting
+    # to crawlers and are explicitly disallowed to save budget.
+    assert "Disallow: /mcp/" in body
+    assert "Disallow: /plugins/" in body
+
+
+async def test_sitemap_xml_route_lists_canonical_urls(server) -> None:
+    """`GET /sitemap.xml` lists the bilingual landing + the capability JSON,
+    with hreflang alternates on the landing entries."""
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get("/sitemap.xml")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/xml")
+    body = r.text
+    assert '<?xml version="1.0" encoding="UTF-8"?>' in body
+    assert "<urlset" in body
+    # Both landing variants present.
+    assert "<loc>http://test.invalid/</loc>" in body
+    assert "<loc>http://test.invalid/de/</loc>" in body
+    # Capability JSON is also indexable (it's the AMMP card).
+    assert "<loc>http://test.invalid/.well-known/agent.json</loc>" in body
+    # hreflang alternates on the landing entries.
+    assert 'hreflang="en"' in body
+    assert 'hreflang="de"' in body
+    assert 'hreflang="x-default"' in body
+
+
 async def test_desktop_bundle_route_serves_mcpb_zip(server) -> None:
     """`GET /desktop-bundle.mcpb` returns a valid ZIP containing manifest + icon
     + server.js, with the BEARER substitution placeholder and the trailing-slash

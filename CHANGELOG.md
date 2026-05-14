@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.11.0] — 2026-05-14
+
+### Added
+
+- **`GET /robots.txt`** — crawler-friendly file with `User-agent: *`, `Allow: /`, `Disallow: /mcp/`, `Disallow: /plugins/`, and a `Sitemap:` pointer to `/sitemap.xml`. Bots welcome on the landing; auth-gated MCP transport + plugin zips disallowed to save crawler budget. Tested. (#seo)
+- **`GET /sitemap.xml`** — XML sitemap listing `/`, `/de/`, and `/.well-known/agent.json`, with `xhtml:link` hreflang alternates on the landing entries (en + de + x-default). Tested. (#seo)
+- **README diagrams extended**: the component diagram now shows the two plugin marketplaces (private/commercial `helmguild-plugins` + public/community `helmguild-plugins-public`), the marketplace clones under `~/.ammp/marketplaces/`, the `GetPluginArchive` zip side-channel, and the bundled `.mcp.json` wire-back from the mentee's installed plugin to this server. Two new sequence diagrams added: end-to-end plugin install via `GetPluginArchive`, and the `EscalateToHumanMentor` sync-or-pending Telegram flow. Verified rendering via `mmdc`. (#docs)
+
 ## [0.10.0] — 2026-05-14
 
 ### Added

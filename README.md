@@ -28,25 +28,40 @@ When an autonomous mentee agent runs into something it doesn't know, it needs a 
 
 ## Component diagram
 
+How a mentee's runtime, the AMMP server, the plugin marketplaces, and the human + agentic mentor pieces fit together. Mentee → server is over MCP-over-HTTP; the install side-channel (`GetPluginArchive` → zip → `/plugin install`) is what makes the static skills durable in the mentee's runtime.
+
 ```mermaid
 graph LR
     HM_OP[Human operator<br/>e.g. Sandra] -->|chats with| CCW
 
-    subgraph MENTEE [Agentic Mentee]
+    subgraph MENTEE [Agentic Mentee + its runtime]
       CCW[Claude Cowork]
       CCO[Claude Code]
-      CAI[Claude.ai]
+      CAI[Claude.ai / Desktop]
+      PLG[(.claude/<br/>plugins/<br/>installed skills)]
     end
 
-    CCW -->|MCP / AMMP<br/>HTTPS| AMMP
-    CCO -->|MCP / AMMP<br/>HTTPS| AMMP
-    CAI -->|MCP / AMMP<br/>HTTPS| AMMP
+    CCW -->|MCP / AMMP<br/>HTTPS + Bearer| AMMP
+    CCO -->|MCP / AMMP<br/>HTTPS + Bearer| AMMP
+    CAI -->|MCP / AMMP<br/>HTTPS + Bearer| AMMP
 
     subgraph SERVER [ammp-mcp · mcp.helmguild.com/ammp]
-      AMMP[Mentor router<br/>+ AskMentor / EscalateToHuman / …]
-      AMMP -->|reads| PB[(Playbook corpus<br/>markdown)]
+      AMMP[Mentor router<br/>11 MCP tools]
+      AMMP -->|reads| PB[(Playbook corpus<br/>mentor.json + playbook.json)]
+      AMMP -->|GetPluginArchive<br/>zips on demand| MCL
+      MCL[(~/.ammp/marketplaces/<br/>git-clones)]
       AMMP -.->|hash-only| LOG[(audit.log)]
     end
+
+    subgraph MARKETS [Plugin marketplaces]
+      MPRIV[helmguild-plugins<br/>private · commercial: true<br/>Helmguild Mentoring License]
+      MPUB[helmguild-plugins-public<br/>public · commercial: false<br/>CC-BY-4.0 / MIT]
+    end
+    MPRIV -. git clone .-> MCL
+    MPUB -. git clone .-> MCL
+
+    AMMP -->|"/plugins/&lt;name&gt;.zip<br/>Bearer-gated"| PLG
+    PLG -. "bundled .mcp.json<br/>wires back" .-> AMMP
 
     AMMP -->|backend.kind=openclaw<br/>HTTPS webhook| AGM
     AMMP -->|backend.kind=anthropic<br/>Messages API| AD
@@ -56,29 +71,34 @@ graph LR
       AD[stateless persona<br/>fallback]
     end
 
-    subgraph MENTOR_HUMAN [Human Mentor]
-      HUM["Operator of the mentee<br/>(reached only via the<br/>mentee, never by the server)"]
+    subgraph MENTOR_HUMAN [Human Mentor — A.h]
+      HUM["Helmut Hoffer von Ankershoffen<br/>(reached via Telegram bot;<br/>AMMP §3.4 human-gated)"]
     end
 
-    CCW -.->|"EscalateToHuman →<br/>guidance text the mentee<br/>hands to its operator"| HUM
-    CCO -.-> HUM
-    CAI -.-> HUM
+    AMMP -->|EscalateToHumanMentor<br/>Telegram adapter| HUM
+    CCW -.->|"EscalateToHuman →<br/>guidance text handed<br/>to mentee's operator"| HM_OP
+    CCO -.-> HM_OP
+    CAI -.-> HM_OP
 
     classDef mentee fill:#dbeafe,stroke:#1d4ed8;
     classDef server fill:#fef3c7,stroke:#92400e,stroke-width:2px;
     classDef mentor fill:#dcfce7,stroke:#166534;
     classDef human fill:#fce7f3,stroke:#9d174d;
     classDef store fill:#f3f4f6,stroke:#6b7280,stroke-dasharray:3 3;
+    classDef market fill:#ede9fe,stroke:#5b21b6;
     class MENTEE mentee
     class CCW,CCO,CAI mentee
+    class PLG store
     class SERVER server
     class AMMP server
+    class MARKETS market
+    class MPRIV,MPUB market
     class MENTOR_AGENTIC mentor
     class AGM,AD,OPUS mentor
     class MENTOR_HUMAN human
     class HUM human
     class HM_OP human
-    class PB,LOG store
+    class PB,LOG,MCL store
 ```
 
 ## Sequence diagram — `AskMentor`
@@ -109,6 +129,84 @@ sequenceDiagram
       Mentee-->>Op: "I'm not confident — could you take a look?<br/>(Human Mentor path)"
       Note over Mentee,Op: Mentor never reached operator directly.<br/>Human-Gated Escalation Invariant.
     end
+```
+
+## Sequence diagram — plugin install via `GetPluginArchive`
+
+The end-to-end install round-trip a mentee + user walks when the start prompt asks them to install a mentor's plugin. The marketplace is private, so the path goes through AMMP's `GetPluginArchive` (Bearer-gated) rather than `claude plugin marketplace add`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Mentee's user
+    participant Mentee as Agentic Mentee<br/>(Claude Code)
+    participant Server as ammp-mcp<br/>(mcp.helmguild.com/ammp)
+    participant MC as ~/.ammp/marketplaces/<br/>helmguild-plugins clone
+    participant Runtime as Claude Code runtime<br/>(plugin store + spawned MCPs)
+
+    Note over Mentee,Server: User pasted the per-playbook start prompt. Mentee already has a Bearer + ListPlaybooks works.
+
+    Mentee->>Server: GetPluginArchive plugin=pepe-operator-craft
+    Server->>MC: read marketplaces_root /<br/>helmguild-plugins / plugins / pepe-operator-craft
+    Server-->>Mentee: archive_url + install_instructions<br/>(Bearer auths the download)
+
+    Mentee-->>User: hand URL + ask to run<br/>/plugin install [extracted-dir]
+    User->>Server: GET /plugins/pepe-operator-craft.zip<br/>Authorization Bearer ammp-…
+    Server->>MC: zip the plugin folder<br/>preserves +x on scripts and mcp-server
+    Server-->>User: 200 application/zip<br/>plugin.json + skills + .mcp.json + scripts + mcp-server
+
+    User->>Runtime: unzip, then<br/>claude plugin marketplace add [wrap]<br/>claude plugin install [plugin] from [wrap]
+    Runtime->>Runtime: read .mcp.json, spawn bundled stdio MCPs,<br/>register HTTP MCP wire-back to mcp.helmguild.com/ammp
+    Runtime-->>Mentee: skills available locally.<br/>mcp tools from pepe-pipeline-status appear
+
+    Note over Mentee,Server: Live AMMP wire stays open via the bundled .mcp.json. AskMentor + EscalateToHumanMentor stay reachable after install.
+```
+
+## Sequence diagram — `EscalateToHumanMentor` (sync-or-pending)
+
+The cross-compartment forward to the human behind a mentor. The mentee's operator (B.h) must approve the forward before `EscalateToHumanMentor` fires; the server delivers via the configured adapter (Telegram in production) and either returns the answer synchronously (within `wait_seconds`) or returns `status="pending"` with an `escalation_id` to poll.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Bh as B.h — mentee's operator
+    actor Ah as A.h — human behind the mentor<br/>(Helmut, via Telegram)
+    participant Mentee as Agentic Mentee
+    participant Server as ammp-mcp
+    participant Broker as EscalationBroker<br/>(in-memory asyncio.Event)
+    participant Store as escalations.jsonl<br/>(persistent)
+    participant Tg as Telegram bot
+
+    Note over Mentee,Server: Prior AskMentor returned escalation_to_human_mentor_draft. B.h reviewed + approved the question text.
+
+    Mentee->>Server: EscalateToHumanMentor question, mentor, wait_seconds=25
+    Server->>Store: append id, status=pending, question, mentor
+    Server->>Tg: sendMessage chat_id, question, reply_to=…
+    Tg-->>Ah: Mentee asks X. Reply by tapping this message.
+    Server->>Broker: register waiter on id, await event<br/>timeout=wait_seconds
+
+    par adapter long-polls Telegram for the reply
+        Tg-->>Server: getUpdates → reply_to matches id
+        Server->>Store: update status=answered, answer, answered_at
+        Server->>Broker: resolve id, answer
+    end
+
+    alt A.h replied within wait_seconds
+      Broker-->>Server: answer
+      Server-->>Mentee: status=answered, answer, answered_at
+    else A.h has not replied yet (production default path)
+      Server-->>Mentee: status=pending, escalation_id
+      Note over Mentee: Mentee tells its user it is in flight.<br/>Later — possibly after the call timed out:
+      Mentee->>Server: GetEscalation escalation_id, wait_seconds=10
+      Server->>Store: lookup current state
+      alt now answered
+        Server-->>Mentee: status=answered, answer, answered_at
+      else still pending
+        Server-->>Mentee: status=pending
+      end
+    end
+
+    Note over Server,Store: hash-only audit. question text never logged. Cross-compartment forward legitimate only because B.h approved it (AMMP 3.4).
 ```
 
 ---
