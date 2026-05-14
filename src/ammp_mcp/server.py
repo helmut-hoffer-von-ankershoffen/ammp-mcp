@@ -1242,6 +1242,9 @@ def _known_plugin_refs(ctx: ServerContext) -> dict[str, tuple[str, str, Path]]:
     ``/plugins/<plugin>.zip`` request without a marketplace path
     segment (one plugin name lives in exactly one marketplace).
 
+    Args:
+        ctx: The per-request server context.
+
     Returns:
         Mapping of ``plugin_name → (plugin_name, marketplace_name, plugin_dir)``.
     """
@@ -2288,6 +2291,12 @@ def create_server(settings: Settings | None = None) -> FastMCP:
         Args:
             plugin: The plugin name (kebab-case slug). Must match a
                 plugin referenced by some playbook on this server.
+
+        Returns:
+            On success: ``{plugin, marketplace, archive_url,
+            install_instructions}``. On failure: ``{error}`` with
+            ``error`` one of ``auth_failed`` / ``invalid_plugin`` /
+            ``not_found``.
         """
         return _handle_get_plugin_archive(ctx, plugin, None)
 
