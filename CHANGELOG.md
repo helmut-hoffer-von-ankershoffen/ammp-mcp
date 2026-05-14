@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.8.1] — 2026-05-14
+
+### Added
+
+- **`scripts/e2e-claude-code-install.sh`** — round-trip exerciser for the install path a real mentee + user walks after `AskMentor` returns a `GetPluginArchive` URL. Downloads the zip from the live AMMP server with a Bearer token, runs `claude plugin validate` on the extract, wraps the plugin in a throwaway local marketplace, runs `claude plugin marketplace add` + `claude plugin install --scope local`, and asserts the install landed in `.claude/settings.local.json`. Project-local scope keeps state isolated; trap-cleanup removes the marketplace + plugin + tmp dir on success or failure. (#e2e)
+- **`tests/e2e/test_claude_code_install.py`** — pytest wrapper parametrised over Pepe's three plugins (`pepe-operator-craft`, `pepe-multi-channel-content-pipelines`, `pepe-personal-assistant-for-managers`). Skips automatically when `claude` / `curl` / `jq` / `unzip` is missing from PATH or when `HELMGUILD_AMMP_BEARER` is unset. Locally with the env var, all three plugins install in <8 s. (#e2e)
+
 ## [0.8.0] — 2026-05-14
 
 ### Added
