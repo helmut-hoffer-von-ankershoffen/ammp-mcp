@@ -5,6 +5,23 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.8.0] — 2026-05-14
+
+### Added
+
+- **Built-on-open-standards section** on the mcp.helmguild.com landing (EN + DE) — explicitly names the [AgentSkills](https://agentskills.io/home) `SKILL.md` format, the [Claude Code plugin](https://code.claude.com/docs/en/plugins) spec, and the [Claude Code marketplace](https://code.claude.com/docs/en/plugin-marketplaces) catalogue conventions as the open standards AMMP's on-disk format leans on. Footer breadcrumb mentions both standards so the claim is visible regardless of scroll position. (#landing)
+- **E2E integration test** (`test_plugin_archive_zip_round_trips_scripts_and_mcp_payload`) covering the full plugin-payload contract — a plugin shipping `scripts/`, `mcp-server/`, and a multi-server `.mcp.json` round-trips through `GetPluginArchive` and `/plugins/<name>.zip` with executable bits preserved + .mcp.json's multi-server config intact. Pins the contract `pepe-multi-channel-content-pipelines` 0.2.0 relies on (bundled stdio MCP + bash helper). (#tests)
+
+### Plugin payload contract — informational
+
+The `pepe-multi-channel-content-pipelines` plugin on the `helmguild-plugins` marketplace bumped to 0.2.0 with:
+
+- `scripts/inspect-content-state.sh` — bundled bash helper.
+- `mcp-server/pipeline-status.mjs` — bundled stdio MCP (pure stdlib Node, no deps).
+- `.mcp.json` now registers two servers: the HTTP AMMP wire + the bundled stdio MCP via `${CLAUDE_PLUGIN_ROOT}`.
+
+This is the first plugin in the marketplace exercising the multi-MCP install path and the plugin-ships-scripts pattern. Validated end-to-end with `claude plugin validate`.
+
 ## [0.7.0] — 2026-05-14
 
 ### Removed (BREAKING)

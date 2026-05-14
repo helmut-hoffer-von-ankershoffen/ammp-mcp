@@ -345,6 +345,18 @@ async def test_landing_page_route(server) -> None:
     # Helmut's `human_mentor.profile_url` swaps the "Behind Pepe" link
     # from the personal bio site to the helmguild profile page.
     assert "href='https://www.helmguild.com/helmut-hoffer-von-ankershoffen/'" in body
+    # Built-on-open-standards callout names AgentSkills + the Claude Code
+    # plugin / marketplace conventions explicitly, so visitors can see at a
+    # glance that the on-disk format is not bespoke.
+    assert "Built on open standards" in body
+    assert "agentskills.io" in body
+    assert "code.claude.com/docs/en/plugins" in body
+    assert "code.claude.com/docs/en/plugin-marketplaces" in body
+    # Footer also names the standards (single-line breadcrumb under the
+    # source link) so the claim is visible even when the section is
+    # scrolled off-screen.
+    assert "AgentSkills</a> standard" in body
+    assert "Claude Code plugin</a> spec" in body
 
 
 async def test_landing_page_de_route_serves_german(server) -> None:
@@ -385,6 +397,10 @@ async def test_landing_page_de_route_serves_german(server) -> None:
     assert "class='mentor-profile' href='https://www.helmguild.com/de/pepe-arturo-ai/'" in body
     # The human-mentor profile link follows the same /de/ swap rule.
     assert "href='https://www.helmguild.com/de/helmut-hoffer-von-ankershoffen/'" in body
+    # Open-standards callout — translated heading, same link targets.
+    assert "Auf offenen Standards aufgebaut" in body
+    assert "agentskills.io" in body
+    assert "code.claude.com/docs/en/plugins" in body
     # The bare (EN) profile URL should NOT appear as a mentor-profile href
     # on the DE page — only its /de/ variant. (It may still appear in
     # alternate-link tags or footer, which is fine.)
@@ -1440,3 +1456,107 @@ async def test_plugin_archive_route_serves_zip(settings: Settings) -> None:
     assert all(n.startswith(f"{plugin}/") for n in names), names
     assert f"{plugin}/.claude-plugin/plugin.json" in names
     assert f"{plugin}/skills/alpha/SKILL.md" in names
+
+
+async def test_plugin_archive_zip_round_trips_scripts_and_mcp_payload(settings: Settings) -> None:
+    """A plugin that ships scripts/ + mcp-server/ + .mcp.json round-trips
+    cleanly through the zip route, with executable-bit metadata preserved
+    so `${CLAUDE_PLUGIN_ROOT}/mcp-server/*.mjs` is spawnable after extract.
+
+    Pinned because plugins like ``pepe-multi-channel-content-pipelines``
+    rely on this end-to-end path: the zip the mentee downloads must
+    extract into a fully-functional Claude-Code plugin (skills + bundled
+    stdio MCP + bundled scripts) without any post-install fix-ups.
+    """
+    import io
+    import json as _json
+    import stat
+    import zipfile
+
+    plugin = "demo-plugin-with-payload"
+    marketplace = "test-market"
+    plugin_dir = settings.marketplaces_root / marketplace / "plugins" / plugin
+    (plugin_dir / ".claude-plugin").mkdir(parents=True)
+    (plugin_dir / ".claude-plugin" / "plugin.json").write_text(
+        '{"name": "demo-plugin-with-payload", "description": "Probe.", "version": "0.1.0"}',
+        encoding="utf-8",
+    )
+    # AgentSkills SKILL.md
+    skill_dir = plugin_dir / "skills" / "alpha"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        '---\nname: alpha\ndescription: "Probe."\nallowed-tools:\n  - Bash\n  - mcp__probe__tool_one\n---\n# Alpha\n\nbody\n',
+        encoding="utf-8",
+    )
+    # .mcp.json with TWO server entries: HTTP + bundled stdio.
+    mcp_cfg = {
+        "mcpServers": {
+            "helmguild-ammp": {
+                "type": "http",
+                "url": "https://mcp.helmguild.com/ammp/mcp/",
+                "headers": {"Authorization": "Bearer ${HELMGUILD_AMMP_BEARER}"},
+            },
+            "probe": {
+                "type": "stdio",
+                "command": "node",
+                "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-server/probe.mjs"],
+            },
+        }
+    }
+    (plugin_dir / ".mcp.json").write_text(_json.dumps(mcp_cfg, indent=2), encoding="utf-8")
+    # Bundled stdio MCP — content doesn't matter for this test; we just
+    # care that the file ships + keeps its executable bit.
+    (plugin_dir / "mcp-server").mkdir()
+    mcp_script = plugin_dir / "mcp-server" / "probe.mjs"
+    mcp_script.write_text("#!/usr/bin/env node\nprocess.exit(0)\n", encoding="utf-8")
+    mcp_script.chmod(0o755)
+    # Bundled bash helper — same shipping + exec-bit story.
+    (plugin_dir / "scripts").mkdir()
+    bash_helper = plugin_dir / "scripts" / "do-something.sh"
+    bash_helper.write_text("#!/usr/bin/env bash\necho ok\n", encoding="utf-8")
+    bash_helper.chmod(0o755)
+    # Wire the playbook → plugin so the route allow-lists it.
+    pb_json = settings.mentors_root / "pepe" / "playbooks" / "intro" / "playbook.json"
+    pb_json.write_text(
+        _json.dumps(
+            {
+                "name": "Welcome to Pepe",
+                "description": "Onboarding for new mentees.",
+                "plugin": f"{plugin}@{marketplace}",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    # Download via the route.
+    settings_auth = settings.model_copy(update={"require_auth": True})
+    server = create_server(settings_auth)
+    from starlette.testclient import TestClient
+
+    app = server.http_app(path="/mcp/")
+    with TestClient(app) as http:
+        r = http.get(f"/plugins/{plugin}.zip", headers={"Authorization": "Bearer ammp-test-key-1"})
+    assert r.status_code == 200
+    body = r.content
+
+    # Validate the zip's shape end-to-end.
+    with zipfile.ZipFile(io.BytesIO(body)) as z:
+        names = set(z.namelist())
+        infos = {info.filename: info for info in z.infolist()}
+        # Round-tripped files
+        assert f"{plugin}/.claude-plugin/plugin.json" in names
+        assert f"{plugin}/.mcp.json" in names
+        assert f"{plugin}/skills/alpha/SKILL.md" in names
+        assert f"{plugin}/mcp-server/probe.mjs" in names
+        assert f"{plugin}/scripts/do-something.sh" in names
+        # .mcp.json parses + still names both servers (HTTP + bundled stdio).
+        roundtripped_mcp = _json.loads(z.read(f"{plugin}/.mcp.json"))
+        assert set(roundtripped_mcp["mcpServers"]) == {"helmguild-ammp", "probe"}
+        assert roundtripped_mcp["mcpServers"]["probe"]["type"] == "stdio"
+        # Executable bit survives the round-trip — required for the runtime
+        # to spawn `node mcp-server/probe.mjs` (or any shipped bash helper)
+        # straight after `unzip` with no `chmod +x` post-step.
+        for path in (f"{plugin}/mcp-server/probe.mjs", f"{plugin}/scripts/do-something.sh"):
+            mode = infos[path].external_attr >> 16
+            assert mode & stat.S_IXUSR, f"{path} lost its user-exec bit (mode={oct(mode)})"
