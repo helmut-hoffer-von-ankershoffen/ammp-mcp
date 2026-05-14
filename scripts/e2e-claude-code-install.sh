@@ -136,5 +136,29 @@ else
   ok "plugin also appears in claude plugin list (id=$PLUGIN@e2e-test-mp)"
 fi
 
-# 7. Cleanup is handled by the trap.
+# 7. If the plugin ships a bundled stdio MCP server, spawn it and
+# confirm tools/list returns at least one tool. Proves the wire works,
+# not just the file shape. Optional: only runs when the plugin has a
+# stdio entry in its .mcp.json.
+plugin_mcp="$tmp/marketplace/plugins/$PLUGIN/.mcp.json"
+if [[ -f "$plugin_mcp" ]] && command -v node >/dev/null 2>&1; then
+  stdio_target=$(jq -r '.mcpServers | to_entries[] | select(.value.type == "stdio") | .value.args[0] // empty' "$plugin_mcp" 2>/dev/null || true)
+  if [[ -n "$stdio_target" ]]; then
+    # ${CLAUDE_PLUGIN_ROOT} → the extracted plugin root.
+    resolved="${stdio_target//\$\{CLAUDE_PLUGIN_ROOT\}/$tmp/marketplace/plugins/$PLUGIN}"
+    if [[ -f "$resolved" ]]; then
+      log "spawning bundled stdio MCP: $resolved"
+      tools_count=$(printf '%s\n' \
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}' \
+        '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+        '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+        | node "$resolved" 2>/dev/null \
+        | jq -r 'select(.id == 2) | .result.tools | length' | head -1)
+      [[ "${tools_count:-0}" -ge 1 ]] || die "bundled stdio MCP returned no tools — bundled MCP wire broken"
+      ok "bundled stdio MCP responds with $tools_count tool(s)"
+    fi
+  fi
+fi
+
+# 8. Cleanup is handled by the trap.
 ok "E2E install round-trip succeeded for $PLUGIN"
