@@ -533,6 +533,117 @@ def test_plugin_archive_happy_path_rich(isolated_tree: Path, monkeypatch: pytest
     assert "http://test.invalid/plugins/demo-plugin.zip" in r.output
 
 
+# ─── ammp playbook validate ────────────────────────────────────────────────
+
+
+def test_playbook_validate_unknown_mentor(runner: CliRunner) -> None:
+    """`ammp playbook validate` exits 2 on unknown mentor."""
+    r = runner.invoke(app, ["playbook", "validate", "intro", "--mentor", "ghost"])
+    assert r.exit_code == 2
+    assert "unknown mentor" in r.output.lower()
+
+
+def test_playbook_validate_invalid_id(runner: CliRunner) -> None:
+    """`ammp playbook validate` rejects path-traversal id."""
+    r = runner.invoke(app, ["playbook", "validate", "../etc/passwd"])
+    assert r.exit_code == 2
+    assert "invalid playbook id" in r.output.lower()
+
+
+def test_playbook_validate_not_found(runner: CliRunner) -> None:
+    """`ammp playbook validate` exits 1 when the playbook id isn't in the corpus."""
+    r = runner.invoke(app, ["playbook", "validate", "no-such-pb"])
+    assert r.exit_code == 1
+    assert "not found" in r.output.lower()
+
+
+def test_playbook_validate_no_prompts(runner: CliRunner) -> None:
+    """Playbook without a `validation.prompts` block → exit 2 (nothing to verify).
+
+    The conftest fixture's `intro` playbook has no validation block, so
+    this is the natural happy-path-for-the-no-prompts-branch case.
+    """
+    r = runner.invoke(app, ["playbook", "validate", "intro"])
+    assert r.exit_code == 2
+    assert "no validation prompts" in r.output.lower()
+
+
+def test_playbook_validate_delegates_to_harness(
+    runner: CliRunner, isolated_tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With a declared validation block, the CLI delegates to the bundled harness.
+
+    We monkey-patch subprocess.run so we don't actually spawn `claude`;
+    the test pins (a) the env vars the harness receives, (b) the stdin
+    JSON shape, (c) that the CLI's exit code matches the harness's.
+    """
+    import json as _json
+    import os
+
+    # Inject a validation block on the fixture's `intro` playbook.json.
+    pb_meta = isolated_tree / "mentors" / "pepe" / "playbooks" / "intro" / "playbook.json"
+    payload = _json.loads(pb_meta.read_text(encoding="utf-8"))
+    payload["validation"] = {
+        "prompts": [
+            {"id": "p1", "task": "do the thing", "expect": {"must_contain": ["thing"]}},
+        ]
+    }
+    pb_meta.write_text(_json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    class _FakeProc:
+        def __init__(self, returncode: int, stdout: str = "", stderr: str = "") -> None:
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    def _fake_run(cmd, env=None, input=None, text=None, capture_output=None, **kwargs):
+        captured["cmd"] = cmd
+        captured["env"] = env or {}
+        captured["input"] = input or ""
+        return _FakeProc(returncode=0, stdout="✓ p1\n\n1/1 prompts passed\n", stderr="")
+
+    import subprocess
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+
+    # The CLI's repo-root probe needs the harness file to exist. Pretend.
+    real_isfile = os.path.isfile
+    monkeypatch.setattr(
+        os.path,
+        "isfile",
+        lambda p: str(p).endswith("e2e-playbook-validation.sh") or real_isfile(p),
+    )
+
+    r = runner.invoke(app, ["playbook", "validate", "intro"])
+    assert r.exit_code == 0, r.output
+    assert captured["env"].get("AMMP_VALIDATE_MENTOR") == "pepe"
+    assert captured["env"].get("AMMP_VALIDATE_PLAYBOOK") == "intro"
+    parsed_input = _json.loads(captured["input"])
+    assert parsed_input["prompts"][0]["id"] == "p1"
+
+
+def test_playbook_validate_missing_harness(
+    runner: CliRunner, isolated_tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the bundled harness script is absent, the CLI exits 2 + names the path."""
+    import json as _json
+
+    pb_meta = isolated_tree / "mentors" / "pepe" / "playbooks" / "intro" / "playbook.json"
+    payload = _json.loads(pb_meta.read_text(encoding="utf-8"))
+    payload["validation"] = {"prompts": [{"id": "p1", "task": "x", "expect": {}}]}
+    pb_meta.write_text(_json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    # Force the harness to look absent regardless of the real filesystem.
+    import os
+
+    monkeypatch.setattr(os.path, "isfile", lambda p: False)
+    r = runner.invoke(app, ["playbook", "validate", "intro"])
+    assert r.exit_code == 2
+    assert "harness not found" in r.output.lower()
+
+
 def test_system_info_envelope_shape(runner: CliRunner) -> None:
     """`ammp system info` prints the GetSystemInfo envelope as JSON."""
     r = runner.invoke(app, ["system", "info"])

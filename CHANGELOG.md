@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.15.2] — 2026-05-15
+
+### Fixed
+
+- **SonarCloud `new_coverage` 79.5 % → 87 %.** The 0.15.0–0.15.1 validation system shipped without unit tests on the new code paths: `_load_one_playbook`'s validation-block parser (~20 lines) and `ammp playbook validate`'s CLI (~58 lines). Adds 9 new tests (4 loader unit tests covering happy path / malformed shapes / absent key, 5 CLI integration tests covering unknown mentor / invalid id / not-found / no-prompts / delegates-to-harness with monkeypatched subprocess + missing-harness path). 240 unit/integration tests pass. (#coverage)
+
 ## [0.15.1] — 2026-05-15
 
 ### Added

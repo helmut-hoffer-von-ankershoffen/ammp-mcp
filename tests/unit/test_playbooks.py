@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -277,3 +278,85 @@ def test_start_prompt_for_plugin_backed_playbook_mentions_get_plugin_archive(tmp
     assert "ListPlaybooks" in prompt
     assert "GetPlaybook" in prompt
     assert "AskMentor" in prompt
+
+
+def test_validation_block_parsed(tmp_path: Path) -> None:
+    """`validation: {prompts: [...]}` round-trips through the loader."""
+    root = tmp_path / "playbooks"
+    pb = root / "demo"
+    pb.mkdir(parents=True)
+    (pb / "playbook.json").write_text(
+        json.dumps(
+            {
+                "name": "Demo",
+                "description": "d",
+                "validation": {
+                    "prompts": [
+                        {"id": "p1", "task": "do a", "expect": {"must_contain": ["a"]}},
+                        {"id": "p2", "task": "do b", "expect": {}},
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    corpus = load_playbooks(root, marketplaces_root=None)
+    assert len(corpus) == 1
+    pb_obj = corpus[0]
+    assert pb_obj.validation["prompts"][0]["id"] == "p1"
+    assert pb_obj.validation["prompts"][0]["task"] == "do a"
+    assert pb_obj.validation["prompts"][0]["expect"] == {"must_contain": ["a"]}
+    assert pb_obj.validation["prompts"][1]["expect"] == {}
+    assert len(pb_obj.validation["prompts"]) == 2
+
+
+def test_validation_block_malformed_shapes_drop_safely(tmp_path: Path) -> None:
+    """Garbage in `validation` shape drops to empty — defensive parsing."""
+    root = tmp_path / "playbooks"
+    pb = root / "demo"
+    pb.mkdir(parents=True)
+    # validation is a string, not a dict → drop.
+    (pb / "playbook.json").write_text(
+        json.dumps({"name": "X", "description": "d", "validation": "garbage"}),
+        encoding="utf-8",
+    )
+    assert load_playbooks(root, None)[0].validation == {}
+
+    # validation.prompts is a string → drop the whole validation (loader
+    # only emits `{"prompts": [...]}` when prompts is actually a list).
+    (pb / "playbook.json").write_text(
+        json.dumps({"name": "X", "description": "d", "validation": {"prompts": "nope"}}),
+        encoding="utf-8",
+    )
+    assert load_playbooks(root, None)[0].validation == {}
+
+    # Individual prompts missing required keys are skipped silently.
+    (pb / "playbook.json").write_text(
+        json.dumps(
+            {
+                "name": "X",
+                "description": "d",
+                "validation": {
+                    "prompts": [
+                        {"id": "ok", "task": "fine", "expect": {}},
+                        {"id": "no-task-key"},  # dropped (no task)
+                        {"task": "no-id-key"},  # dropped (no id)
+                        "not-even-a-dict",  # dropped
+                        {"id": "", "task": "empty-id"},  # dropped (empty id)
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    kept = load_playbooks(root, None)[0].validation["prompts"]
+    assert [p["id"] for p in kept] == ["ok"]
+
+
+def test_validation_block_absent_yields_empty_dict(tmp_path: Path) -> None:
+    """No `validation` key in playbook.json → Playbook.validation is empty."""
+    root = tmp_path / "playbooks"
+    pb = root / "demo"
+    pb.mkdir(parents=True)
+    (pb / "playbook.json").write_text(json.dumps({"name": "X", "description": "d"}), encoding="utf-8")
+    assert load_playbooks(root, None)[0].validation == {}
