@@ -91,7 +91,12 @@ EOF
 # Iterate the prompts via a Python helper (jq-level introspection of
 # nested objects is painful; Python is shipped on macOS + ubuntu by
 # default).
-mapfile -t prompt_lines < <(python3 -c "
+# Bash 3.2 (macOS default) doesn't have `mapfile`; use a while-read
+# loop into an array instead.
+prompt_lines=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && prompt_lines+=("$line")
+done < <(python3 -c "
 import json, sys
 spec = json.loads(sys.argv[1])
 for p in spec.get('prompts', []):
@@ -139,68 +144,6 @@ $task"
   printf '%s\n' "$response" > "$tmp/mentee-$pid.out"
 
   # Run the expect rules in Python — easier than shelling them.
-  result=$(python3 - "$line" <<'PYEOF'
-import json, re, sys
-spec = json.loads(sys.argv[1])
-expect = spec.get("expect", {})
-import os
-resp_file = os.path.join(os.environ.get("MENTEE_RESPONSE_DIR", "."), f"mentee-{spec['id']}.out")
-with open(resp_file) as fh:
-    response = fh.read()
-response_low = response.lower()
-
-failures = []
-
-# must_mention_skill: substring match on response (case-insensitive).
-mms = expect.get("must_mention_skill")
-if isinstance(mms, str) and mms.lower() not in response_low:
-    failures.append(f"must_mention_skill: {mms!r} not in response")
-elif isinstance(mms, list):
-    for s in mms:
-        if isinstance(s, str) and s.lower() not in response_low:
-            failures.append(f"must_mention_skill: {s!r} not in response")
-
-# must_contain: every string (or pipe-separated alternate group) appears.
-mc = expect.get("must_contain")
-if isinstance(mc, list):
-    for entry in mc:
-        if not isinstance(entry, str):
-            continue
-        alternatives = [a.strip().lower() for a in entry.split("|") if a.strip()]
-        if not any(a in response_low for a in alternatives):
-            failures.append(f"must_contain: none of {alternatives!r} in response")
-
-# must_contain_pattern: Python re.search match (case-insensitive).
-mcp = expect.get("must_contain_pattern")
-if isinstance(mcp, str):
-    if not re.search(mcp, response, re.IGNORECASE):
-        failures.append(f"must_contain_pattern: {mcp!r} did not match response")
-
-# must_invoke_or_name: at least one of the named scripts/tools is named in response.
-mio = expect.get("must_invoke_or_name")
-if isinstance(mio, list):
-    for entry in mio:
-        if not isinstance(entry, str):
-            continue
-        if entry.lower() not in response_low:
-            failures.append(f"must_invoke_or_name: {entry!r} not named in response")
-
-# must_mention_type: case-insensitive substring (for memory types etc.)
-mmt = expect.get("must_mention_type")
-if isinstance(mmt, str) and mmt.lower() not in response_low:
-    failures.append(f"must_mention_type: {mmt!r} not in response")
-
-passed = not failures
-print(json.dumps({
-    "id": spec["id"],
-    "passed": passed,
-    "failures": failures,
-    "response_length": len(response),
-}))
-PYEOF
-  )
-
-  # Inject MENTEE_RESPONSE_DIR for the heredoc.
   result=$(MENTEE_RESPONSE_DIR="$tmp" python3 - "$line" <<'PYEOF'
 import json, re, sys, os
 spec = json.loads(sys.argv[1])

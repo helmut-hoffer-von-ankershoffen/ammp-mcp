@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.15.1] — 2026-05-15
+
+### Added
+
+- **"Validated" badge** on playbook cards that declare validation prompts. Sits next to the Free/Commercial license badge; purple-tint pill; tooltip names the prompt count + how to run the validator. Pepe's `knowledge-management` playbook now shows `Free · Validated` (4 prompts) on https://mcp.helmguild.com/ammp/. EN + DE i18n + CSS shipped. (#landing)
+- **Live proof of AMMP-as-pedagogy:** `ammp playbook validate knowledge-management` against the live `mcp.helmguild.com/ammp` server returned **4/4 prompts passed** on a freshly-spawned Claude Code mentee. The mentee correctly mapped 4 distinct user-task prompts to the right skills (canonical-knowledge-vault, per-agent-auto-memory-discipline), named the bundled scaffolder, and reproduced the load-bearing rules (200-line index cap, save-corrections-as-feedback, vault wins over private memory). First end-to-end proof that mentoring transfers competence, not just RPC. (#validation)
+
 ## [0.15.0] — 2026-05-15
 
 ### Added — playbook validation (AMMP extension)

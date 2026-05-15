@@ -349,9 +349,9 @@ def playbook_validate(
     # Delegate to the bundled subprocess harness. The harness lives in
     # the ammp-mcp repo; this CLI passes the playbook spec to it via
     # env vars so the harness has everything to spawn the mentee.
-    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    # _cli.py lives at src/ammp_mcp/playbook/_cli.py; repo root is three up.
-    repo_root = os.path.abspath(os.path.join(repo_root, "..", ".."))
+    # _cli.py lives at <repo>/src/ammp_mcp/playbook/_cli.py — 4 dirnames
+    # up gets the repo root.
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     harness = os.path.join(repo_root, "scripts", "e2e-playbook-validation.sh")
     if not os.path.isfile(harness):
         console.print(
