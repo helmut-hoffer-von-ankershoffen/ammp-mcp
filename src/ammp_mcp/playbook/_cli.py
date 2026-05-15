@@ -100,8 +100,17 @@ def plugin_archive(
 
 
 @playbook_app.command("list")
-def playbook_list(mentor: str = typer.Option("", help="Mentor slug. Empty → server default.")) -> None:
-    """List the playbooks (areas of practice) for a mentor."""
+def playbook_list(
+    mentor: str = typer.Option("", help="Mentor slug. Empty → server default."),
+    as_json: bool = typer.Option(False, "--json", help="Emit raw JSON instead of a Rich table."),
+) -> None:
+    """List the playbooks (areas of practice) for a mentor.
+
+    Default output is a Rich table; ``--json`` emits a machine-readable
+    envelope with shape ``{mentor, count, playbooks: [{id, name,
+    description, requires, skill_count}]}`` (matches the MCP
+    ``ListPlaybooks`` envelope minus the embedded skill bodies).
+    """
     s = get_settings()
     mentors = load_mentors(s.mentors_root)
     m = get_mentor(mentors, mentor, s.default_mentor)
@@ -109,6 +118,23 @@ def playbook_list(mentor: str = typer.Option("", help="Mentor slug. Empty → se
         console.print(f"[red]Unknown mentor: {mentor or s.default_mentor!r}[/red]")
         raise typer.Exit(code=2)
     corpus = load_playbooks(m.playbook_dir, marketplaces_root=s.marketplaces_root)
+    if as_json:
+        payload = {
+            "mentor": m.slug,
+            "count": len(corpus),
+            "playbooks": [
+                {
+                    "id": pb.id,
+                    "name": pb.name,
+                    "description": pb.description,
+                    "requires": list(pb.requires),
+                    "skill_count": len(pb.skills),
+                }
+                for pb in corpus
+            ],
+        }
+        typer.echo(_json.dumps(payload, indent=2, ensure_ascii=False))
+        return
     table = Table(title=f"{m.name} — playbooks ({len(corpus)})")
     table.add_column("id", style="cyan")
     table.add_column("name", style="white")

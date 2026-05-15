@@ -354,6 +354,11 @@ $ ammp playbook [OPTIONS] COMMAND [ARGS]...
 
 List the playbooks (areas of practice) for a mentor.
 
+Default output is a Rich table; ``--json`` emits a machine-readable
+envelope with shape ``{mentor, count, playbooks: [{id, name,
+description, requires, skill_count}]}`` (matches the MCP
+``ListPlaybooks`` envelope minus the embedded skill bodies).
+
 **Usage**:
 
 ```console
@@ -363,6 +368,7 @@ $ ammp playbook list [OPTIONS]
 **Options**:
 
 * `--mentor TEXT`: Mentor slug. Empty → server default.
+* `--json`: Emit raw JSON instead of a Rich table.
 * `--help`: Show this message and exit.
 
 ### `ammp playbook show`

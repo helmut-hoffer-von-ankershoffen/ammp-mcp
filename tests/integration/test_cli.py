@@ -74,6 +74,19 @@ def test_list_playbooks_unknown_mentor(runner: CliRunner) -> None:
     assert r.exit_code == 2
 
 
+def test_list_playbooks_json(runner: CliRunner) -> None:
+    """`ammp playbook list --json` emits a machine-readable envelope."""
+    r = runner.invoke(app, ["playbook", "list", "--json"])
+    assert r.exit_code == 0, r.output
+    payload = json.loads(r.output)
+    assert payload["mentor"] == "pepe"
+    assert payload["count"] >= 1
+    ids = {pb["id"] for pb in payload["playbooks"]}
+    assert "intro" in ids
+    for pb in payload["playbooks"]:
+        assert {"id", "name", "description", "requires", "skill_count"} <= set(pb.keys())
+
+
 def test_show_playbook(runner: CliRunner) -> None:
     """`ammp playbook show <id>` lists the skills inside the playbook."""
     r = runner.invoke(app, ["playbook", "show", "intro"])

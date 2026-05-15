@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.14.3] — 2026-05-14
+
+### Added
+
+- **`ammp playbook list --json`** — CLI parity with the other list-shaped commands (`ammp mentor list --json`, `ammp playbook search --json`). Emits `{mentor, count, playbooks: [{id, name, description, requires, skill_count}]}` — same shape as the MCP `ListPlaybooks` envelope minus the embedded skill bodies. The 0.14.1 CI's docs-walker LLM check (Haiku) flagged this inconsistency: list-shaped CLI commands universally support `--json` except this one. Closing the gap, CLI_REFERENCE.md regenerated, new test pinned. (#cli)
+
 ## [0.14.2] — 2026-05-14
 
 ### Removed
