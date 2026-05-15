@@ -87,6 +87,11 @@ class Playbook:
             ``plugin.json`` declares ``"commercial": true`` (private
             helmguild-plugins marketplace). ``False`` for community-
             licensed plugins or when no plugin backs the playbook.
+        requires: List of playbook ids this playbook depends on
+            (other playbooks under the same mentor). Read from the
+            ``"requires"`` array in ``playbook.json``; empty list
+            when absent. Mentee agents are expected to load the
+            required playbooks before the dependent one.
         skills: Skills loaded from this playbook, sorted by
             ``order`` then ``id``.
     """
@@ -97,6 +102,7 @@ class Playbook:
     dir: Path
     plugin_ref: tuple[str, str] | None = None
     commercial: bool = False
+    requires: list[str] = field(default_factory=list)
     skills: list[Skill] = field(default_factory=list)
 
 
@@ -412,6 +418,13 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
     else:
         skills = _load_skills_local(playbook_dir, pid)
 
+    # `requires` — list of sibling playbook ids this playbook depends
+    # on. Optional; absent or non-list → empty list.
+    requires_raw = meta.get("requires")
+    requires: list[str] = []
+    if isinstance(requires_raw, list):
+        requires = [str(r) for r in requires_raw if isinstance(r, str) and r]
+
     return Playbook(
         id=pid,
         name=name,
@@ -419,6 +432,7 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
         dir=playbook_dir,
         plugin_ref=plugin_ref,
         commercial=commercial,
+        requires=requires,
         skills=skills,
     )
 

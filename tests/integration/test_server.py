@@ -141,6 +141,29 @@ async def test_get_playbook_returns_skill_summaries(server) -> None:
         assert "title" in sk
         assert "summary" in sk
         assert "body" not in sk, f"skill {sk['id']} leaked body into GetPlaybook envelope"
+    # `requires` is in the envelope; defaults to empty list on the
+    # fixture (no playbook.json `requires` field declared).
+    assert result.data["requires"] == []
+
+
+async def test_get_playbook_propagates_requires(server, isolated_tree) -> None:
+    """A playbook.json with `requires` round-trips into GetPlaybook envelope."""
+    import json
+
+    # Inject `requires` on the fixture's `intro` playbook.json (the
+    # conftest scaffold doesn't write one), then re-load.
+    pb_meta = isolated_tree / "mentors" / "pepe" / "playbooks" / "intro" / "playbook.json"
+    payload = json.loads(pb_meta.read_text(encoding="utf-8"))
+    payload["requires"] = ["operator-craft", "knowledge-management"]
+    pb_meta.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    # FastMCP server rebuilds the corpus per request — no restart needed.
+    async with Client(server) as c:
+        got = await c.call_tool("GetPlaybook", {"id": "intro"})
+        listed = await c.call_tool("ListPlaybooks", {"mentor": "pepe"})
+    assert got.data["requires"] == ["operator-craft", "knowledge-management"]
+    # Also visible in ListPlaybooks per-entry.
+    intro_entry = next(pb for pb in listed.data["playbooks"] if pb["id"] == "intro")
+    assert intro_entry["requires"] == ["operator-craft", "knowledge-management"]
 
 
 async def test_get_playbook_path_traversal_rejected(server) -> None:

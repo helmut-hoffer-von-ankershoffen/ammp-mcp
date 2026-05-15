@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.14.0] — 2026-05-14
+
+### Added — playbook dependencies (`requires`)
+
+- **`playbook.json` carries a `requires: [<id>, ...]` array** listing sibling-playbook ids this playbook depends on. Loader reads it; wire envelopes (`PlaybookSummary`, `GetPlaybookResponse`) pass it through unchanged. Empty list when absent or malformed (defensive). Pepe's deployment now declares: `knowledge-management → []`, `multi-channel-content-pipelines → [knowledge-management]`, `operator-craft → [knowledge-management]`, `personal-assistant-for-managers → [knowledge-management, operator-craft]`. (#deps)
+- **Landing page surfaces dependencies** in two ways: (a) every playbook card with non-empty `requires` shows a "Requires: <links>" line pointing to the depended-on playbooks (anchor IDs added to each card); (b) when any playbook in a mentor declares a dependency, the page appends a Mermaid `graph LR` DAG below the playbook list, distinguishing commercial (red-tint) from community-licensed (blue-tint) nodes. EN + DE i18n strings + minimal CSS shipped. The Mermaid bundle is loaded on-demand only when the page actually has a `<pre class="mermaid">` block. (#landing)
+
 ## [0.13.0] — 2026-05-14
 
 ### Changed — wire envelope (breaking)

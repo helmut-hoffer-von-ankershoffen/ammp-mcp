@@ -330,6 +330,7 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
                 id=pb.id,
                 name=pb.name,
                 description=pb.description,
+                requires=list(pb.requires),
                 skill_count=len(pb.skills),
                 skills=[SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk in pb.skills],
             )
@@ -387,6 +388,7 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         id=pb.id,
         name=pb.name,
         description=pb.description,
+        requires=list(pb.requires),
         skills=[SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk in pb.skills],
     ).model_dump()
 
@@ -1447,6 +1449,9 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentors_empty": "No mentors are currently available.",
         "commercial_label": "Commercial",
         "commercial_title": "Distributed only inside an active helmguild mentoring engagement via AMMP GetPluginArchive — Helmguild Mentoring License v1.0.",
+        "playbook_requires": "Requires:",
+        "playbook_deps_heading": "Playbook dependencies",
+        "playbook_deps_help": "Foundation playbooks point at the playbooks that depend on them. Install foundation playbooks first; their content (vault, auto-memory discipline) underpins everything downstream.",
         # Mailto draft
         "form_title": "Access request form",
     },
@@ -1501,6 +1506,9 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
         "commercial_label": "Kommerziell",
         "commercial_title": "Wird nur innerhalb einer aktiven helmguild-Mentoring-Beziehung über AMMP GetPluginArchive verteilt — Helmguild Mentoring License v1.0.",
+        "playbook_requires": "Voraussetzungen:",
+        "playbook_deps_heading": "Playbook-Abhängigkeiten",
+        "playbook_deps_help": "Fundament-Playbooks zeigen auf die Playbooks, die von ihnen abhängen. Fundament zuerst installieren; ihre Inhalte (Vault, Auto-Memory-Disziplin) tragen alles, was darauf aufbaut.",
         "form_title": "Zugangsanfrage-Formular",
     },
 }
@@ -1634,6 +1642,13 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                 else:
                     skills_block = f"<p class='empty'>{c['mentor_no_skills']}</p>"
                 pb_desc = f"<p class='pb-desc'>{_md_inline(pb.description)}</p>" if pb.description else ""
+                if pb.requires:
+                    req_links = ", ".join(
+                        f"<a href='#pb-{_h(slug)}-{_h(r)}' class='pb-req-link'>{_h(r)}</a>" for r in pb.requires
+                    )
+                    pb_requires_html = f"<p class='pb-requires'>{_h(c['playbook_requires'])} {req_links}</p>"
+                else:
+                    pb_requires_html = ""
                 # Copy-paste prompt for starting a mentoring session on
                 # this specific (mentor, playbook). User pastes into
                 # their MCP-aware agent. Sits next to the skills
@@ -1663,14 +1678,40 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     else ""
                 )
                 pb_html_parts.append(
-                    "<section class='playbook'>"
+                    f"<section class='playbook' id='pb-{_h(slug)}-{_h(pb.id)}'>"
                     f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span>{commercial_badge}</h4>"
                     f"{pb_desc}"
+                    f"{pb_requires_html}"
                     f"{skills_block}"
                     f"{prompt_block}"
                     "</section>"
                 )
             playbook_section = "".join(pb_html_parts)
+            # Append a Mermaid DAG of the playbook dependencies, but
+            # only when at least one playbook declares `requires`.
+            if any(pb.requires for pb in playbooks):
+                edges: list[str] = []
+                nodes: list[str] = []
+                ids_seen: set[str] = set()
+                for pb in playbooks:
+                    if pb.id not in ids_seen:
+                        cls = " commercial" if pb.commercial else ""
+                        nodes.append(f'  {pb.id}["{pb.id}"]:::pb{cls.strip()}')
+                        ids_seen.add(pb.id)
+                    for r in pb.requires:
+                        edges.append(f"  {r} --> {pb.id}")
+                mermaid_body = "\n".join(nodes + edges)
+                playbook_section += (
+                    "<section class='playbook-deps'>"
+                    f"<h4>{_h(c['playbook_deps_heading'])}</h4>"
+                    f"<p class='pb-deps-help'>{_h(c['playbook_deps_help'])}</p>"
+                    "<pre class='mermaid'>graph LR\n"
+                    f"{mermaid_body}\n"
+                    "  classDef pb fill:#eef,stroke:#446,stroke-width:1px;\n"
+                    "  classDef commercial fill:#fee,stroke:#a44,stroke-width:1px;\n"
+                    "</pre>"
+                    "</section>"
+                )
         else:
             playbook_section = f"<p class='empty'>{c['mentor_no_playbooks']}</p>"
         # When the mentor advertises a longer profile page, hyperlink
@@ -1768,6 +1809,13 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .pb-id{{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);font-weight:400}}
 .pb-commercial{{font-family:var(--sans);font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:rgba(46, 79, 107, 0.08);border:1px solid rgba(46, 79, 107, 0.3);border-radius:3px;padding:.05rem .35rem;cursor:help}}
 .pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
+.pb-requires{{margin:.15rem 0 .35rem;font-size:.78rem;color:var(--ink-soft)}}
+.pb-requires .pb-req-link{{color:var(--accent);text-decoration:none;border-bottom:1px dotted rgba(46,79,107,.4);padding-bottom:1px}}
+.pb-requires .pb-req-link:hover{{border-bottom-style:solid}}
+.playbook-deps{{margin-top:1rem;padding:.75rem 1rem;background:rgba(46,79,107,.04);border:1px solid rgba(46,79,107,.15);border-radius:6px}}
+.playbook-deps h4{{margin:0 0 .25rem;font-size:.95rem;color:var(--accent)}}
+.pb-deps-help{{margin:0 0 .5rem;font-size:.78rem;color:var(--ink-soft);line-height:1.45}}
+.playbook-deps pre.mermaid{{margin:0;padding:0;background:transparent;border:none;font-size:.85rem}}
 .skills-details,.prompt-details{{margin:.4rem 0 0}}
 .skills-details > summary,.prompt-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}
 .skills-details > summary::-webkit-details-marker,.prompt-details > summary::-webkit-details-marker{{display:none}}
@@ -1920,6 +1968,15 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 </footer>
 
 </main>
+
+<script type="module">
+  // Mermaid renders the playbook-dependency DAG client-side. Loaded
+  // only when at least one `.mermaid` block exists on the page.
+  if (document.querySelector('pre.mermaid')) {{
+    const m = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
+    m.default.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'strict' }});
+  }}
+</script>
 
 <script>
 document.querySelectorAll('button.btn.copy').forEach(function(b) {{
