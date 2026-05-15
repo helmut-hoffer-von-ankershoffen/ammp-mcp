@@ -5,6 +5,16 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.15.0] — 2026-05-15
+
+### Added — playbook validation (AMMP extension)
+
+This is the closing loop the protocol was missing. Until now AMMP could prove "the wire works" (RPC) and "a mentee can read a playbook" (the install/walkthrough e2e). It could not prove "a mentee actually learns the playbook" — the mentoring-as-pedagogy claim.
+
+- **`playbook.json` carries an optional `validation` object** with shape `{"prompts": [{"id", "task", "expect": {...}}]}`. Each prompt names an `id`, a `task` the mentee receives verbatim, and an `expect` block of rules. Supported rules: `must_mention_skill`, `must_contain` (alternates via `|`), `must_contain_pattern` (regex, case-insensitive), `must_invoke_or_name` (named scripts/tools), `must_mention_type`. Pepe's `knowledge-management` playbook ships 4 prompts covering the canonical-vault Setup, auto-memory correction-handling, private-vs-shared decision, and the 200-line index cap.
+- **`ammp playbook validate <id>`** — new CLI. Reads the playbook spec, delegates to `scripts/e2e-playbook-validation.sh` which spawns a fresh `claude -p` mentee per prompt with the live AMMP MCP wire pre-loaded (.mcp.json in tmp workdir), captures the mentee's response, runs the expect rules against it. Reports per-prompt pass/fail; exits 0 only when every rule on every prompt passes. `--json` available.
+- **Wire envelopes** (`PlaybookSummary`, `GetPlaybookResponse`) gain a `validation_prompt_count: int` field. Bodies of the prompts stay server-side (they'd otherwise leak the answer key); only the count goes over the wire. Mentees can see "this playbook has N validation prompts" without seeing them. (#validation)
+
 ## [0.14.3] — 2026-05-14
 
 ### Added

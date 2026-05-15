@@ -331,6 +331,7 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
                 name=pb.name,
                 description=pb.description,
                 requires=list(pb.requires),
+                validation_prompt_count=len(pb.validation.get("prompts", []) or []),
                 skill_count=len(pb.skills),
                 skills=[SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk in pb.skills],
             )
@@ -389,6 +390,7 @@ def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_
         name=pb.name,
         description=pb.description,
         requires=list(pb.requires),
+        validation_prompt_count=len(pb.validation.get("prompts", []) or []),
         skills=[SkillSummary(id=sk.id, title=sk.title, summary=sk.summary) for sk in pb.skills],
     ).model_dump()
 

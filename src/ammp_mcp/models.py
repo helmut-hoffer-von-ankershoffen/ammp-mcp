@@ -70,6 +70,7 @@ class PlaybookSummary(BaseModel):
     name: str
     description: str = ""
     requires: list[str] = Field(default_factory=list)
+    validation_prompt_count: int = 0
     skill_count: int = 0
     skills: list[SkillSummary] = Field(default_factory=list)
 
@@ -186,6 +187,7 @@ class GetPlaybookResponse(BaseModel):
     name: str
     description: str = ""
     requires: list[str] = Field(default_factory=list)
+    validation_prompt_count: int = 0
     skills: list[SkillSummary]
 
 

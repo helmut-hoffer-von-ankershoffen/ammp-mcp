@@ -287,3 +287,95 @@ def playbook_search(
             m_["snippet"][:100],
         )
     console.print(table)
+
+
+@playbook_app.command("validate")
+def playbook_validate(
+    playbook_id: str = typer.Argument(..., help="Playbook id to validate."),
+    mentor: str = typer.Option("", "--mentor", "-m", help="Mentor slug. Empty → server default."),
+    as_json: bool = typer.Option(False, "--json", help="Emit raw JSON instead of a Rich summary."),
+) -> None:
+    """Run the playbook's validation prompts as a Sub-process LLM mentee.
+
+    Reads the playbook's ``validation.prompts[]`` from ``playbook.json``,
+    spawns a fresh ``claude -p`` mentee for each prompt with the AMMP
+    wire pre-loaded (the mentee gets the canonical start-prompt
+    referencing this playbook), then runs each ``expect`` rule against
+    the mentee's response.
+
+    Rules supported (mentee must satisfy all that apply):
+
+    * ``must_mention_skill: <skill-id>`` — response references the named
+      skill explicitly (case-insensitive substring of the skill id).
+    * ``must_contain: ["str", "str|alt", ...]`` — every listed string
+      appears in the response. Pipe-separated alternates accepted.
+    * ``must_contain_pattern: "regex"`` — Python ``re.search`` against
+      the response matches.
+    * ``must_invoke_or_name: ["script.sh", ...]`` — at least one of the
+      named scripts is named in the response (proxy for "the mentee
+      knew to invoke this tool"; the validator doesn't actually run
+      the scripts here, that's the e2e harness's job).
+
+    The CLI is the planning layer; the heavy lifting (subprocess
+    spawning + Claude Code invocation) lives in
+    ``scripts/e2e-playbook-validation.sh``. This CLI is what an
+    operator + CI invoke; the script is what does the work.
+    """
+    import os
+    import subprocess
+    import sys
+
+    s = get_settings()
+    mentors = load_mentors(s.mentors_root)
+    m = get_mentor(mentors, mentor, s.default_mentor)
+    if not m:
+        console.print(f"[red]Unknown mentor: {mentor or s.default_mentor!r}[/red]")
+        raise typer.Exit(code=2)
+    clean_id = safe_id(playbook_id)
+    if not clean_id:
+        console.print(f"[red]Invalid playbook id: {playbook_id!r}[/red]")
+        raise typer.Exit(code=2)
+    corpus = load_playbooks(m.playbook_dir, marketplaces_root=s.marketplaces_root)
+    pb = next((p for p in corpus if p.id == clean_id), None)
+    if pb is None:
+        console.print(f"[red]Not found: playbook id={clean_id!r} for mentor {m.slug!r}[/red]")
+        raise typer.Exit(code=1)
+
+    prompts = pb.validation.get("prompts", []) if isinstance(pb.validation, dict) else []
+    if not prompts:
+        console.print(f"[yellow]Playbook {clean_id!r} declares no validation prompts. Nothing to verify.[/yellow]")
+        raise typer.Exit(code=2)
+
+    # Delegate to the bundled subprocess harness. The harness lives in
+    # the ammp-mcp repo; this CLI passes the playbook spec to it via
+    # env vars so the harness has everything to spawn the mentee.
+    repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    # _cli.py lives at src/ammp_mcp/playbook/_cli.py; repo root is three up.
+    repo_root = os.path.abspath(os.path.join(repo_root, "..", ".."))
+    harness = os.path.join(repo_root, "scripts", "e2e-playbook-validation.sh")
+    if not os.path.isfile(harness):
+        console.print(
+            f"[red]Validator harness not found at {harness!r}. "
+            f"This CLI requires scripts/e2e-playbook-validation.sh in the ammp-mcp checkout.[/red]"
+        )
+        raise typer.Exit(code=2)
+
+    # Pass the playbook spec as env vars + JSON on stdin (avoids a
+    # 100-arg command-line).
+    env = os.environ.copy()
+    env["AMMP_VALIDATE_MENTOR"] = m.slug
+    env["AMMP_VALIDATE_PLAYBOOK"] = clean_id
+    env["AMMP_VALIDATE_PLAYBOOK_NAME"] = pb.name
+    env["AMMP_VALIDATE_OUTPUT_FORMAT"] = "json" if as_json else "text"
+    spec_json = _json.dumps({"prompts": prompts}, ensure_ascii=False)
+    proc = subprocess.run(
+        ["bash", harness],
+        env=env,
+        input=spec_json,
+        text=True,
+        capture_output=True,
+    )
+    # Pass through the harness's stdout + stderr verbatim.
+    sys.stdout.write(proc.stdout)
+    sys.stderr.write(proc.stderr)
+    raise typer.Exit(code=proc.returncode)

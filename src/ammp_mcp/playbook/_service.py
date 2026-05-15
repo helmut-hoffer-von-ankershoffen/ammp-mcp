@@ -92,6 +92,14 @@ class Playbook:
             ``"requires"`` array in ``playbook.json``; empty list
             when absent. Mentee agents are expected to load the
             required playbooks before the dependent one.
+        validation: Acceptance-test specification for proving a
+            mentee actually learned the playbook. Read from the
+            ``"validation"`` object in ``playbook.json``. Shape:
+            ``{"prompts": [{"id", "task", "expect": {...}}, ...]}``.
+            Empty list of prompts when absent. A separate validator
+            (``ammp playbook validate <id>``) spawns a fresh mentee,
+            issues each prompt, and runs the expect-rules against
+            the response.
         skills: Skills loaded from this playbook, sorted by
             ``order`` then ``id``.
     """
@@ -103,6 +111,7 @@ class Playbook:
     plugin_ref: tuple[str, str] | None = None
     commercial: bool = False
     requires: list[str] = field(default_factory=list)
+    validation: dict[str, Any] = field(default_factory=dict)
     skills: list[Skill] = field(default_factory=list)
 
 
@@ -425,6 +434,30 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
     if isinstance(requires_raw, list):
         requires = [str(r) for r in requires_raw if isinstance(r, str) and r]
 
+    # `validation` — acceptance-test spec for proving a mentee learned
+    # the playbook. Optional; absent or malformed → empty dict.
+    validation_raw = meta.get("validation")
+    validation: dict[str, Any] = {}
+    if isinstance(validation_raw, dict):
+        prompts_raw = validation_raw.get("prompts")
+        if isinstance(prompts_raw, list):
+            kept: list[dict[str, Any]] = []
+            for p in prompts_raw:
+                if not isinstance(p, dict):
+                    continue
+                pid_v = p.get("id")
+                task = p.get("task")
+                if isinstance(pid_v, str) and isinstance(task, str) and pid_v and task:
+                    expect = p.get("expect")
+                    kept.append(
+                        {
+                            "id": pid_v,
+                            "task": task,
+                            "expect": expect if isinstance(expect, dict) else {},
+                        }
+                    )
+            validation = {"prompts": kept}
+
     return Playbook(
         id=pid,
         name=name,
@@ -433,6 +466,7 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
         plugin_ref=plugin_ref,
         commercial=commercial,
         requires=requires,
+        validation=validation,
         skills=skills,
     )
 
