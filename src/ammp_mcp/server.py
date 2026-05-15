@@ -1452,8 +1452,6 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "free_label": "Free",
         "free_title": "Open + community-licensed (CC-BY-4.0 skill bodies + MIT bundled scripts). Available in the public helmguild-plugins-public marketplace.",
         "playbook_requires": "Requires:",
-        "playbook_deps_heading": "Playbook dependencies",
-        "playbook_deps_help": "Foundation playbooks point at the playbooks that depend on them. Install foundation playbooks first; their content (vault, auto-memory discipline) underpins everything downstream.",
         # Mailto draft
         "form_title": "Access request form",
     },
@@ -1511,8 +1509,6 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "free_label": "Frei",
         "free_title": "Offen + community-lizenziert (CC-BY-4.0 Skill-Texte + MIT für gebündelte Skripte). Verfügbar im öffentlichen helmguild-plugins-public Marketplace.",
         "playbook_requires": "Voraussetzungen:",
-        "playbook_deps_heading": "Playbook-Abhängigkeiten",
-        "playbook_deps_help": "Fundament-Playbooks zeigen auf die Playbooks, die von ihnen abhängen. Fundament zuerst installieren; ihre Inhalte (Vault, Auto-Memory-Disziplin) tragen alles, was darauf aufbaut.",
         "form_title": "Zugangsanfrage-Formular",
     },
 }
@@ -1693,31 +1689,6 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     "</section>"
                 )
             playbook_section = "".join(pb_html_parts)
-            # Append a Mermaid DAG of the playbook dependencies, but
-            # only when at least one playbook declares `requires`.
-            if any(pb.requires for pb in playbooks):
-                edges: list[str] = []
-                nodes: list[str] = []
-                ids_seen: set[str] = set()
-                for pb in playbooks:
-                    if pb.id not in ids_seen:
-                        cls = " commercial" if pb.commercial else ""
-                        nodes.append(f'  {pb.id}["{pb.id}"]:::pb{cls.strip()}')
-                        ids_seen.add(pb.id)
-                    for r in pb.requires:
-                        edges.append(f"  {r} --> {pb.id}")
-                mermaid_body = "\n".join(nodes + edges)
-                playbook_section += (
-                    "<section class='playbook-deps'>"
-                    f"<h4>{_h(c['playbook_deps_heading'])}</h4>"
-                    f"<p class='pb-deps-help'>{_h(c['playbook_deps_help'])}</p>"
-                    "<pre class='mermaid'>graph LR\n"
-                    f"{mermaid_body}\n"
-                    "  classDef pb fill:#eef,stroke:#446,stroke-width:1px;\n"
-                    "  classDef commercial fill:#fee,stroke:#a44,stroke-width:1px;\n"
-                    "</pre>"
-                    "</section>"
-                )
         else:
             playbook_section = f"<p class='empty'>{c['mentor_no_playbooks']}</p>"
         # When the mentor advertises a longer profile page, hyperlink
@@ -1820,10 +1791,6 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .pb-requires{{margin:.15rem 0 .35rem;font-size:.78rem;color:var(--ink-soft)}}
 .pb-requires .pb-req-link{{color:var(--accent);text-decoration:none;border-bottom:1px dotted rgba(46,79,107,.4);padding-bottom:1px}}
 .pb-requires .pb-req-link:hover{{border-bottom-style:solid}}
-.playbook-deps{{margin-top:1rem;padding:.75rem 1rem;background:rgba(46,79,107,.04);border:1px solid rgba(46,79,107,.15);border-radius:6px}}
-.playbook-deps h4{{margin:0 0 .25rem;font-size:.95rem;color:var(--accent)}}
-.pb-deps-help{{margin:0 0 .5rem;font-size:.78rem;color:var(--ink-soft);line-height:1.45}}
-.playbook-deps pre.mermaid{{margin:0;padding:0;background:transparent;border:none;font-size:.85rem}}
 .skills-details,.prompt-details{{margin:.4rem 0 0}}
 .skills-details > summary,.prompt-details > summary{{cursor:pointer;color:var(--accent);font-size:.88rem;font-family:var(--sans);padding:.25rem 0;list-style:none;user-select:none}}
 .skills-details > summary::-webkit-details-marker,.prompt-details > summary::-webkit-details-marker{{display:none}}
@@ -1976,15 +1943,6 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 </footer>
 
 </main>
-
-<script type="module">
-  // Mermaid renders the playbook-dependency DAG client-side. Loaded
-  // only when at least one `.mermaid` block exists on the page.
-  if (document.querySelector('pre.mermaid')) {{
-    const m = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
-    m.default.initialize({{ startOnLoad: true, theme: 'neutral', securityLevel: 'strict' }});
-  }}
-</script>
 
 <script>
 document.querySelectorAll('button.btn.copy').forEach(function(b) {{

@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.14.2] — 2026-05-14
+
+### Removed
+
+- **Mermaid playbook-dependency DAG dropped from the landing page.** The block wasn't rendering on mcp.helmguild.com (CDN ESM import or CSP issue) — and the per-card "Requires:" line with anchor links to depended-on playbooks is already a sufficient surfacing. Drops the `<pre class='mermaid'>` block, the on-demand Mermaid loader script, the `.playbook-deps` / `.pb-deps-help` CSS, and the `playbook_deps_heading` / `playbook_deps_help` i18n strings (EN + DE). The `requires` field on `playbook.json` + the wire envelope + the per-card "Requires:" line all stay. (#landing)
+
 ## [0.14.1] — 2026-05-14
 
 ### Added
