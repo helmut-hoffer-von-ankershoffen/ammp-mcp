@@ -1453,8 +1453,6 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "commercial_title": "Distributed only inside an active helmguild mentoring engagement via AMMP GetPluginArchive — Helmguild Mentoring License v1.0.",
         "free_label": "Free",
         "free_title": "Open + community-licensed (CC-BY-4.0 skill bodies + MIT bundled scripts). Available in the public helmguild-plugins-public marketplace.",
-        "validated_label": "Validated",
-        "validated_title": "Ships with {n} validation prompt(s). Run `ammp playbook validate <id>` to spawn a fresh mentee against the live AMMP wire and verify the playbook teaches what it claims.",
         "playbook_requires": "Requires:",
         # Mailto draft
         "form_title": "Access request form",
@@ -1512,8 +1510,6 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "commercial_title": "Wird nur innerhalb einer aktiven helmguild-Mentoring-Beziehung über AMMP GetPluginArchive verteilt — Helmguild Mentoring License v1.0.",
         "free_label": "Frei",
         "free_title": "Offen + community-lizenziert (CC-BY-4.0 Skill-Texte + MIT für gebündelte Skripte). Verfügbar im öffentlichen helmguild-plugins-public Marketplace.",
-        "validated_label": "Validiert",
-        "validated_title": "Hat {n} Validierungs-Prompt(s). `ammp playbook validate <id>` startet einen frischen Mentee am Live-AMMP-Wire und prüft, ob das Playbook tatsächlich vermittelt, was es behauptet.",
         "playbook_requires": "Voraussetzungen:",
         "form_title": "Zugangsanfrage-Formular",
     },
@@ -1800,7 +1796,6 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .pb-badge{{font-family:var(--sans);font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;border-radius:3px;padding:.05rem .35rem;cursor:help;border:1px solid;margin-left:.35rem}}
 .pb-commercial{{color:var(--accent);background:rgba(46, 79, 107, 0.08);border-color:rgba(46, 79, 107, 0.3)}}
 .pb-free{{color:#2e7d52;background:rgba(46, 125, 82, 0.08);border-color:rgba(46, 125, 82, 0.35)}}
-.pb-validated{{color:#5b3d8a;background:rgba(91, 61, 138, 0.08);border-color:rgba(91, 61, 138, 0.35)}}
 .pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
 .pb-requires{{margin:.15rem 0 .35rem;font-size:.78rem;color:var(--ink-soft)}}
 .pb-requires .pb-req-link{{color:var(--accent);text-decoration:none;border-bottom:1px dotted rgba(46,79,107,.4);padding-bottom:1px}}
