@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.14.1] — 2026-05-14
+
+### Added
+
+- **"Free" badge on community-licensed playbook cards** — symmetric with the existing "Commercial" badge. Every playbook now carries exactly one badge: `Free` (green tint) for community-licensed playbooks served via `helmguild-plugins-public`, `Commercial` (blue tint) for proprietary ones from `helmguild-plugins`. EN + DE i18n strings + a tooltip naming the licensing posture (`free_title`, `commercial_title`). CSS refactored: shared `.pb-badge` base + variant classes `.pb-commercial` / `.pb-free`. (#landing)
+
 ## [0.14.0] — 2026-05-14
 
 ### Added — playbook dependencies (`requires`)

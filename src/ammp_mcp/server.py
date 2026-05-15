@@ -1449,6 +1449,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentors_empty": "No mentors are currently available.",
         "commercial_label": "Commercial",
         "commercial_title": "Distributed only inside an active helmguild mentoring engagement via AMMP GetPluginArchive — Helmguild Mentoring License v1.0.",
+        "free_label": "Free",
+        "free_title": "Open + community-licensed (CC-BY-4.0 skill bodies + MIT bundled scripts). Available in the public helmguild-plugins-public marketplace.",
         "playbook_requires": "Requires:",
         "playbook_deps_heading": "Playbook dependencies",
         "playbook_deps_help": "Foundation playbooks point at the playbooks that depend on them. Install foundation playbooks first; their content (vault, auto-memory discipline) underpins everything downstream.",
@@ -1506,6 +1508,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "mentors_empty": "Aktuell stehen keine Mentoren zur Verfügung.",
         "commercial_label": "Kommerziell",
         "commercial_title": "Wird nur innerhalb einer aktiven helmguild-Mentoring-Beziehung über AMMP GetPluginArchive verteilt — Helmguild Mentoring License v1.0.",
+        "free_label": "Frei",
+        "free_title": "Offen + community-lizenziert (CC-BY-4.0 Skill-Texte + MIT für gebündelte Skripte). Verfügbar im öffentlichen helmguild-plugins-public Marketplace.",
         "playbook_requires": "Voraussetzungen:",
         "playbook_deps_heading": "Playbook-Abhängigkeiten",
         "playbook_deps_help": "Fundament-Playbooks zeigen auf die Playbooks, die von ihnen abhängen. Fundament zuerst installieren; ihre Inhalte (Vault, Auto-Memory-Disziplin) tragen alles, was darauf aufbaut.",
@@ -1672,14 +1676,16 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     f"<button class='btn copy' data-copy-from='#{prompt_dom_id}'>{c['mentor_prompt_copy']}</button>"
                     "</details>"
                 )
-                commercial_badge = (
-                    f"<span class='pb-commercial' title='{_h(c['commercial_title'])}'>{_h(c['commercial_label'])}</span>"
-                    if pb.commercial
-                    else ""
-                )
+                if pb.commercial:
+                    badge = (
+                        f"<span class='pb-badge pb-commercial' title='{_h(c['commercial_title'])}'>"
+                        f"{_h(c['commercial_label'])}</span>"
+                    )
+                else:
+                    badge = f"<span class='pb-badge pb-free' title='{_h(c['free_title'])}'>{_h(c['free_label'])}</span>"
                 pb_html_parts.append(
                     f"<section class='playbook' id='pb-{_h(slug)}-{_h(pb.id)}'>"
-                    f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span>{commercial_badge}</h4>"
+                    f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span>{badge}</h4>"
                     f"{pb_desc}"
                     f"{pb_requires_html}"
                     f"{skills_block}"
@@ -1807,7 +1813,9 @@ code{{font-family:var(--mono);font-size:.92em;background:rgba(0,0,0,.045);border
 .playbook{{margin-top:1rem;padding:.75rem 0 0;border-top:1px dashed var(--rule)}}
 .pb-name{{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .15rem;color:var(--ink);display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap}}
 .pb-id{{font-family:var(--mono);font-size:.72rem;color:var(--ink-soft);font-weight:400}}
-.pb-commercial{{font-family:var(--sans);font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:rgba(46, 79, 107, 0.08);border:1px solid rgba(46, 79, 107, 0.3);border-radius:3px;padding:.05rem .35rem;cursor:help}}
+.pb-badge{{font-family:var(--sans);font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;border-radius:3px;padding:.05rem .35rem;cursor:help;border:1px solid;margin-left:.35rem}}
+.pb-commercial{{color:var(--accent);background:rgba(46, 79, 107, 0.08);border-color:rgba(46, 79, 107, 0.3)}}
+.pb-free{{color:#2e7d52;background:rgba(46, 125, 82, 0.08);border-color:rgba(46, 125, 82, 0.35)}}
 .pb-desc{{margin:0 0 .35rem;color:var(--ink-soft);font-size:.9rem;line-height:1.45}}
 .pb-requires{{margin:.15rem 0 .35rem;font-size:.78rem;color:var(--ink-soft)}}
 .pb-requires .pb-req-link{{color:var(--accent);text-decoration:none;border-bottom:1px dotted rgba(46,79,107,.4);padding-bottom:1px}}
