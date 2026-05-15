@@ -1,70 +1,95 @@
-# Playbook validation — comprehension layer + behavioral layer
+# Playbook validation — three layers
 
-AMMP's playbook validation has two layers. The first one shipped in 0.15.0. The second is in flight after Helmut's "did the mentee actually install the plugin / schedule a task?" critique on 2026-05-15.
+AMMP's playbook validation has three layers, each strictly stronger than the previous.
 
-## Layer 1 — Comprehension (shipped 0.15.0, proven 4/4 on knowledge-management)
+## Layer 1 — Comprehension (shipped 0.15.0; 4/4 on knowledge-management)
 
-A fresh `claude -p` mentee gets the AMMP MCP wire pre-loaded (`.mcp.json` pointing at `mcp.helmguild.com/ammp`). For each `validation.prompts[]` entry:
+A fresh `claude -p` mentee gets the AMMP MCP wire. For each `validation.prompts[]` entry (default `mode: "comprehension"`):
 
-1. Mentee reads playbook via `GetPlaybook` + relevant `GetSkill`.
+1. Mentee reads playbook via `GetPlaybook` + `GetSkill`.
 2. Mentee answers the prompt in 4-8 sentences.
-3. Harness runs `expect` rules against the response text:
-   - `must_mention_skill`, `must_contain`, `must_contain_pattern`, `must_invoke_or_name`, `must_mention_type`.
+3. Harness asserts on response text via text rules: `must_mention_skill`, `must_contain`, `must_contain_pattern`, `must_invoke_or_name`, `must_mention_type`.
 
-**Proves:** the skill text is LLM-readable + LLM-actionable in principle.
+**Proves:** the skill text is LLM-readable + LLM-actionable.
 
-**Does not prove:**
-- The plugin actually installs and the bundled scripts actually run.
-- Any state persists after the prompt exits. The mentee says "I'd save this as a feedback memory" but doesn't write one. Says "I'd schedule a daily extraction" but doesn't register a task.
-- Mentoring left a mark.
+**Doesn't prove:** plugin installs, bundled scripts run, state persists.
 
-## Layer 2 — Behavioral (in flight)
+Script: `scripts/e2e-playbook-validation.sh`. CLI: `ammp playbook validate <id>`.
 
-Same per-prompt loop, but the mentee runs in a **persistent workdir** with the plugin **actually installed**:
+## Layer 2 — Behavioral (in flight, install path verified)
 
-1. **Setup (once per validation run):**
-   - Harness creates a persistent `<tmp>/mentee/` workdir (NOT cleaned up at end of run unless `--cleanup-on-pass`).
-   - Harness invokes `claude plugin marketplace add <mp>` + `claude plugin install <plugin>@<mp>` so the bundled scripts land at `<workdir>/.claude/plugins/<plugin>/`.
-   - Harness verifies install via `.claude/settings.local.json` (the canonical install marker — see memory:`claude_plugin_install_local_settings`).
-2. **Per behavioral prompt:**
-   - Mentee runs in the same workdir, can invoke bundled scripts via the `Bash` tool, can write files, can register scheduling artefacts.
-   - Expect rules extend with side-effect assertions:
-     - `must_create_file: "<glob-relative-to-workdir>"`
-     - `must_invoke_command: "<substring>"` (matched against the mentee's tool-call trace via `claude --json` mode)
-     - `must_create_dir: "<glob>"`
-3. **Tear-down:** archive the workdir for inspection (or rm with `--cleanup-on-pass`).
+Per behavioral prompt (`mode: "behavioral"`):
 
-**Will prove:**
-- The plugin install path works end-to-end (already covered by `e2e-claude-code-install.sh`; this folds it into validation).
-- The mentee, given a "scaffold a vault" task, actually invokes `vault-scaffold.sh` and produces the directory layout.
-- The mentee, given a "save this correction" task, actually writes a memory entry to the workdir's auto-memory location.
-- The mentee, given a "schedule a daily learning extraction" task, registers a cron / launchd / ScheduleWakeup entry.
+1. **Setup once per run:** harness invokes real `claude plugin marketplace add` + `claude plugin install --scope local`. Verifies via `.claude/settings.local.json`.
+2. **Per prompt:** mentee runs in persistent workdir with `Bash`, `Write`, `Read` tool access + AMMP MCP wire. Plugin's bundled scripts are at `<workdir>/.claude/plugins/<plugin>/scripts/`.
+3. **Side-effect assertions:** `must_create_file`, `must_create_dir` in addition to text rules.
 
-**Will not prove (deliberate scope cut):**
-- The mentee's behavior persists across sessions — that's an auto-memory + shared-vault concern, tested separately.
-- The mentee can do this against real publishing surfaces (IG / X / Veo). Behavioral mode stays filesystem-local; live-credential e2e is gated separately.
+**Proves:** plugin install works end-to-end; mentee actually invokes bundled tooling; specific files/dirs land on disk.
 
-## Prompt-level flag
+**Doesn't prove:** the playbook's stated **goal** was achieved — that the whole playbook delivers its promised outcome, not just that each skill triggered in isolation.
 
-Each prompt in `validation.prompts[]` gets an optional `mode: "comprehension" | "behavioral"` (default `"comprehension"` for back-compat with shipped 0.15.x). Behavioral prompts must declare side-effect expectations.
+Script: `scripts/e2e-playbook-validation-behavioral.sh`. CLI: `ammp playbook validate <id> --behavioral --plugin <id> --marketplace-repo <repo>`.
 
-## First behavioral prompt (target — knowledge-management)
+## Layer 3 — Goal-level (designed; building)
+
+**Helmut's bar:** "the validation is not only that some skill was triggered — but that the skills together achieve the goal of the playbook."
+
+Per-playbook ONE `validation.goal` block:
 
 ```json
-{
-  "id": "vault-scaffold-actually-runs",
-  "mode": "behavioral",
-  "task": "Scaffold a canonical knowledge vault for a brand called 'Sandra's Cooking' at /tmp/ammp-behavioral-test/sandra-vault using the bundled scaffolder. Operator slug 'sandra', brand slug 'sandras-cooking', agents 'pepe,cowork'. After running, list the files created.",
-  "expect": {
-    "must_mention_skill": "canonical-knowledge-vault",
-    "must_invoke_command": "vault-scaffold.sh",
-    "must_create_file": "/tmp/ammp-behavioral-test/sandra-vault/MEMORY.md",
-    "must_create_file": "/tmp/ammp-behavioral-test/sandra-vault/agents/pepe/Charter.md"
+"validation": {
+  "goal": {
+    "id": "operator-stack-fully-wired",
+    "task": "End-to-end multi-step task that exercises the playbook holistically...",
+    "expect": {
+      "must_create_file": [...],
+      "must_create_dir": [...],
+      "must_contain_in_file": [
+        {"path": "<rel>", "patterns": ["...", "..."]},
+        {"path": "<rel>", "patterns_min_length": 200}
+      ],
+      "consumer_check": {
+        "task": "Read this workdir cold (no AMMP wire) and answer: <question>",
+        "must_contain": ["..."]
+      }
+    }
   }
 }
 ```
 
+### The consumer-mentee — load-bearing
+
+After the producer mentee finishes, a **second fresh mentee** spawns:
+
+- **No AMMP MCP wire** — it sees only the workdir + the read-only filesystem.
+- Receives the `consumer_check.task` (e.g. "what's Sandra's privacy posture?").
+- If it can answer correctly from the workdir alone, the playbook **actually delivered**: the artefacts are consumable, not just present.
+
+This is the difference between "the scaffolder ran" and "the operator's stack now has functioning knowledge management".
+
+### New expect rules in Layer 3
+
+- `must_contain_in_file: [{path, patterns}]` — file exists AND its content contains every pattern.
+- `must_contain_in_file: [{path, patterns_min_length}]` — file's content is at least N chars long (defends against stub-only output that satisfies `must_create_file` but is empty templates).
+- `consumer_check: {task, must_contain}` — the second-mentee acceptance test.
+
+### Knowledge-management goal scenario (first target)
+
+Task: "Sandra is a new operator with 3 agents (pepe, cowork, hermes). Bootstrap her complete knowledge-management infrastructure: scaffold the vault, populate the operator profile + brand charter + privacy boundaries with real content (not stub text), wire MEMORY.md to index every doc, append a scaffold event to _shared/Changelog.md. After running, confirm in 3-4 sentences."
+
+Expect:
+- File tree matches the full Layer 1 vault schema.
+- `MEMORY.md` patterns include all 3 agent slugs + brand slug + operator slug.
+- `sandra/Privacy-Boundaries.md` content > 200 chars (not just template stub).
+- `_shared/Changelog.md` has the scaffold entry.
+- Consumer-mentee can answer "what's the brand emoji signature" + "which agents are mounted" from the vault alone.
+
+Script: `scripts/e2e-playbook-validation-goal.sh` (in flight).
+
 ## Status
 
-Layer 1: shipped + green.
-Layer 2: this doc + the harness extension. Tracked at `feedback_run_make_check_before_push` + the iteration log.
+| Layer | State | Proven |
+|---|---|---|
+| 1. Comprehension | Shipped 0.15.0 | knowledge-management 4/4; multi-channel-content-pipelines 4/5 (1 too-strict rule) |
+| 2. Behavioral | Install verified, first prompt in flight (run `bk47vchee`) | Plugin install end-to-end via `claude plugin install --scope local` succeeds |
+| 3. Goal-level | Design landed in this doc; harness in flight | — |

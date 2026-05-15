@@ -449,14 +449,28 @@ def _load_one_playbook(playbook_dir: Path, marketplaces_root: Path | None = None
                 task = p.get("task")
                 if isinstance(pid_v, str) and isinstance(task, str) and pid_v and task:
                     expect = p.get("expect")
-                    kept.append(
-                        {
-                            "id": pid_v,
-                            "task": task,
-                            "expect": expect if isinstance(expect, dict) else {},
-                        }
-                    )
+                    mode = p.get("mode")
+                    prompt_entry: dict[str, Any] = {
+                        "id": pid_v,
+                        "task": task,
+                        "expect": expect if isinstance(expect, dict) else {},
+                    }
+                    # `mode` is optional; default is "comprehension" (Layer 1).
+                    # "behavioral" routes to the Layer 2 harness with plugin
+                    # install + filesystem side-effect assertions.
+                    if isinstance(mode, str) and mode in ("comprehension", "behavioral"):
+                        prompt_entry["mode"] = mode
+                    kept.append(prompt_entry)
             validation = {"prompts": kept}
+        # `goal` is the optional Layer-3 acceptance-test object —
+        # one composite scenario per playbook, distinct from the
+        # `prompts[]` array. Carries `id`, `task`, `expect` (with
+        # extended rules: must_contain_in_file, consumer_check).
+        # Pass it through verbatim if shaped right; loader doesn't
+        # re-validate every nested key (the harness defends).
+        goal_raw = validation_raw.get("goal")
+        if isinstance(goal_raw, dict) and isinstance(goal_raw.get("task"), str) and goal_raw["task"]:
+            validation["goal"] = goal_raw
 
     return Playbook(
         id=pid,

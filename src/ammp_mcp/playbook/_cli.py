@@ -294,6 +294,26 @@ def playbook_validate(
     playbook_id: str = typer.Argument(..., help="Playbook id to validate."),
     mentor: str = typer.Option("", "--mentor", "-m", help="Mentor slug. Empty → server default."),
     as_json: bool = typer.Option(False, "--json", help="Emit raw JSON instead of a Rich summary."),
+    behavioral: bool = typer.Option(
+        False,
+        "--behavioral",
+        help="Run the Layer 2 behavioral validator (real claude plugin install + filesystem side-effect assertions) instead of Layer 1 comprehension-only.",
+    ),
+    goal: bool = typer.Option(
+        False,
+        "--goal",
+        help="Run the Layer 3 goal-level validator: producer mentee delivers the playbook's promised outcome + consumer mentee verifies the workdir is consumable cold (no AMMP wire).",
+    ),
+    plugin: str = typer.Option(
+        "",
+        "--plugin",
+        help="Plugin id for --behavioral mode (e.g. pepe-knowledge-management). Required when --behavioral.",
+    ),
+    marketplace_repo: str = typer.Option(
+        "",
+        "--marketplace-repo",
+        help="GitHub owner/repo of the marketplace for --behavioral mode. Required when --behavioral.",
+    ),
 ) -> None:
     """Run the playbook's validation prompts as a Sub-process LLM mentee.
 
@@ -352,7 +372,27 @@ def playbook_validate(
     # _cli.py lives at <repo>/src/ammp_mcp/playbook/_cli.py — 4 dirnames
     # up gets the repo root.
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    harness = os.path.join(repo_root, "scripts", "e2e-playbook-validation.sh")
+    if goal:
+        if not plugin or not marketplace_repo:
+            console.print("[red]--goal requires --plugin and --marketplace-repo[/red]")
+            raise typer.Exit(code=2)
+        if not isinstance(pb.validation, dict) or not isinstance(pb.validation.get("goal"), dict):
+            console.print(
+                f"[yellow]Playbook {clean_id!r} declares no `validation.goal` block. Nothing to verify at goal level.[/yellow]"
+            )
+            raise typer.Exit(code=2)
+        harness = os.path.join(repo_root, "scripts", "e2e-playbook-validation-goal.sh")
+    elif behavioral:
+        if not plugin or not marketplace_repo:
+            console.print(
+                "[red]--behavioral requires --plugin and --marketplace-repo (e.g. "
+                "--plugin pepe-knowledge-management --marketplace-repo "
+                "helmut-hoffer-von-ankershoffen/helmguild-plugins-public)[/red]"
+            )
+            raise typer.Exit(code=2)
+        harness = os.path.join(repo_root, "scripts", "e2e-playbook-validation-behavioral.sh")
+    else:
+        harness = os.path.join(repo_root, "scripts", "e2e-playbook-validation.sh")
     if not os.path.isfile(harness):
         console.print(
             f"[red]Validator harness not found at {harness!r}. "
@@ -367,7 +407,13 @@ def playbook_validate(
     env["AMMP_VALIDATE_PLAYBOOK"] = clean_id
     env["AMMP_VALIDATE_PLAYBOOK_NAME"] = pb.name
     env["AMMP_VALIDATE_OUTPUT_FORMAT"] = "json" if as_json else "text"
-    spec_json = _json.dumps({"prompts": prompts}, ensure_ascii=False)
+    if behavioral or goal:
+        env["AMMP_VALIDATE_PLUGIN"] = plugin
+        env["AMMP_VALIDATE_MARKETPLACE_REPO"] = marketplace_repo
+    if goal:
+        spec_json = _json.dumps({"goal": pb.validation.get("goal", {})}, ensure_ascii=False)
+    else:
+        spec_json = _json.dumps({"prompts": prompts}, ensure_ascii=False)
     proc = subprocess.run(
         ["bash", harness],
         env=env,

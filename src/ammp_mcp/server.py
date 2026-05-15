@@ -1685,20 +1685,16 @@ def _render_landing(ctx: ServerContext, lang: str = "en") -> str:
                     )
                 else:
                     badge = f"<span class='pb-badge pb-free' title='{_h(c['free_title'])}'>{_h(c['free_label'])}</span>"
-                # Validated badge appears next to Free/Commercial when the
-                # playbook declares validation prompts (it's been authored
-                # with acceptance tests for mentee learning).
-                n_prompts = len(pb.validation.get("prompts", []) or [])
-                if n_prompts > 0:
-                    validated_badge = (
-                        f"<span class='pb-badge pb-validated' title='{_h(c['validated_title'].format(n=n_prompts))}'>"
-                        f"{_h(c['validated_label'])}</span>"
-                    )
-                else:
-                    validated_badge = ""
+                # The Validated badge previously rendered when the playbook
+                # declared ≥1 validation prompt. Helmut: that overstates —
+                # "has prompts declared" is not "validated". Real Validated
+                # state is per-runtime (Validated: Cowork, Code, Copilot,
+                # OpenClaw, Hermes) and lands only after a goal-level run
+                # passes on that runtime. Until that state exists no badge
+                # renders. Re-add once the per-runtime state file ships.
                 pb_html_parts.append(
                     f"<section class='playbook' id='pb-{_h(slug)}-{_h(pb.id)}'>"
-                    f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span>{badge}{validated_badge}</h4>"
+                    f"<h4 class='pb-name'>{_h(pb.name)} <span class='pb-id'>{_h(pb.id)}</span>{badge}</h4>"
                     f"{pb_desc}"
                     f"{pb_requires_html}"
                     f"{skills_block}"

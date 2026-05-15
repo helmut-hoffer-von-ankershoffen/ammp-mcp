@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.15.3] — 2026-05-15
+
+### Removed
+
+- **Validated badge dropped from the landing page.** Helmut: "remove the Validated badges from mcp until we have real validation. Plus we must validate per type of agent: ie we will have `[validated: Cowork, Code, Copilot, OpenClaw, Hermes]` when fully done." The previous badge rendered whenever a playbook declared ≥1 validation prompt — which is "has acceptance tests authored", not "passed acceptance tests". Real Validated state is per-runtime + only earned after a Layer 3 goal-level run passes for that runtime. Re-add as `Validated: <runtime-list>` once the per-runtime state file ships. (#validation)
+
 ## [0.15.2] — 2026-05-15
 
 ### Fixed
