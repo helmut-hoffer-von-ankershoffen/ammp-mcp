@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.15.5] — 2026-05-15
+
+### Changed
+
+- **Path-collapse ASGI middleware replaces the two specific-route `//` handlers.** The new `CollapseSlashesMiddleware` (in `server.py`) runs before Starlette route matching: any URL whose path contains `2+` consecutive `/` is collapsed to a single `/` and 308-redirected to the canonical URL. Wired in `system/_cli.py:serve` via `mcp.run(middleware=[Middleware(CollapseSlashesMiddleware)])`. The previous `@mcp.custom_route(f"{prefix}//", ...)` + `@mcp.custom_route(f"{prefix}/de//", ...)` handlers are removed — the middleware supersedes them and handles every path, not just the two landing URLs. SEO consolidation: Google sometimes links with `//` (a referrer artefact); the 308 keeps link equity on the canonical URL. 4 new unit tests pin the middleware shape (HTTP redirect, clean-path pass-through, query-string preservation, non-HTTP-scope pass-through). 244 tests pass. (#seo)
+
 ## [0.15.4] — 2026-05-15
 
 ### Added

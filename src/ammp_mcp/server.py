@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -22,7 +23,8 @@ from typing import Any
 from fastmcp import Context, FastMCP
 from fastmcp.server.tasks import TaskConfig
 from starlette.requests import Request
-from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import __ammp_draft__, __version__
 from .audit import log_event, short_hash
@@ -62,6 +64,61 @@ from .playbook import (
 from .settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
+
+
+# ─── HTTP middleware: collapse `//+` in URL path → 308 canonical ──────────
+#
+# Google sometimes links to brand URLs with `//` (a referrer artefact).
+# Without normalization Starlette returns 404 + Google indexes the
+# malformed URL as duplicate content. This ASGI middleware fires
+# *before* Starlette route matching: any path with 2+ consecutive `/`
+# is collapsed to a single `/` and a 308 redirect issued. Wired in
+# `system/_cli.py:serve` via `mcp.run(middleware=[Middleware(...)])`.
+class CollapseSlashesMiddleware:
+    """ASGI middleware: 308-redirect any URL whose path has ``//+``.
+
+    Wraps the downstream ASGI app passed via ``app``. On every HTTP
+    request, inspects ``scope["path"]``; if it contains two or more
+    consecutive slashes, collapses them to a single slash and issues
+    a 308 (permanent) redirect to the canonical URL. Non-HTTP scopes
+    (lifespan, websocket) pass through unchanged.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Intercept HTTP requests, collapse ``//+`` in the path, otherwise pass through.
+
+        Args:
+            scope: The ASGI scope dict.
+            receive: ASGI receive callable.
+            send: ASGI send callable.
+        """
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        collapsed = re.sub(r"/{2,}", "/", path)
+        if collapsed == path:
+            await self.app(scope, receive, send)
+            return
+        target = collapsed
+        qs = scope.get("query_string") or b""
+        if qs:
+            target = f"{collapsed}?{qs.decode('latin-1')}"
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 308,
+                "headers": [
+                    (b"location", target.encode("latin-1")),
+                    (b"content-length", b"0"),
+                    (b"cache-control", b"public, max-age=86400"),
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": b""})
 
 
 # ─── Per-server runtime context ───────────────────────────────────────────
@@ -2542,20 +2599,11 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             headers={"Cache-Control": "public, max-age=3600"},
         )
 
-    # Trailing-slash normaliser — Google sometimes links to URLs with
-    # `//` at the end (a Google referrer artefact). Without an explicit
-    # redirect Starlette returns 404. Send `<prefix>//` → `<prefix>/`
-    # + same for the `/de//` mutation. Permanent (308) so the
-    # canonical URL gets the link equity.
-    @mcp.custom_route(f"{prefix}//", methods=["GET"])
-    async def landing_trailing_slash(_request: Request) -> Response:
-        """Strip a trailing double-slash on the EN landing URL."""
-        return RedirectResponse(url=f"{prefix}/", status_code=308)
-
-    @mcp.custom_route(f"{prefix}/de//", methods=["GET"])
-    async def landing_de_trailing_slash(_request: Request) -> Response:
-        """Strip a trailing double-slash on the DE landing URL."""
-        return RedirectResponse(url=f"{prefix}/de/", status_code=308)
+    # Trailing-slash normaliser — installed as ASGI middleware on the
+    # http_app via `mcp.run(middleware=[...])` from system/_cli.py. The
+    # generic collapse-`//` middleware supersedes the previous
+    # specific-route handlers (they covered only `<prefix>//` +
+    # `<prefix>/de//`; the middleware handles every path).
 
     @mcp.custom_route(f"{prefix}/", methods=["GET"])
     async def landing(_request: Request) -> HTMLResponse:

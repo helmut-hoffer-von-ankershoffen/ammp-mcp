@@ -1664,3 +1664,102 @@ async def test_plugin_archive_zip_round_trips_scripts_and_mcp_payload(settings: 
         for path in (f"{plugin}/mcp-server/probe.mjs", f"{plugin}/scripts/do-something.sh"):
             mode = infos[path].external_attr >> 16
             assert mode & stat.S_IXUSR, f"{path} lost its user-exec bit (mode={oct(mode)})"
+
+
+# ─── CollapseSlashesMiddleware — `//+` → `/` 308 redirect ─────────────
+
+
+async def test_collapse_slashes_middleware_redirects_double_slash_path() -> None:
+    """Any URL path with 2+ consecutive `/` 308-redirects to the canonical."""
+    from ammp_mcp.server import CollapseSlashesMiddleware
+
+    captured: dict[str, object] = {}
+    downstream_called = False
+
+    async def downstream(_scope, _receive, _send):  # type: ignore[no-untyped-def]
+        nonlocal downstream_called
+        downstream_called = True
+
+    async def receive():  # type: ignore[no-untyped-def]
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(msg):  # type: ignore[no-untyped-def]
+        captured.setdefault("messages", []).append(msg)
+
+    mw = CollapseSlashesMiddleware(downstream)
+    scope = {"type": "http", "method": "GET", "path": "/ammp//", "query_string": b""}
+    await mw(scope, receive, send)
+
+    msgs = captured["messages"]
+    assert msgs[0]["type"] == "http.response.start"
+    assert msgs[0]["status"] == 308
+    headers = dict(msgs[0]["headers"])
+    assert headers[b"location"] == b"/ammp/"
+    assert not downstream_called, "middleware should not call downstream on redirect"
+
+
+async def test_collapse_slashes_middleware_passes_through_clean_path() -> None:
+    """Single-slash paths pass through unchanged to the downstream app."""
+    from ammp_mcp.server import CollapseSlashesMiddleware
+
+    downstream_called = False
+
+    async def downstream(_scope, _receive, _send):  # type: ignore[no-untyped-def]
+        nonlocal downstream_called
+        downstream_called = True
+
+    async def receive():  # type: ignore[no-untyped-def]
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(_msg):  # type: ignore[no-untyped-def]
+        pass
+
+    mw = CollapseSlashesMiddleware(downstream)
+    scope = {"type": "http", "method": "GET", "path": "/ammp/", "query_string": b""}
+    await mw(scope, receive, send)
+    assert downstream_called, "middleware should pass through clean paths"
+
+
+async def test_collapse_slashes_middleware_preserves_query_string() -> None:
+    """Redirect carries the original query string forward."""
+    from ammp_mcp.server import CollapseSlashesMiddleware
+
+    captured: dict[str, object] = {}
+
+    async def downstream(_scope, _receive, _send):  # type: ignore[no-untyped-def]
+        pass
+
+    async def receive():  # type: ignore[no-untyped-def]
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(msg):  # type: ignore[no-untyped-def]
+        captured.setdefault("messages", []).append(msg)
+
+    mw = CollapseSlashesMiddleware(downstream)
+    scope = {"type": "http", "method": "GET", "path": "/blog//foo//", "query_string": b"x=1&y=2"}
+    await mw(scope, receive, send)
+    msgs = captured["messages"]
+    headers = dict(msgs[0]["headers"])
+    assert headers[b"location"] == b"/blog/foo/?x=1&y=2"
+
+
+async def test_collapse_slashes_middleware_ignores_non_http_scope() -> None:
+    """Non-HTTP scopes (websocket, lifespan) pass through unchanged."""
+    from ammp_mcp.server import CollapseSlashesMiddleware
+
+    downstream_called = False
+
+    async def downstream(_scope, _receive, _send):  # type: ignore[no-untyped-def]
+        nonlocal downstream_called
+        downstream_called = True
+
+    async def receive():  # type: ignore[no-untyped-def]
+        return {"type": "lifespan.startup"}
+
+    async def send(_msg):  # type: ignore[no-untyped-def]
+        pass
+
+    mw = CollapseSlashesMiddleware(downstream)
+    scope = {"type": "lifespan"}
+    await mw(scope, receive, send)
+    assert downstream_called, "non-HTTP scope should pass through"

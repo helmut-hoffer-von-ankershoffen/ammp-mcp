@@ -169,7 +169,22 @@ def serve(
     # `mount_path` is empty (local dev), the transport is at /mcp/.
     # When set to `/ammp` (production), it's at /ammp/mcp/.
     transport_path = f"{s.mount_path.rstrip('/')}/mcp/"
-    server.run(transport="http", host=host or s.host, port=port or s.port, path=transport_path)
+    # Wire the path-collapse ASGI middleware so any URL with `//+` in
+    # its path 308-redirects to the canonical single-slash form. SEO
+    # consolidation: Google sometimes links to brand URLs with `//`,
+    # and we want all link equity on the canonical URL.
+    from starlette.middleware import Middleware
+
+    from ..server import CollapseSlashesMiddleware
+
+    middleware = [Middleware(CollapseSlashesMiddleware)]
+    server.run(
+        transport="http",
+        host=host or s.host,
+        port=port or s.port,
+        path=transport_path,
+        middleware=middleware,
+    )
 
 
 # ─── ammp system setup ───────────────────────────────────────────────────
