@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning is [semver](https://semver.org/) (`MAJOR.MINOR.PATCH`).
 
+## [0.15.4] — 2026-05-15
+
+### Added
+
+- **GitHub-repo pills left of the language switcher** on the landing. Two small pills with the GitHub mark: "Reference impl" → `github.com/.../ammp-mcp`, "Free marketplace" → `github.com/.../helmguild-plugins-public`. Lets a visitor get from the landing to source without poking through helmguild.com. EN + DE i18n + CSS shipped; pills hide on viewports < 720 px to avoid overlap with the lang switcher. (#landing)
+- **Trailing-`//` redirect** for the EN + DE landing. Google sometimes links to URLs with a trailing double-slash (a referrer artefact); Starlette returned 404. New `<prefix>//` + `<prefix>/de//` handlers 308 to the canonical single-slash URL. Closes a parallel breakage to Helmut's report on www.helmguild.com — that site got its CSS paths root-relative-ed in the helmguild.com commit `7e87732`. (#landing)
+
 ## [0.15.3] — 2026-05-15
 
 ### Removed

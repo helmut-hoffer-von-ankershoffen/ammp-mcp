@@ -22,7 +22,7 @@ from typing import Any
 from fastmcp import Context, FastMCP
 from fastmcp.server.tasks import TaskConfig
 from starlette.requests import Request
-from starlette.responses import FileResponse, HTMLResponse, JSONResponse, Response
+from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 
 from . import __ammp_draft__, __version__
 from .audit import log_event, short_hash
@@ -1404,6 +1404,11 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "meta_description": "Mentor your agent — give your Claude (or other MCP-aware) agent a senior mentor it can ask. Reasons over a curated playbook library, answers grounded and cited, escalates to a human when out of depth.",
         "banner_label": "← back to helmguild.com",
         "lang_aria": "Language",
+        "repo_aria": "Open-source repositories",
+        "repo_ref_impl_label": "Reference impl",
+        "repo_ref_impl_title": "github.com/helmut-hoffer-von-ankershoffen/ammp-mcp — the AMMP reference server source",
+        "repo_free_mp_label": "Free marketplace",
+        "repo_free_mp_title": "github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public — free + community-licensed plugin marketplace",
         "h1": "Mentor your agent.",
         "lede": "Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.",
         "step1_h": "Step 1 — Request your access token",
@@ -1462,6 +1467,11 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "meta_description": "Mentor your agent — gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, eskaliert an einen Menschen, wenn es zu komplex wird.",
         "banner_label": "← zurück zu helmguild.com",
         "lang_aria": "Sprache",
+        "repo_aria": "Open-Source-Repositories",
+        "repo_ref_impl_label": "Referenzserver",
+        "repo_ref_impl_title": "github.com/helmut-hoffer-von-ankershoffen/ammp-mcp — Quellcode des AMMP-Referenzservers",
+        "repo_free_mp_label": "Freier Marketplace",
+        "repo_free_mp_title": "github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public — freier + community-lizenzierter Plugin-Marketplace",
         "h1": "Mentor your agent.",
         "lede": "Gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Der Mentor denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, und eskaliert an einen Menschen, wenn es zu komplex wird. Keine gespeicherten Verläufe. Vier Schritte.",
         "step1_h": "Schritt 1 — Zugangs-Token anfordern",
@@ -1770,6 +1780,13 @@ html,body{{margin:0;padding:0;background:linear-gradient(180deg,var(--bg-hi),var
 .lang-pill .current{{color:var(--ink);font-weight:600;padding:0 .2rem}}
 .lang-pill .sep{{color:var(--ink-soft);opacity:.5;margin:0 .15rem}}
 @media (prefers-color-scheme: dark) {{ .lang-pill{{background:rgba(20,23,31,.55)}} .lang-pill:hover{{background:rgba(20,23,31,.75)}} }}
+.repo-pills{{position:fixed;top:calc(.55rem + 2.6rem);right:calc(1rem + 70px);z-index:90;display:flex;align-items:center;gap:.5rem}}
+.repo-pill{{display:inline-flex;align-items:center;gap:.4rem;height:38px;padding:0 .8rem;background:rgba(236,230,217,.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--rule);border-radius:6px;font-size:.78rem;font-family:var(--sans);color:var(--ink-soft);text-decoration:none;letter-spacing:.02em;transition:background .18s ease,border-color .18s ease,color .18s ease;box-sizing:border-box}}
+.repo-pill:hover{{background:rgba(236,230,217,.95);border-color:var(--accent);color:var(--accent)}}
+.repo-pill svg{{flex-shrink:0;opacity:.78}}
+.repo-pill:hover svg{{opacity:1}}
+@media (max-width:720px){{.repo-pills{{display:none}}}}
+@media (prefers-color-scheme: dark){{.repo-pill{{background:rgba(20,23,31,.55)}} .repo-pill:hover{{background:rgba(20,23,31,.75)}}}}
 main{{max-width:40rem;margin:0 auto;padding:2.5rem 1.75rem 3rem}}
 h1{{font-family:var(--serif);font-weight:600;font-size:2.25rem;margin:0 0 .4rem;letter-spacing:-.01em}}
 h2{{font-family:var(--serif);font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-soft);margin:2.5rem 0 .9rem}}
@@ -1856,6 +1873,16 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 </head>
 <body>
 <a class="helmguild-banner" href="https://www.helmguild.com/{"de/" if lang == "de" else ""}">{c["banner_label"]}</a>
+<nav class="repo-pills" aria-label="{c["repo_aria"]}">
+  <a class="repo-pill" href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp" target="_blank" rel="noopener" title="{c["repo_ref_impl_title"]}">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    {c["repo_ref_impl_label"]}
+  </a>
+  <a class="repo-pill" href="https://github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public" target="_blank" rel="noopener" title="{c["repo_free_mp_title"]}">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    {c["repo_free_mp_label"]}
+  </a>
+</nav>
 <nav class="lang-pill" aria-label="{c["lang_aria"]}">
   <span class="current" aria-current="true">{lang.upper()}</span>
   <span class="sep">·</span>
@@ -2514,6 +2541,21 @@ def create_server(settings: Settings | None = None) -> FastMCP:
             media_type="application/xml; charset=utf-8",
             headers={"Cache-Control": "public, max-age=3600"},
         )
+
+    # Trailing-slash normaliser — Google sometimes links to URLs with
+    # `//` at the end (a Google referrer artefact). Without an explicit
+    # redirect Starlette returns 404. Send `<prefix>//` → `<prefix>/`
+    # + same for the `/de//` mutation. Permanent (308) so the
+    # canonical URL gets the link equity.
+    @mcp.custom_route(f"{prefix}//", methods=["GET"])
+    async def landing_trailing_slash(_request: Request) -> Response:
+        """Strip a trailing double-slash on the EN landing URL."""
+        return RedirectResponse(url=f"{prefix}/", status_code=308)
+
+    @mcp.custom_route(f"{prefix}/de//", methods=["GET"])
+    async def landing_de_trailing_slash(_request: Request) -> Response:
+        """Strip a trailing double-slash on the DE landing URL."""
+        return RedirectResponse(url=f"{prefix}/de/", status_code=308)
 
     @mcp.custom_route(f"{prefix}/", methods=["GET"])
     async def landing(_request: Request) -> HTMLResponse:
