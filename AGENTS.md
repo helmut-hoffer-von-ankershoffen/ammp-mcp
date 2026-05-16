@@ -151,6 +151,18 @@ Release order is fixed:
 
 The release workflow fails as a whole if either the GitHub release or the PyPI publish fails — you cannot end up with a tag on GitHub but no PyPI artefact, or with a PyPI artefact and a broken GitHub release. PyPI badge in the README points at `https://pypi.org/project/ammp/`.
 
+### Tag-and-push sequence
+
+The release workflow's gate-verification step expects the branch workflows (`Audit` / `SonarCloud` / `CodeQL` / `CI`) to have reported `success` on the tag commit. GitHub fires those workflows on `push: branches: [main]`, **not** on tag pushes, so the tag commit must be the tip of main at the moment branch workflows run. The pre-push hook can auto-generate a `Sync uv.lock` commit, which becomes the new tip of main — if you tag *before* pushing, the tag points at the bump commit and the lock-sync commit is what main's branch workflows actually run on. The gate step times out polling for runs on the tag commit and aborts the release (this is what bit v0.15.4 and v0.15.5).
+
+The safe sequence:
+
+1. Edit `pyproject.toml`, `CHANGELOG.md`, `src/ammp_mcp/__init__.py`. Commit as `Bump ammp-mcp 0.X.Y: …`.
+2. `git push origin main`. If the pre-push hook auto-syncs `uv.lock`, commit that and push again. Wait for the branch workflows on main's tip to land green.
+3. `git tag -a v0.X.Y -m "v0.X.Y — …" <tip-of-main>` and `git push origin v0.X.Y`. The Release workflow fires on the tag, the gate step finds the green branch runs on the same SHA, and the release proceeds.
+
+If you forget step 2 (push before tagging) and the lock-sync lands on main after the tag, the gate step now has a **safety-net fallback**: it accepts gate runs on `main` if main descends from the tag commit *and* the diff is limited to release-housekeeping files (`uv.lock`, `CHANGELOG.md`, `src/*/__init__.py`). Any non-housekeeping change in the descendant rejects the fallback, so the gate cannot rubber-stamp unrelated commits.
+
 ## Protocol additions — sweep all surfaces
 
 Adding a new MCP tool / operation (e.g. `EscalateToHumanMentor`, `GetEscalation`, `GetSystemInfo`) is *not done* until all of these are updated in the same change set:

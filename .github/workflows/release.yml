@@ -126,48 +126,93 @@ jobs:
           SHA="${GITHUB_SHA}"
           REPO="${GITHUB_REPOSITORY}"
 
-          # Each required workflow runs once per push to main; the
-          # release tag's commit is the same SHA, so we can fetch its
-          # run conclusion via the workflow-runs API and refuse to
-          # ship if any required gate isn't `success`.
+          # Build the list of SHAs we'll accept gate runs from.
+          # Primary: the tag commit itself ($SHA) — the natural and strictest case.
+          # Fallback: tip of `main`, but only if it's a strict descendant of $SHA
+          # AND the diff is limited to release-housekeeping files. This handles
+          # the common case where a pre-push `uv.lock` sync commit becomes
+          # main's new tip after the tag is pushed, so the branch-event
+          # gate workflows fire on the descendant, not on $SHA.
+          MAIN_HEAD="$(gh api "repos/${REPO}/branches/main" --jq .commit.sha)"
+          VALIDATING_SHAS=("$SHA")
+          if [[ "$MAIN_HEAD" != "$SHA" ]]; then
+            COMPARE_JSON="$(gh api "repos/${REPO}/compare/${SHA}...${MAIN_HEAD}" 2>/dev/null || echo '{}')"
+            REL_STATUS="$(echo "$COMPARE_JSON" | jq -r '.status // empty')"
+            if [[ "$REL_STATUS" == "ahead" || "$REL_STATUS" == "identical" ]]; then
+              OFFENDERS="$(echo "$COMPARE_JSON" \
+                | jq -r '[.files[]?.filename] | map(select(test("^(uv\\.lock|CHANGELOG\\.md|src/[^/]+/__init__\\.py)$") | not)) | join(",")')"
+              if [[ -z "$OFFENDERS" ]]; then
+                echo "[gates] main head ${MAIN_HEAD:0:7} is a release-housekeeping descendant of ${SHA:0:7} — adding as fallback gate validator."
+                VALIDATING_SHAS+=("$MAIN_HEAD")
+              else
+                echo "[gates] main head ${MAIN_HEAD:0:7} descends from ${SHA:0:7} but with non-housekeeping changes ($OFFENDERS) — fallback rejected; will only validate against $SHA."
+              fi
+            fi
+          fi
+
           REQUIRED=(Audit SonarCloud CodeQL CI)
           FAIL=0
           for NAME in "${REQUIRED[@]}"; do
-            # Poll: when a tag and a main push land near-simultaneously,
-            # the gate workflow may still be running. Wait up to ~15 min
-            # for it to finish before deciding.
-            for attempt in $(seq 1 90); do
-              CONCLUSION="$(gh api -X GET "repos/${REPO}/actions/runs" \
-                  -f "head_sha=${SHA}" -f "per_page=50" \
-                  --jq ".workflow_runs[] | select(.name==\"${NAME}\") | .conclusion" \
-                  | head -n1 || echo "")"
-              STATUS="$(gh api -X GET "repos/${REPO}/actions/runs" \
-                  -f "head_sha=${SHA}" -f "per_page=50" \
-                  --jq ".workflow_runs[] | select(.name==\"${NAME}\") | .status" \
-                  | head -n1 || echo "")"
-              # Empty conclusion + empty status = no run for this SHA yet.
-              # Empty conclusion + in_progress/queued = wait.
-              if [[ -z "$STATUS" || "$STATUS" == "in_progress" || "$STATUS" == "queued" || "$STATUS" == "waiting" || "$STATUS" == "pending" ]]; then
-                echo "[$NAME] status='$STATUS' — waiting (attempt $attempt/90)…"
-                sleep 10
-                continue
+            GATE_OK=0
+            FINAL_CONCLUSION=""
+            FINAL_STATUS=""
+            FINAL_VSHA=""
+            for VSHA in "${VALIDATING_SHAS[@]}"; do
+              # Poll: when a tag and a main push land near-simultaneously,
+              # the gate workflow may still be running. Wait up to ~15 min
+              # for it to finish before deciding. Short-circuit to the next
+              # candidate SHA after ~1 min of "no run at all" if we have one,
+              # since a workflow that hasn't started after a minute on the
+              # primary SHA almost certainly won't (the branch-push event
+              # fired on the descendant).
+              NO_RUN_COUNT=0
+              for attempt in $(seq 1 90); do
+                CONCLUSION="$(gh api -X GET "repos/${REPO}/actions/runs" \
+                    -f "head_sha=${VSHA}" -f "per_page=50" \
+                    --jq ".workflow_runs[] | select(.name==\"${NAME}\") | .conclusion" \
+                    | head -n1 || echo "")"
+                STATUS="$(gh api -X GET "repos/${REPO}/actions/runs" \
+                    -f "head_sha=${VSHA}" -f "per_page=50" \
+                    --jq ".workflow_runs[] | select(.name==\"${NAME}\") | .status" \
+                    | head -n1 || echo "")"
+                if [[ -z "$STATUS" ]]; then
+                  NO_RUN_COUNT=$((NO_RUN_COUNT+1))
+                  if [[ $NO_RUN_COUNT -ge 6 && ${#VALIDATING_SHAS[@]} -gt 1 && "$VSHA" == "${VALIDATING_SHAS[0]}" ]]; then
+                    echo "[$NAME @ ${VSHA:0:7}] no run after $NO_RUN_COUNT idle attempts — trying fallback validator."
+                    break
+                  fi
+                  echo "[$NAME @ ${VSHA:0:7}] no run yet (attempt $attempt/90)…"
+                  sleep 10
+                  continue
+                fi
+                if [[ "$STATUS" == "in_progress" || "$STATUS" == "queued" || "$STATUS" == "waiting" || "$STATUS" == "pending" ]]; then
+                  echo "[$NAME @ ${VSHA:0:7}] status='$STATUS' — waiting (attempt $attempt/90)…"
+                  sleep 10
+                  continue
+                fi
+                break
+              done
+              FINAL_CONCLUSION="$CONCLUSION"
+              FINAL_STATUS="$STATUS"
+              FINAL_VSHA="$VSHA"
+              if [[ "$CONCLUSION" == "success" ]]; then
+                echo "[$NAME @ ${VSHA:0:7}] ✓ success"
+                GATE_OK=1
+                break
               fi
-              break
             done
-            if [[ "$CONCLUSION" != "success" ]]; then
+            if [[ "$GATE_OK" != "1" ]]; then
               echo "::error title=Quality gate '$NAME' did not pass::"\
-                   "Workflow '$NAME' on commit $SHA reported conclusion='$CONCLUSION' (status='$STATUS'). "\
+                   "Workflow '$NAME' on commit ${FINAL_VSHA:-$SHA} reported conclusion='${FINAL_CONCLUSION}' (status='${FINAL_STATUS}'). "\
                    "Fix the gate on main before tagging this release."
               FAIL=1
-            else
-              echo "[$NAME] ✓ success"
             fi
           done
           if [[ "$FAIL" != "0" ]]; then
             echo "::error::One or more required quality gates failed for $SHA. Release aborted."
             exit 1
           fi
-          echo "All required quality gates green for $SHA — proceeding with release."
+          echo "All required quality gates green — proceeding with release."
 
   # -----------------------------------------------------------------------
   build:
