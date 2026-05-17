@@ -18,6 +18,8 @@ import pytest
 from ammp_mcp.settings import Settings
 from ammp_mcp.system._setup_service import bootstrap_ammp_dir, bootstrap_marketplaces
 
+pytestmark = pytest.mark.integration
+
 
 def _make_git_repo(path: Path) -> None:
     """Init a one-commit git repo at `path` to stand in for a marketplace."""
