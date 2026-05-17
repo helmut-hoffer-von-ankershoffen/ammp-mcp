@@ -26,6 +26,7 @@ permissions:
   contents: write          # for `gh pr merge`
   pull-requests: write     # for review submission + auto-merge enable
   issues: write            # comment fallback when reviews aren't applicable
+  id-token: write          # OIDC token mint for anthropics/claude-code-action
 
 jobs:
   review:
