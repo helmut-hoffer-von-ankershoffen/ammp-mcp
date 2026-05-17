@@ -37,7 +37,7 @@ In another shell, confirm the server advertises its capability:
 curl -s http://127.0.0.1:8765/.well-known/agent.json | python -m json.tool
 ```
 
-You should see a JSON document naming the loaded mentors, advertising the AMMP draft version, and listing the six MCP operations (`ListMentors` + the five AMMP §5 Mentoring-track operations).
+You should see a JSON document naming the loaded mentors, advertising the AMMP draft version, and listing the 11 MCP operations the server exposes: `ListMentors`, `ListPlaybooks`, `GetPlaybook`, `GetSkill`, `SearchPlaybooks`, `AskMentor`, `EscalateToHuman`, `EscalateToHumanMentor`, `GetEscalation`, `GetPluginArchive`, and `GetSystemInfo`.
 
 ---
 
