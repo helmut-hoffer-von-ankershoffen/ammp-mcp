@@ -29,9 +29,15 @@ COPY --from=ghcr.io/astral-sh/uv:0.11.12 /uv /uvx /bin/
 # Bytecode-compile during install. Use the system interpreter (no
 # `uv python install`). Copy mode so the venv survives cross-stage
 # COPY into the runtime image (symlinks wouldn't).
+#
+# UV_PROJECT_ENVIRONMENT builds the venv directly at its final runtime
+# path. Console-script shebangs are absolute and are NOT rewritten on a
+# cross-stage COPY — building at /opt/ammp-venv keeps `ammp`'s shebang
+# valid in the runtime image.
 ENV UV_PYTHON_DOWNLOADS=never \
     UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/ammp-venv
 
 WORKDIR /app
 
@@ -70,7 +76,9 @@ EOT
 
 # Drop the builder's venv in immutable mode. Owned by root, world-
 # readable; the `ammp` user reads through PATH but cannot modify it.
-COPY --from=builder --chown=root:root --chmod=755 /app/.venv /opt/ammp-venv
+# The builder creates it at /opt/ammp-venv directly (UV_PROJECT_ENVIRONMENT),
+# so the copied console-script shebangs already resolve in this stage.
+COPY --from=builder --chown=root:root --chmod=755 /opt/ammp-venv /opt/ammp-venv
 
 ENV PATH="/opt/ammp-venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
