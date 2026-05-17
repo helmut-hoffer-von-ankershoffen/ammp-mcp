@@ -635,10 +635,17 @@ def test_playbook_validate_missing_harness(
     payload["validation"] = {"prompts": [{"id": "p1", "task": "x", "expect": {}}]}
     pb_meta.write_text(_json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
-    # Force the harness to look absent regardless of the real filesystem.
+    # Force only the validator harness script to look absent. A blanket
+    # os.path.isfile patch also breaks mentor.json discovery on Python 3.14,
+    # where pathlib.Path.is_file() now delegates to os.path.isfile.
     import os
 
-    monkeypatch.setattr(os.path, "isfile", lambda p: False)
+    _real_isfile = os.path.isfile
+    monkeypatch.setattr(
+        os.path,
+        "isfile",
+        lambda p: False if "e2e-playbook-validation" in str(p) else _real_isfile(p),
+    )
     r = runner.invoke(app, ["playbook", "validate", "intro"])
     assert r.exit_code == 2
     assert "harness not found" in r.output.lower()
