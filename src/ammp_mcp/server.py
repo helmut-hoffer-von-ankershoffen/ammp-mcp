@@ -353,8 +353,8 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
 
     Returns the mentor's playbooks (areas of practice). Each playbook
     carries its name + description + skill summaries (id + title +
-    one-line summary, no bodies). Fetch a full playbook's skill
-    bodies with ``GetPlaybook(id)``, or one skill's body with
+    one-line summary, no bodies). ``GetPlaybook(id)`` returns the same
+    summaries scoped to one playbook; fetch a skill's full body with
     ``GetSkill(playbook_id, id)``.
 
     Args:
@@ -400,9 +400,10 @@ def _handle_list_playbooks(ctx: ServerContext, mentor: str, api_key: str | None)
 def _handle_get_playbook(ctx: ServerContext, playbook_id: str, mentor: str, api_key: str | None) -> dict[str, Any]:
     """Handle the ``GetPlaybook`` MCP tool call (AMMP §5.2).
 
-    Returns one playbook with the full body of every skill
-    in it — a single round-trip for everything the mentee needs about
-    one area of practice.
+    Returns one playbook's identity plus a summary of every skill in
+    it (id, title, summary — no body). Mentees fetch a specific
+    skill's body with ``GetSkill``; bodies are split out so a large
+    corpus stays within the mentee runtime's per-tool token budget.
 
     Args:
         ctx: The per-request server context.
@@ -2214,7 +2215,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     @mcp.tool
     def GetPlaybook(id: str, mentor: str = "") -> dict[str, Any]:
-        """Retrieve one playbook with the full body of every skill inside it."""
+        """Retrieve one playbook: its identity plus a summary (id, title, summary) of every skill in it. Skill bodies are not included — fetch a body with GetSkill — so a large corpus stays within the mentee's per-tool token budget."""
         return _handle_get_playbook(ctx, id, mentor, None)
 
     @mcp.tool

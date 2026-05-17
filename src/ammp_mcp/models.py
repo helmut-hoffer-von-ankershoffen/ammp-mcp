@@ -80,8 +80,8 @@ class ListPlaybooksResponse(BaseModel):
 
     Returns the mentor's playbooks (areas of practice) — each carries
     its name + description + skill summaries (title only, no bodies).
-    Fetch a full skill body with ``GetSkill``; fetch a whole playbook
-    (descriptions + every skill body) with ``GetPlaybook``.
+    Fetch a full skill body with ``GetSkill``; fetch one playbook's
+    identity + every skill summary with ``GetPlaybook``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -99,7 +99,8 @@ class PlaybookEntry(BaseModel):
     (id/title/summary). Full skill bodies are intentionally omitted
     to keep the envelope small enough for transports with
     response-size limits — fetch the body for a specific skill via
-    ``GetSkill``, or the whole playbook via ``GetPlaybook``.
+    ``GetSkill``. ``GetPlaybook`` returns the same summaries scoped to
+    a single playbook.
     """
 
     model_config = ConfigDict(extra="forbid")
