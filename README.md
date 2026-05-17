@@ -379,6 +379,7 @@ All settings are env vars prefixed `AMMP_`. The server auto-loads `<AMMP_DIR>/co
 | `AMMP_PUBLIC_URL` | `http://127.0.0.1:8765` | Advertised in capability JSON. Set to `https://mcp.helmguild.com/ammp` in production (include any mount prefix). |
 | `AMMP_MOUNT_PATH` | `""` | URL prefix under which every route lives. Empty = root. Production uses `/ammp` so the host can serve sibling MCP servers later. |
 | `AMMP_MENTORS_ROOT` | `<AMMP_DIR>/mentors` | One subdir per mentor. Override to point at an Obsidian vault or other curated location. |
+| `AMMP_MARKETPLACE_REPOS` | helmguild reference marketplaces | JSON map of marketplace name → git URL. `ammp setup` (and `ammp serve`'s bootstrap) clones any marketplace the corpus references but is missing from `<AMMP_DIR>/marketplaces/`. |
 | `AMMP_DEFAULT_MENTOR` | `example` | Used when a mentee omits `mentor`. |
 | `AMMP_MENTEES_FILE` | `<AMMP_DIR>/mentees.json` | The allowlist. |
 | `AMMP_REQUIRE_AUTH` | `false` | Flip on for production. |
