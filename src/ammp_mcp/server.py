@@ -1466,6 +1466,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "repo_ref_impl_title": "github.com/helmut-hoffer-von-ankershoffen/ammp-mcp — the AMMP reference server source",
         "repo_free_mp_label": "Free Plugins",
         "repo_free_mp_title": "github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public — free + community-licensed plugin marketplace",
+        "repo_ref_impl_label_short": "Code",
+        "repo_free_mp_label_short": "Plugins",
         "h1": "Mentor your agent.",
         "lede": "Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.",
         "step1_h": "Step 1 — Request your access token",
@@ -1529,6 +1531,8 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "repo_ref_impl_title": "github.com/helmut-hoffer-von-ankershoffen/ammp-mcp — Quellcode des AMMP-Referenzservers",
         "repo_free_mp_label": "Freie Plugins",
         "repo_free_mp_title": "github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public — freier + community-lizenzierter Plugin-Marketplace",
+        "repo_ref_impl_label_short": "Code",
+        "repo_free_mp_label_short": "Plugins",
         "h1": "Mentor your agent.",
         "lede": "Gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Der Mentor denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, und eskaliert an einen Menschen, wenn es zu komplex wird. Keine gespeicherten Verläufe. Vier Schritte.",
         "step1_h": "Schritt 1 — Zugangs-Token anfordern",
@@ -1842,7 +1846,8 @@ html,body{{margin:0;padding:0;background:linear-gradient(180deg,var(--bg-hi),var
 .repo-pill:hover{{background:rgba(236,230,217,.95);border-color:var(--accent);color:var(--accent)}}
 .repo-pill svg{{flex-shrink:0;opacity:.78}}
 .repo-pill:hover svg{{opacity:1}}
-@media (max-width:720px){{.repo-pills{{display:none}}}}
+.repo-pill .pill-short{{display:none}}
+@media (max-width:720px){{.repo-pill .pill-full{{display:none}}.repo-pill .pill-short{{display:inline}}}}
 @media (prefers-color-scheme: dark){{.repo-pill{{background:rgba(20,23,31,.55)}} .repo-pill:hover{{background:rgba(20,23,31,.75)}}}}
 main{{max-width:40rem;margin:0 auto;padding:2.5rem 1.75rem 3rem}}
 h1{{font-family:var(--serif);font-weight:600;font-size:2.25rem;margin:0 0 .4rem;letter-spacing:-.01em}}
@@ -1933,11 +1938,11 @@ footer a{{color:var(--ink-soft);border-bottom-color:var(--rule)}}
 <nav class="repo-pills" aria-label="{c["repo_aria"]}">
   <a class="repo-pill" href="https://github.com/helmut-hoffer-von-ankershoffen/ammp-mcp" target="_blank" rel="noopener" title="{c["repo_ref_impl_title"]}">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-    {c["repo_ref_impl_label"]}
+    <span class="pill-full">{c["repo_ref_impl_label"]}</span><span class="pill-short">{c["repo_ref_impl_label_short"]}</span>
   </a>
   <a class="repo-pill" href="https://github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public" target="_blank" rel="noopener" title="{c["repo_free_mp_title"]}">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-    {c["repo_free_mp_label"]}
+    <span class="pill-full">{c["repo_free_mp_label"]}</span><span class="pill-short">{c["repo_free_mp_label_short"]}</span>
   </a>
 </nav>
 <nav class="lang-pill" aria-label="{c["lang_aria"]}">
