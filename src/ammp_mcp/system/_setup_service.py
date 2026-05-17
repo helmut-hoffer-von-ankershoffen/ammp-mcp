@@ -180,9 +180,7 @@ def bootstrap_marketplaces(s: Settings, *, quiet: bool = False) -> bool:
             if not quiet:
                 console.print(f"{_ICON_OK} Cloned marketplace [bold]{name}[/bold] ← {url}")
         else:
-            logger.warning(
-                "marketplace %r clone failed (%s): %s", name, url, result.stderr.strip()[:200]
-            )
+            logger.warning("marketplace %r clone failed (%s): %s", name, url, result.stderr.strip()[:200])
     return cloned
 
 
