@@ -1462,9 +1462,9 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "banner_label": "← back to helmguild.com",
         "lang_aria": "Language",
         "repo_aria": "Open-source repositories",
-        "repo_ref_impl_label": "Reference impl",
+        "repo_ref_impl_label": "Reference server",
         "repo_ref_impl_title": "github.com/helmut-hoffer-von-ankershoffen/ammp-mcp — the AMMP reference server source",
-        "repo_free_mp_label": "Free marketplace",
+        "repo_free_mp_label": "Free Plugins",
         "repo_free_mp_title": "github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public — free + community-licensed plugin marketplace",
         "h1": "Mentor your agent.",
         "lede": "Give your Claude (or other MCP-aware) agent a senior mentor it can ask. The mentor reasons over a curated playbook library, answers grounded and cited, and escalates to a human when it's out of its depth. No kept history. Four steps.",
@@ -1527,7 +1527,7 @@ _LANDING_COPY: dict[str, dict[str, str]] = {
         "repo_aria": "Open-Source-Repositories",
         "repo_ref_impl_label": "Referenzserver",
         "repo_ref_impl_title": "github.com/helmut-hoffer-von-ankershoffen/ammp-mcp — Quellcode des AMMP-Referenzservers",
-        "repo_free_mp_label": "Freier Marketplace",
+        "repo_free_mp_label": "Freie Plugins",
         "repo_free_mp_title": "github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public — freier + community-lizenzierter Plugin-Marketplace",
         "h1": "Mentor your agent.",
         "lede": "Gib deinem Claude (oder einem anderen MCP-fähigen Agenten) einen erfahrenen Mentor, den er befragen kann. Der Mentor denkt anhand einer kuratierten Playbook-Bibliothek nach, antwortet fundiert und mit Quellenangaben, und eskaliert an einen Menschen, wenn es zu komplex wird. Keine gespeicherten Verläufe. Vier Schritte.",
@@ -1837,7 +1837,7 @@ html,body{{margin:0;padding:0;background:linear-gradient(180deg,var(--bg-hi),var
 .lang-pill .current{{color:var(--ink);font-weight:600;padding:0 .2rem}}
 .lang-pill .sep{{color:var(--ink-soft);opacity:.5;margin:0 .15rem}}
 @media (prefers-color-scheme: dark) {{ .lang-pill{{background:rgba(20,23,31,.55)}} .lang-pill:hover{{background:rgba(20,23,31,.75)}} }}
-.repo-pills{{position:fixed;top:calc(.55rem + 2.6rem);right:calc(1rem + 70px);z-index:90;display:flex;align-items:center;gap:.5rem}}
+.repo-pills{{position:fixed;top:calc(.55rem + 2.6rem);right:calc(1rem + 108px);z-index:90;display:flex;align-items:center;gap:.5rem}}
 .repo-pill{{display:inline-flex;align-items:center;gap:.4rem;height:38px;padding:0 .8rem;background:rgba(236,230,217,.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--rule);border-radius:6px;font-size:.78rem;font-family:var(--sans);color:var(--ink-soft);text-decoration:none;letter-spacing:.02em;transition:background .18s ease,border-color .18s ease,color .18s ease;box-sizing:border-box}}
 .repo-pill:hover{{background:rgba(236,230,217,.95);border-color:var(--accent);color:var(--accent)}}
 .repo-pill svg{{flex-shrink:0;opacity:.78}}
