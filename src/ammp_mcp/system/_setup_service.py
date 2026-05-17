@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import secrets
 import shutil
+import subprocess
 from pathlib import Path
 
 import typer
@@ -29,6 +31,7 @@ from ..mentor import Mentor, load_mentors
 from ..settings import Settings
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 _ICON_OK = "[green]✓[/green]"
 _VALID_BACKEND_KINDS = {"openclaw", "anthropic", "stub"}
@@ -63,10 +66,11 @@ def bootstrap_ammp_dir(s: Settings, *, quiet: bool = False) -> bool:
     needs_dir = not ammp_dir.exists()
     needs_example = mentors_is_default and not (mentors_root / "example").is_dir()
     needs_config = not config_env.exists()
-    if not (needs_dir or needs_example or needs_config):
-        return False
 
-    ammp_dir.mkdir(parents=True, exist_ok=True)
+    changed = False
+    if needs_dir or needs_example or needs_config:
+        ammp_dir.mkdir(parents=True, exist_ok=True)
+        changed = True
 
     if needs_example:
         mentors_root.mkdir(parents=True, exist_ok=True)
@@ -94,7 +98,90 @@ def bootstrap_ammp_dir(s: Settings, *, quiet: bool = False) -> bool:
         if not quiet:
             console.print(f"{_ICON_OK} Wrote [bold]{config_env}[/bold]")
 
-    return True
+    # Marketplace caches hold the skill bodies. Clone any the corpus
+    # references that aren't on disk yet — independent of the scaffold
+    # above, since a fully-configured host can still be missing them.
+    if bootstrap_marketplaces(s, quiet=quiet):
+        changed = True
+
+    return changed
+
+
+def _referenced_marketplaces(mentors_root: Path) -> set[str]:
+    """Collect marketplace names referenced by `plugin` fields in the corpus.
+
+    Walks every ``<mentor>/playbooks/<playbook>/playbook.json`` under
+    ``mentors_root`` and extracts the ``@<marketplace>`` suffix of each
+    ``plugin`` reference.
+
+    Args:
+        mentors_root: Root directory holding one subdirectory per mentor.
+
+    Returns:
+        The distinct set of referenced marketplace names (may be empty).
+    """
+    names: set[str] = set()
+    for pb_json in sorted(mentors_root.glob("*/playbooks/*/playbook.json")):
+        try:
+            data = json.loads(pb_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        plugin = data.get("plugin", "")
+        if isinstance(plugin, str) and "@" in plugin:
+            names.add(plugin.rsplit("@", 1)[1])
+    return names
+
+
+def bootstrap_marketplaces(s: Settings, *, quiet: bool = False) -> bool:
+    """Clone marketplaces the corpus references into ``marketplaces_root``.
+
+    Idempotent: a marketplace already on disk is left untouched. A
+    referenced marketplace with no URL in ``s.marketplace_repos``, or a
+    clone that fails (private repo without auth, no network), logs a
+    warning and is skipped — the server still boots and falls back to
+    local skills for that playbook.
+
+    Args:
+        s: Settings supplying ``mentors_root``, ``marketplaces_root`` and
+            the ``marketplace_repos`` name → URL map.
+        quiet: When True, suppress the per-clone success line; warnings
+            are logged regardless.
+
+    Returns:
+        ``True`` when at least one marketplace was cloned.
+    """
+    referenced = _referenced_marketplaces(s.mentors_root)
+    git_exe = shutil.which("git")
+    cloned = False
+    for name in sorted(referenced):
+        dest = s.marketplaces_root / name
+        if dest.exists():
+            continue
+        url = s.marketplace_repos.get(name)
+        if not url:
+            logger.warning(
+                "marketplace %r is referenced by the corpus but absent from "
+                "AMMP_MARKETPLACE_REPOS — its skill bodies will be unavailable",
+                name,
+            )
+            continue
+        if git_exe is None:
+            logger.warning("git not found on PATH — cannot clone marketplace %r", name)
+            continue
+        s.marketplaces_root.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            [git_exe, "clone", "--depth", "1", url, str(dest)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            cloned = True
+            if not quiet:
+                console.print(f"{_ICON_OK} Cloned marketplace [bold]{name}[/bold] ← {url}")
+        else:
+            logger.warning("marketplace %r clone failed (%s): %s", name, url, result.stderr.strip()[:200])
+    return cloned
 
 
 def _setup_print_header(s: Settings) -> None:

@@ -188,6 +188,21 @@ class Settings(BaseSettings):
             "fetch / refresh automatically."
         ),
     )
+    marketplace_repos: dict[str, str] = Field(
+        default_factory=lambda: {
+            "helmguild-plugins": "https://github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins",
+            "helmguild-plugins-public": "https://github.com/helmut-hoffer-von-ankershoffen/helmguild-plugins-public",
+        },
+        description=(
+            "Marketplace name → git clone URL. `ammp setup` (and `ammp serve`'s "
+            "auto-bootstrap) clones every marketplace a loaded playbook references "
+            "via its `plugin` field into `marketplaces_root` when missing — so a "
+            "fresh host has skill bodies without a manual clone. Defaults to the "
+            "helmguild reference marketplaces; operators serving their own corpus "
+            "override via `AMMP_MARKETPLACE_REPOS` (a JSON object). A referenced "
+            "marketplace absent from this map is skipped with a warning."
+        ),
+    )
     default_mentor: str = Field(
         default="example", description="Mentor slug used when a mentee omits the `mentor` argument."
     )
