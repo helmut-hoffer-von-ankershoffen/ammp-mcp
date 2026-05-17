@@ -69,9 +69,15 @@ LABEL org.opencontainers.image.title="ammp-mcp" \
 # Non-root user with a real home so AMMP_DIR=$HOME/.ammp works.
 # `nologin` shell + system uid range — the user is for running the
 # server, not for interactive use.
+#
+# Create AMMP_DIR owned by `ammp` *before* the VOLUME directive below:
+# Docker creates an undeclared VOLUME mountpoint as root, which would
+# leave `ammp serve`'s bootstrap unable to write mentors/ on first run.
 RUN <<EOT
 groupadd --system --gid 1000 ammp
 useradd --system --uid 1000 --gid 1000 --home-dir /home/ammp --create-home --shell /usr/sbin/nologin ammp
+mkdir -p /home/ammp/.ammp
+chown ammp:ammp /home/ammp/.ammp
 EOT
 
 # Drop the builder's venv in immutable mode. Owned by root, world-
