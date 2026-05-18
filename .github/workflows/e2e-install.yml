@@ -51,7 +51,7 @@ jobs:
     # without an immediate secret-setup step.
     if: ${{ vars.AMMP_E2E_ENABLED == 'true' || github.event_name == 'workflow_dispatch' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Node (for claude CLI + bundled stdio MCP smoke test)
         uses: actions/setup-node@v4
