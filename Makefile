@@ -99,9 +99,13 @@ dist_smoke_test: dist ## Build, then install the wheel into a throwaway venv and
 
 audit: audit_vulnerabilities audit_licenses audit_sbom  ## Run the full audit pipeline (matches audit.yml).
 
-audit_vulnerabilities: ## pip-audit + fail-on-any-vulnerability (writes reports/vulnerabilities.json).
+audit_vulnerabilities: ## pip-audit + policy enforcement (writes reports/vulnerabilities.json).
 	mkdir -p reports
-	uv run --with pip-audit -- pip-audit \
+	# pip-audit exits non-zero on any finding; we always want the JSON
+	# written and the policy step to run, so the report-writing call
+	# tolerates the exit and the policy script (which honours the
+	# IGNORED_VULNS list) is what actually fails CI.
+	-uv run --with pip-audit -- pip-audit \
 		--skip-editable \
 		--format json \
 		--output reports/vulnerabilities.json
