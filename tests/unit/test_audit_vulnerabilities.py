@@ -57,9 +57,7 @@ def test_ignored_vuln_is_filtered_and_recorded() -> None:
     """A vuln whose ID is in IGNORED_VULNS is excluded from `failing` and noted in `ignored`."""
     av = _load()
     ignored_id = next(iter(av.IGNORED_VULNS))
-    failing, ignored = av.evaluate(
-        _report({"name": "pyjwt", "version": "2.12.1", "vulns": [{"id": ignored_id}]})
-    )
+    failing, ignored = av.evaluate(_report({"name": "pyjwt", "version": "2.12.1", "vulns": [{"id": ignored_id}]}))
     assert failing == []
     assert ignored == [("pyjwt", "2.12.1", ignored_id)]
 
